@@ -8,7 +8,9 @@ CDM.CustomBuffs = {
     activeBuffs = {},       -- [spellID] = { expires, frame, startTime, duration }
     activeBuffVersion = 0,
     iconFrames = {},        -- [spellID] = frame
+    barFrames = {},         -- [spellID] = frame
     framePool = {},         -- reusable, inactive custom buff frames
+    barFramePool = {},      -- reusable, inactive custom buff bar frames
 }
 
 local CB = CDM.CustomBuffs
@@ -62,7 +64,7 @@ local BLOODLUST_DEBUFFS = {
     [390435] = 390386,  -- Exhaustion → Fury of the Aspects
 }
 
-local function RebuildGlowFilters()
+function CDM:RebuildGlowFilters()
     table.wipe(glowSuppressSpells)
     for _, entry in ipairs(TIME_SPIRAL_GLOW_FILTERS) do
         if IsPlayerSpell(entry.talentID) then
@@ -93,28 +95,18 @@ end
 
 CDM.RefreshCachedCustomBuffStyles = RefreshCachedCustomBuffStyles
 
-local function ForEachCooldownFontString(cd, fn)
-    fn(cd.Text or cd.text)
-    for _, region in ipairs({ cd:GetRegions() }) do
-        if region and region.IsObjectType and region:IsObjectType("FontString") then
-            fn(region)
-        end
-    end
-end
-
 local function SetupCustomBuffCooldownTextLayout(frame)
     if not frame or not frame.Cooldown then return end
 
-    ForEachCooldownFontString(frame.Cooldown, function(text)
-        if not text or not text.SetFont then return end
-        text:SetIgnoreParentScale(true)
-        text:ClearAllPoints()
-        text:SetPoint("CENTER", 0, 0)
-        text:SetJustifyH("CENTER")
-        text:SetJustifyV("MIDDLE")
-        text:SetShadowOffset(0, 0)
-        text:SetDrawLayer("OVERLAY", 7)
-    end)
+    local text = frame.Cooldown.Text or frame.Cooldown.text
+    if not text or not text.SetFont then return end
+    text:SetIgnoreParentScale(true)
+    text:ClearAllPoints()
+    text:SetPoint("CENTER", 0, 0)
+    text:SetJustifyH("CENTER")
+    text:SetJustifyV("MIDDLE")
+    text:SetShadowOffset(0, 0)
+    text:SetDrawLayer("OVERLAY", 7)
 end
 
 local function IsGroupedCustomBuff(spellID)
@@ -123,27 +115,64 @@ local function IsGroupedCustomBuff(spellID)
     return grouped and grouped[spellID] and true or false
 end
 
+local function IsBarGroupedCustomBuff(spellID)
+    local sets = CDM.BarGroupSets
+    local grouped = sets and sets.grouped
+    return grouped and grouped[spellID] and true or false
+end
+
+-- A custom buff renders as a bar when it belongs to a bar group; otherwise it
+-- renders as an icon (in a buff group, or ungrouped). Show only the matching
+-- frame so the same buff never appears as both an icon and a bar.
+local function ApplyCustomBuffDisplayMode(spellID, iconFrame, barFrame)
+    local asBar = IsBarGroupedCustomBuff(spellID)
+    if iconFrame then iconFrame:SetShown(not asBar) end
+    if barFrame then barFrame:SetShown(asBar) end
+    return asBar
+end
+
 local function ApplyCustomBuffCooldownTextStyle(frame)
     if not frame or not frame.Cooldown then return end
     if not cachedCustomBuffStyles.fontPath then
         RefreshCachedCustomBuffStyles()
     end
 
-    ForEachCooldownFontString(frame.Cooldown, function(text)
-        if not text or not text.SetFont then return end
-        local fontColor = cachedCustomBuffStyles.fontColor or CDM_C.WHITE
-        text:SetFont(
-            cachedCustomBuffStyles.fontPath,
-            CDM.Pixel.FontSize(cachedCustomBuffStyles.fontSize),
-            cachedCustomBuffStyles.fontOutline
-        )
-        text:SetTextColor(fontColor.r, fontColor.g, fontColor.b, fontColor.a or 1)
-    end)
+    local text = frame.Cooldown.Text or frame.Cooldown.text
+    if not text or not text.SetFont then return end
+    local fontColor = cachedCustomBuffStyles.fontColor or CDM_C.WHITE
+    text:SetFont(
+        cachedCustomBuffStyles.fontPath,
+        CDM.Pixel.FontSize(cachedCustomBuffStyles.fontSize),
+        cachedCustomBuffStyles.fontOutline
+    )
+    text:SetTextColor(fontColor.r, fontColor.g, fontColor.b, fontColor.a or 1)
 end
 
 local function ReanchorBuffViewer()
     local v = _G[VIEWERS.BUFF]
     if v then CDM:ForceReanchor(v) end
+end
+
+local function ReanchorBuffBarViewer()
+    local v = _G[VIEWERS.BUFF_BAR]
+    if v then CDM:ForceReanchor(v) end
+end
+
+local function GetCustomBuffBarEffectiveSize(spellID)
+    local sets = CDM.BarGroupSets
+    local grouped = sets and sets.grouped
+    local groupIdx = spellID and grouped and grouped[spellID]
+    local groupData = groupIdx and sets.groups and sets.groups[groupIdx]
+    local db = CDM.db or {}
+
+    local width = (groupData and groupData.barWidth) or db.buffBarWidth or 0
+    if width == 0 and CDM.CalculateEssentialRow1Width then
+        width = CDM.CalculateEssentialRow1Width()
+    end
+    if width == 0 then width = 120 end
+
+    local height = (groupData and groupData.barHeight) or db.buffBarHeight or 20
+    return Snap(width), Snap(height)
 end
 
 function CDM:GetCustomBuffEffectiveSize(spellID)
@@ -160,6 +189,35 @@ function CDM:GetCustomBuffEffectiveSize(spellID)
     return (dbSize and dbSize.w) or defaultSize.w, (dbSize and dbSize.h) or defaultSize.h
 end
 
+local DeactivateCustomBuff
+
+local function CustomBuffBarOnUpdate(frame)
+    local duration = frame.customBuffDuration
+    local expires = frame.customBuffExpires
+    if not duration or duration <= 0 or not expires then return end
+
+    local remaining = expires - GetTime()
+    if remaining <= 0 then
+        -- The bar is the only expiry signal when the icon frame is hidden
+        -- (custom buff routed into a bar group), so drive deactivation here.
+        frame:SetScript("OnUpdate", nil)
+        local spellID = frame.spellID
+        if spellID and DeactivateCustomBuff then
+            DeactivateCustomBuff(spellID)
+        end
+        return
+    end
+
+    local bar = frame.Bar
+    if bar then
+        bar:SetMinMaxValues(0, duration)
+        bar:SetValue(remaining)
+        if bar.Duration then
+            bar.Duration:SetText(C_StringUtil.TruncateWhenZero(remaining))
+        end
+    end
+end
+
 local function CreateCustomBuffIcon(spellID, config)
     if CB.iconFrames[spellID] then
         return CB.iconFrames[spellID]
@@ -170,7 +228,6 @@ local function CreateCustomBuffIcon(spellID, config)
     local frame = table.remove(CB.framePool)
     if not frame then
         frame = CreateFrame("Frame", nil, UIParent)
-        frame:SetFrameStrata("MEDIUM")
 
         local icon = frame:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
@@ -180,18 +237,15 @@ local function CreateCustomBuffIcon(spellID, config)
         local cooldown = CreateFrame("Cooldown", nil, frame, "CooldownFrameTemplate")
         cooldown:SetAllPoints()
         cooldown:SetDrawEdge(false)
-        cooldown:SetDrawSwipe(true)
+        cooldown:SetDrawSwipe(not (CDM.db and CDM.db.hideBuffSwipe))
         cooldown:SetSwipeColor(CDM_C.SWIPE_COLOR.r, CDM_C.SWIPE_COLOR.g, CDM_C.SWIPE_COLOR.b, CDM_C.SWIPE_COLOR.a)
         cooldown:SetReverse(true)  -- Fill up as time passes (like a buff)
         frame.Cooldown = cooldown
         SetupCustomBuffCooldownTextLayout(frame)
 
-        local borderFrame = CreateFrame("Frame", nil, frame)
-        borderFrame:SetAllPoints()
         if CDM.BORDER and CDM.BORDER.CreateBorder then
-            CDM.BORDER:CreateBorder(borderFrame)
+            frame.cdmBorder = CDM.BORDER:CreateBorder(frame)
         end
-        CDM.GetFrameData(frame).borderFrame = borderFrame
     end
 
     frame:SetSize(w, h)
@@ -212,10 +266,6 @@ local function CreateCustomBuffIcon(spellID, config)
         frame.Cooldown:SetScript("OnCooldownDone", nil)
     end
 
-    local fd = CDM.GetFrameData(frame)
-    if fd.borderFrame then
-        fd.borderFrame:SetAllPoints()
-    end
     frame:Hide()
 
     CB.iconFrames[spellID] = frame
@@ -223,20 +273,95 @@ local function CreateCustomBuffIcon(spellID, config)
     return frame
 end
 
-local DeactivateCustomBuff
+local function CreateCustomBuffBar(spellID, config)
+    if CB.barFrames[spellID] then
+        return CB.barFrames[spellID]
+    end
+
+    local w, h = GetCustomBuffBarEffectiveSize(spellID)
+
+    local frame = table.remove(CB.barFramePool)
+    if not frame then
+        frame = CreateFrame("Frame", nil, UIParent)
+
+        local iconFrame = CreateFrame("Frame", nil, frame)
+        local icon = iconFrame:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints()
+        CDM.Pixel.DisableTextureSnap(icon)
+        iconFrame.Icon = icon
+        frame.Icon = iconFrame
+
+        local applications = iconFrame:CreateFontString(nil, "OVERLAY")
+        applications:SetFont(CDM_C.FONT_PATH, 12, CDM_C.FONT_OUTLINE)
+        applications:SetText("")
+        applications:Hide()
+        iconFrame.Applications = applications
+
+        local bar = CreateFrame("StatusBar", nil, frame)
+        bar:SetMinMaxValues(0, 1)
+        bar:SetValue(1)
+        frame.Bar = bar
+
+        bar.Name = bar:CreateFontString(nil, "OVERLAY")
+        bar.Name:SetFont(CDM_C.FONT_PATH, 12, CDM_C.FONT_OUTLINE)
+        bar.Duration = bar:CreateFontString(nil, "OVERLAY")
+        bar.Duration:SetFont(CDM_C.FONT_PATH, 12, CDM_C.FONT_OUTLINE)
+    end
+
+    frame:SetSize(w, h)
+    frame.spellID = spellID
+    frame.isCustomBuff = true
+    frame.isCustomBuffBar = true
+    frame.customBuffStartTime = nil
+    frame.customBuffDuration = nil
+    frame.customBuffExpires = nil
+
+    frame.GetSpellID = frame.GetSpellID or function(self) return self.spellID end
+    frame.GetBaseSpellID = frame.GetBaseSpellID or function(self) return self.spellID end
+    frame.RefreshName = frame.RefreshName or function(self)
+        local cfg = self.spellID and CDM.db and CDM.db.customBuffRegistry and CDM.db.customBuffRegistry[self.spellID]
+        local name = cfg and cfg.name or (self.spellID and C_Spell.GetSpellName(self.spellID)) or ""
+        if self.Bar and self.Bar.Name then
+            self.Bar.Name:SetText(name)
+        end
+    end
+
+    if frame.Icon then
+        frame.Icon:SetSize(h, h)
+        if frame.Icon.Icon then
+            frame.Icon.Icon:SetAllPoints()
+            CDM_C.ApplyIconTexCoord(frame.Icon.Icon, CDM_C.GetEffectiveZoomAmount(), h, h)
+            frame.Icon.Icon:SetTexture(config.icon)
+            frame.Icon.Icon:SetDesaturation(0)
+        end
+    end
+
+    if frame.Bar then
+        frame.Bar:SetMinMaxValues(0, config.duration or 1)
+        frame.Bar:SetValue(config.duration or 1)
+        if frame.Bar.Name then frame.Bar.Name:SetText(config.name or C_Spell.GetSpellName(spellID) or "") end
+        if frame.Bar.Duration then frame.Bar.Duration:SetText("") end
+    end
+
+    frame:Hide()
+    CB.barFrames[spellID] = frame
+
+    return frame
+end
 
 local function ActivateCustomBuff(spellID, config, overrideStartTime)
     local frame = CreateCustomBuffIcon(spellID, config)
+    local barFrame = CreateCustomBuffBar(spellID, config)
 
     local startTime = overrideStartTime or GetTime()
     local duration = config.duration
+    local expires = startTime + duration
 
-    local fd = CDM.GetFrameData(frame)
-    if not fd.cdmDurationObj then
-        fd.cdmDurationObj = C_DurationUtil.CreateDuration()
+    if not frame.cdmDurationObj then
+        frame.cdmDurationObj = C_DurationUtil.CreateDuration()
     end
-    fd.cdmDurationObj:SetTimeFromStart(startTime, duration)
-    frame.Cooldown:SetCooldownFromDurationObject(fd.cdmDurationObj)
+    frame.cdmDurationObj:SetTimeFromStart(startTime, duration)
+    frame.Cooldown:SetCooldownFromDurationObject(frame.cdmDurationObj)
     frame.Cooldown:SetScript("OnCooldownDone", function()
         DeactivateCustomBuff(spellID)
     end)
@@ -245,17 +370,24 @@ local function ActivateCustomBuff(spellID, config, overrideStartTime)
     end
 
     CB.activeBuffs[spellID] = {
-        expires = startTime + duration,
+        expires = expires,
         frame = frame,
+        barFrame = barFrame,
         startTime = startTime,
         duration = duration,
     }
     CB.activeBuffVersion = (CB.activeBuffVersion or 0) + 1
 
     frame.customBuffStartTime = startTime
+    barFrame.customBuffStartTime = startTime
+    barFrame.customBuffDuration = duration
+    barFrame.customBuffExpires = expires
 
-    frame:Show()
+    ApplyCustomBuffDisplayMode(spellID, frame, barFrame)
+    barFrame:SetScript("OnUpdate", CustomBuffBarOnUpdate)
+    CustomBuffBarOnUpdate(barFrame)
     ReanchorBuffViewer()
+    ReanchorBuffBarViewer()
 
     if CDM.PlayCustomBuffNotification then
         CDM:PlayCustomBuffNotification(spellID, false)
@@ -276,10 +408,15 @@ DeactivateCustomBuff = function(spellID)
         end
         buffData.frame:Hide()
     end
+    if buffData.barFrame then
+        buffData.barFrame:SetScript("OnUpdate", nil)
+        buffData.barFrame:Hide()
+    end
 
     CB.activeBuffs[spellID] = nil
     CB.activeBuffVersion = (CB.activeBuffVersion or 0) + 1
     ReanchorBuffViewer()
+    ReanchorBuffBarViewer()
 end
 
 local function OnSpellCastSucceeded(event, unit, castGUID, spellID)
@@ -411,6 +548,7 @@ function CDM:RemoveCustomBuffSpell(spellID)
         end
         frame:Hide()
         frame:ClearAllPoints()
+        frame.cdmAnchor = nil
         if frame:GetParent() ~= UIParent then
             frame:SetParent(UIParent)
         end
@@ -418,6 +556,23 @@ function CDM:RemoveCustomBuffSpell(spellID)
         frame.customBuffStartTime = nil
         CB.framePool[#CB.framePool + 1] = frame
         CB.iconFrames[spellID] = nil
+    end
+
+    local barFrame = CB.barFrames[spellID]
+    if barFrame then
+        barFrame:SetScript("OnUpdate", nil)
+        barFrame:Hide()
+        barFrame:ClearAllPoints()
+        barFrame.cdmBarAnchor = nil
+        if barFrame:GetParent() ~= UIParent then
+            barFrame:SetParent(UIParent)
+        end
+        barFrame.spellID = nil
+        barFrame.customBuffStartTime = nil
+        barFrame.customBuffDuration = nil
+        barFrame.customBuffExpires = nil
+        CB.barFramePool[#CB.barFramePool + 1] = barFrame
+        CB.barFrames[spellID] = nil
     end
 
     CDM.db.customBuffRegistry[spellID] = nil
@@ -434,6 +589,22 @@ function CDM:RemoveCustomBuffSpell(spellID)
 
     if CDM.db.buffGroups then
         for _, specGroups in pairs(CDM.db.buffGroups) do
+            if type(specGroups) == "table" then
+                for _, groupData in ipairs(specGroups) do
+                    if groupData.spells then
+                        for i = #groupData.spells, 1, -1 do
+                            if groupData.spells[i] == spellID then
+                                table.remove(groupData.spells, i)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if CDM.db.barGroups then
+        for _, specGroups in pairs(CDM.db.barGroups) do
             if type(specGroups) == "table" then
                 for _, groupData in ipairs(specGroups) do
                     if groupData.spells then
@@ -491,6 +662,24 @@ function CDM:UpdateCustomBuffs()
             ApplyCustomBuffCooldownTextStyle(frame)
         end
     end
+
+    for spellID, frame in pairs(CB.barFrames) do
+        local w, h = GetCustomBuffBarEffectiveSize(spellID)
+        frame:SetSize(w, h)
+        if frame.Icon then
+            frame.Icon:SetSize(h, h)
+            if frame.Icon.Icon then
+                CDM_C.ApplyIconTexCoord(frame.Icon.Icon, CDM_C.GetEffectiveZoomAmount(), h, h)
+            end
+        end
+        frame.cdmBarStyled = false
+    end
+
+    -- Group membership may have changed (e.g. a custom buff moved between an
+    -- icon buff group and a bar group); re-resolve icon vs bar visibility.
+    for spellID, buffData in pairs(CB.activeBuffs) do
+        ApplyCustomBuffDisplayMode(spellID, buffData.frame, buffData.barFrame)
+    end
 end
 
 CDM.CustomBuffTemplates = {
@@ -503,12 +692,17 @@ CDM.CustomBuffTemplates = {
 
 
 function CDM:IsCustomBuffInAnyGroup(specID, spellID)
-    local groups = self.db and self.db.buffGroups and self.db.buffGroups[specID]
-    if not groups then return false end
-    for _, groupData in ipairs(groups) do
-        if groupData.spells then
-            for _, sid in ipairs(groupData.spells) do
-                if sid == spellID then return true end
+    local db = self.db
+    if not db then return false end
+    for _, groupKey in ipairs({ "buffGroups", "barGroups" }) do
+        local groups = db[groupKey] and db[groupKey][specID]
+        if groups then
+            for _, groupData in ipairs(groups) do
+                if groupData.spells then
+                    for _, sid in ipairs(groupData.spells) do
+                        if sid == spellID then return true end
+                    end
+                end
             end
         end
     end
@@ -596,8 +790,7 @@ function CDM:InitializeCustomBuffs()
     eventFrame:RegisterEvent("SPELL_ACTIVATION_OVERLAY_GLOW_HIDE")
     eventFrame:RegisterEvent("PLAYER_DEAD")
 
-    RebuildGlowFilters()
-    self:RegisterTalentDataHandler(RebuildGlowFilters)
+    self:RebuildGlowFilters()
 end
 
 CDM:RegisterRefreshCallback("customBuffs", function()

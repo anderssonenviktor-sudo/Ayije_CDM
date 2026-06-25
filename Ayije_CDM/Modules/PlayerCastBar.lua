@@ -18,6 +18,9 @@ local CAST_STATE_NORMAL = 1
 local CAST_STATE_CHANNEL = 2
 local CAST_STATE_NONBREAKABLE = 3
 
+local math_floor = math.floor
+local math_max = math.max
+
 local GetTime = _G.GetTime
 local UnitClass = _G.UnitClass
 local UnitCastingDuration = _G.UnitCastingDuration
@@ -35,11 +38,47 @@ local _empLsmTexturePath
 local _empBarWidth
 local _empBarHeight
 
-local DEFAULT_BORDER_COLOR = { r = 1, g = 1, b = 1, a = 1 }
 local DEFAULT_BG_COLOR = { r = 0.15, g = 0.15, b = 0.15, a = 0.8 }
 
 local function CfgVal(key, default)
     return CDM_C.GetConfigValue(key, default)
+end
+
+local ROLE_FROM_BLIZZ = { DAMAGER = "DPS", TANK = "TANK", HEALER = "HEALER" }
+
+local function ResolveCastBarField(field, default)
+    local overrides = CDM.db.castBarOverridesEnabled and CDM.db.castBarOverrides
+    if overrides then
+        local specID = CDM:GetCurrentSpecID()
+
+        if specID then
+            local row = overrides["spec:" .. specID]
+            if row and row.enabled and row[field] ~= nil then
+                return row[field]
+            end
+        end
+
+        local _, playerClass = UnitClass("player")
+        if playerClass then
+            local row = overrides["class:" .. playerClass]
+            if row and row.enabled and row[field] ~= nil then
+                return row[field]
+            end
+        end
+
+        if specID then
+            local blizzRole = GetSpecializationRoleByID(specID)
+            local roleTok = blizzRole and ROLE_FROM_BLIZZ[blizzRole]
+            if roleTok then
+                local row = overrides["role:" .. roleTok]
+                if row and row.enabled and row[field] ~= nil then
+                    return row[field]
+                end
+            end
+        end
+    end
+
+    return CfgVal("castBar" .. field:sub(1,1):upper() .. field:sub(2), default)
 end
 
 local function GetPlayerClassColor()
@@ -50,10 +89,8 @@ local function GetPlayerClassColor()
     return color.r, color.g, color.b, color.a or 1
 end
 
-local function SyncCastBarBorderVisual(target, borderHost)
-    if borderHost and borderHost.border then
-        borderHost.border:Show()
-    end
+local function SyncCastBarBorderVisual(border)
+    if border then border:Show() end
 end
 
 local CAST_ANCHOR_SCREEN       = "screen"
@@ -190,11 +227,11 @@ local function ResolveViewerContainer(vName)
 end
 
 local function ResolveCastBarAnchor()
-    local mode = CfgVal("castBarAnchor", "resources")
-    local aP = CfgVal("castBarAnchorPoint", "BOTTOM")
-    local tP = CfgVal("castBarTargetPoint", "TOP")
+    local mode = ResolveCastBarField("anchor", "resources")
+    local aP = ResolveCastBarField("anchorPoint", "BOTTOM")
+    local tP = ResolveCastBarField("targetPoint", "TOP")
     local oX = CfgVal("castBarOffsetX", 0)
-    local oY = CfgVal("castBarOffsetY", -166)
+    local oY = ResolveCastBarField("offsetY", -166)
 
     if mode == CAST_ANCHOR_SCREEN then
         return UIParent, aP, tP, oX, oY, false
@@ -229,7 +266,7 @@ local function ResolveCastBarAnchor()
 end
 
 local function IsCastBarPreviewEnabled()
-    return CfgVal("castBarPreviewEnabled", false) == true
+    return CDM.castBarPreviewActive == true
 end
 
 local EMPOWER_WINDUP_DEFAULT = { r = 0.45, g = 0.45, b = 0.55, a = 1 }
@@ -261,8 +298,6 @@ local function UpdateEmpowerPips(frame, scaledPercentages)
     frame.empowerPips = frame.empowerPips or {}
     local barWidth = frame.cachedWidth or frame:GetWidth()
     local barHeight = frame:GetHeight()
-    local pipWidth = Snap(Pixel.GetSize() * 2)
-    local pipHeight = Snap(barHeight * 0.9)
 
     HideEmpowerPips(frame)
 
@@ -274,7 +309,7 @@ local function UpdateEmpowerPips(frame, scaledPercentages)
         end
 
         local xPos = barWidth * scaledPercentages[i]
-        pip:SetSize(pipWidth, pipHeight)
+        pip:SetSize(Pixel.GetSize() * 2, barHeight * 0.9)
         pip:ClearAllPoints()
         Pixel.SetPoint(pip, "CENTER", frame.topOverlay, "LEFT", xPos, 0)
         pip:SetVertexColor(1, 1, 1, 1)
@@ -321,7 +356,7 @@ local function ConfigureStage(index, startPct, endPct, color)
     stage.startPct = startPct
     stage.endPct = endPct
     local onePixel = Pixel.GetSize()
-    local fullWidth = math.max(onePixel, Snap((endPct - startPct) * _empBarWidth))
+    local fullWidth = math_max(onePixel, Snap((endPct - startPct) * _empBarWidth))
 
     local bar = stage.bar
     bar:ClearAllPoints()
@@ -409,7 +444,7 @@ local function GetCastBarWidth()
         if source == "utility" and CDM:GetUtilityVisibleCount() > 0 then
             w = CDM:GetUtilityContentWidth()
         end
-        if w == 0 and CDM.CalculateEssentialRow1Width then
+        if w == 0 then
             w = CDM.CalculateEssentialRow1Width()
         end
     end
@@ -469,13 +504,13 @@ ShowPreview = function(frame)
     if frame.iconFrame and CfgVal("castBarShowIcon", false) then
         frame.iconFrame.texture:SetTexture(134400) -- question mark icon
         frame.iconFrame:Show()
-        SyncCastBarBorderVisual(frame.iconFrame, frame.iconFrame.borderFrame)
+        SyncCastBarBorderVisual(frame.iconFrame.cdmBorder)
     end
 
     HideEmpowerSegments(frame)
     frame:SetAlpha(1)
     frame:Show()
-    SyncCastBarBorderVisual(frame, frame.borderFrame)
+    SyncCastBarBorderVisual(frame.cdmBorder)
 end
 
 HidePreview = function(frame)
@@ -504,11 +539,11 @@ OnUpdate = function(self)
         if durationObject then
             local remaining = durationObject:GetRemainingDuration()
             if CDM.IsSafeNumber(remaining) then
-                local tenths = math.floor(remaining * 10 + 0.5)
-                if tenths ~= self._cdmLastTimerTenths then
-                    self._cdmLastTimerTenths = tenths
-                    local total = self.cdmTotalDuration
-                    if self.cdmShowTotalDuration and total and total > 0 then
+                local tenths = math_floor(remaining * 10 + 0.5)
+                if tenths ~= self.cdmLastTimerTenths then
+                    self.cdmLastTimerTenths = tenths
+                    local total = durationObject:GetTotalDuration()
+                    if self.cdmShowTotalDuration and CDM.IsSafeNumber(total) and total > 0 then
                         local elapsed = total - tenths * 0.1
                         if elapsed < 0 then elapsed = 0
                         elseif elapsed > total then elapsed = total end
@@ -637,13 +672,13 @@ local function RefreshBarData(frame)
     if frame.iconFrame and CfgVal("castBarShowIcon", false) then
         frame.iconFrame.texture:SetTexture(texture)
         frame.iconFrame:Show()
-        SyncCastBarBorderVisual(frame.iconFrame, frame.iconFrame.borderFrame)
+        SyncCastBarBorderVisual(frame.iconFrame.cdmBorder)
     end
 
     frame.isPreview = false
     frame.casting = not isChannel
     frame.channeling = isChannel or false
-    frame._cdmLastTimerTenths = nil
+    frame.cdmLastTimerTenths = nil
     frame.isEmpowered = isEmpowered or false
     frame.isReverse = isChannel and not frame.isEmpowered
 
@@ -722,7 +757,7 @@ local function RefreshBarData(frame)
 
     frame:SetAlpha(1)
     frame:Show()
-    SyncCastBarBorderVisual(frame, frame.borderFrame)
+    SyncCastBarBorderVisual(frame.cdmBorder)
 
     if frame.isEmpowered then
         UpdateEmpowerFill(frame)
@@ -774,12 +809,12 @@ local function ApplyCastBarIconLayout(frame)
     iconFrame.texture:SetAllPoints()
     iconFrame.texture:SetTexCoord(0.08, 0.92, 0.08, 0.92)
 
-    if iconFrame.borderFrame and CDM.BORDER and CDM.BORDER.UpdateBorder then
-        CDM.BORDER:UpdateBorder(iconFrame.borderFrame)
+    if iconFrame.cdmBorder and CDM.BORDER and CDM.BORDER.UpdateBorder then
+        CDM.BORDER:UpdateBorder(iconFrame)
     end
 
     iconFrame:Show()
-    SyncCastBarBorderVisual(iconFrame, iconFrame.borderFrame)
+    SyncCastBarBorderVisual(iconFrame.cdmBorder)
 end
 
 local function UpdateCastBarFromConfig(frame)
@@ -844,11 +879,11 @@ local function UpdateCastBarFromConfig(frame)
         frame.bgTexture:SetVertexColor(bgColor.r, bgColor.g, bgColor.b, bgColor.a or 0.8)
     end
 
-    if frame.borderFrame and CDM.BORDER and CDM.BORDER.UpdateBorder then
-        CDM.BORDER:UpdateBorder(frame.borderFrame)
+    if frame.cdmBorder and CDM.BORDER and CDM.BORDER.UpdateBorder then
+        CDM.BORDER:UpdateBorder(frame)
     end
 
-    SyncCastBarBorderVisual(frame, frame.borderFrame)
+    SyncCastBarBorderVisual(frame.cdmBorder)
 
     ApplyCastBarIconLayout(frame)
 end
@@ -981,20 +1016,15 @@ function CDM:CreatePlayerCastBar()
 
     local f = CreateFrame("Frame", "Ayije_CastBar", container)
     f:SetAllPoints(container)
-    f:SetFrameStrata("MEDIUM")
     f:SetFrameLevel(10)
 
     local iconFrame = CreateFrame("Frame", nil, f)
-    iconFrame:SetFrameStrata("MEDIUM")
     iconFrame:SetFrameLevel(10)
     iconFrame.texture = iconFrame:CreateTexture(nil, "ARTWORK")
     iconFrame.texture:SetAllPoints()
     Pixel.DisableTextureSnap(iconFrame.texture)
-    iconFrame.borderFrame = CreateFrame("Frame", nil, iconFrame)
-    iconFrame.borderFrame:SetAllPoints()
-    iconFrame.borderFrame:SetFrameLevel(12)
     if CDM.BORDER and CDM.BORDER.CreateBorder then
-        CDM.BORDER:CreateBorder(iconFrame.borderFrame)
+        iconFrame.cdmBorder = CDM.BORDER:CreateBorder(iconFrame)
     end
     iconFrame:Hide()
     f.iconFrame = iconFrame
@@ -1042,11 +1072,8 @@ function CDM:CreatePlayerCastBar()
         f.sparkObj:SetPoint("CENTER", f.topOverlay, "LEFT", 0, 0)
     end
 
-    f.borderFrame = CreateFrame("Frame", nil, f)
-    f.borderFrame:SetAllPoints()
-    f.borderFrame:SetFrameLevel(12)
     if CDM.BORDER and CDM.BORDER.CreateBorder then
-        CDM.BORDER:CreateBorder(f.borderFrame)
+        f.cdmBorder = CDM.BORDER:CreateBorder(f)
     end
 
     f:SetScript("OnEvent", function(frame, event, unit, a, b, c, d, e)
@@ -1061,7 +1088,6 @@ function CDM:CreatePlayerCastBar()
             FinishCast(frame)
 
         elseif event == "UNIT_SPELLCAST_INTERRUPTED" then
-            -- (unit, castGUID, spellID, interruptedBy, castBarID) -> d = castBarID
             if frame.castID and d and frame.castID ~= d then return end
             FinishCast(frame)
 
@@ -1144,3 +1170,4 @@ CDM:RegisterRefreshCallback("playerCastBar", function()
 end, 55, { "STYLE", "LAYOUT" })
 
 CDM.ResolveResourcesAnchor = ResolveResourcesAnchor
+CDM.ResolveCastBarField = ResolveCastBarField
