@@ -14,8 +14,6 @@ local buttons = {}
 local currentTab = nil
 local ADDON_NAME = "Ayije_CDM"
 local versionText = nil
-local discordText = nil
-local twitchText = nil
 local footerRefreshRegistered = false
 local lastFooterFont = nil
 local combatCloseRegistered = false
@@ -62,8 +60,6 @@ local function ApplyAllFooterTextStyles()
     if currentFont == lastFooterFont then return end
     lastFooterFont = currentFont
     ApplyFooterTextStyle(versionText)
-    ApplyFooterTextStyle(discordText)
-    ApplyFooterTextStyle(twitchText)
 end
 
 local function PrintConfigCombatBlocked(actionLabel)
@@ -156,9 +152,8 @@ end
 ns.ConfigCreatePage = CreateCategoryPage
 
 local categoryHeaders = {
-    { label = L["Display"], tabs = {"sizes", "layout", "positions"} },
-    { label = L["Styling"], tabs = {"border", "text", "glow", "fading", "assist"} },
-    { label = L["Buffs"], tabs = {"buffgroups", "bars"} },
+    { label = L["CDM"], tabs = {"layout", "buffgroups", "bars", "positions"} },
+    { label = L["Styling"], tabs = {"sizes", "border", "text", "glow", "fading", "assist"} },
     { label = L["Features"], tabs = {"racials", "resources", "defensives", "trinkets", "castbar"} },
     { label = L["Utility"], tabs = {"profiles", "importexport"} },
 }
@@ -195,14 +190,9 @@ local function CreateConfigFrame()
     titleContainer:SetFrameLevel(ConfigFrame:GetFrameLevel() + 10)
 
     local title = titleContainer:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font18")
-    title:SetPoint("TOP", ConfigFrame, "TOP", 0, -30)
-    title:SetText("Ayije CDM")
+    title:SetPoint("TOP", ConfigFrame, "TOP", 0, -34)
+    title:SetText(L["Cooldown Manager"])
     UI.SetTextColor(title, CDM_C.GOLD or { r = 1, g = 0.82, b = 0, a = 1 })
-
-    local subtitle = titleContainer:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    subtitle:SetPoint("TOP", title, "BOTTOM", 0, -2)
-    subtitle:SetText(L["Cooldown Manager"])
-    UI.SetTextSubtle(subtitle)
 
     local cdmBtn = CreateFrame("Button", nil, titleContainer, "UIPanelButtonTemplate")
     cdmBtn:SetSize(90, 24)
@@ -243,48 +233,6 @@ local function CreateConfigFrame()
     local panelBg = panelBgHolder:CreateTexture(nil, "BACKGROUND")
     panelBg:SetAtlas("Options_InnerFrame", true)
     panelBg:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 17, -64)
-
-    local gold = CDM_C.GOLD
-
-    local function CreateSocialButton(parent, iconTexPath, labelText, base64Data, anchor, anchorPoint)
-        local btn = CreateFrame("Button", nil, parent)
-        btn:SetSize(80, 20)
-        if type(anchor) == "table" then
-            btn:SetPoint("LEFT", anchor, "RIGHT", 6, 0)
-        else
-            btn:SetPoint("BOTTOMLEFT", parent, "BOTTOMLEFT", 22, 10)
-        end
-
-        local icon = btn:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(16, 16)
-        icon:SetPoint("LEFT", 0, 0)
-        icon:SetTexture(iconTexPath)
-
-        local text = btn:CreateFontString(nil, "OVERLAY")
-        text:SetPoint("LEFT", icon, "RIGHT", 4, 0)
-        ApplyFooterTextStyle(text)
-        text:SetText(labelText)
-        UI.SetTextFaint(text)
-
-        btn:SetScript("OnClick", function()
-            local link = C_EncodingUtil.DeserializeCBOR(C_EncodingUtil.DecodeBase64(base64Data)).link
-            StaticPopup_Show("AYIJE_CDM_COPY_URL", nil, nil, {url = link})
-        end)
-        btn:SetScript("OnEnter", function() UI.SetTextColor(text, gold) end)
-        btn:SetScript("OnLeave", function() UI.SetTextFaint(text) end)
-
-        return btn, text
-    end
-
-    local discordBtn
-    discordBtn, discordText = CreateSocialButton(ConfigFrame,
-        "Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\Discord.tga", "Discord",
-        "oURsaW5rWB1odHRwczovL2Rpc2NvcmQuZ2cvUmV4ZjNEaG5CRA==")
-
-    local twitchBtn
-    twitchBtn, twitchText = CreateSocialButton(ConfigFrame,
-        "Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\Twitch.tga", "Twitch",
-        "oURsaW5rV2h0dHBzOi8vdHdpdGNoLnR2L2F5aWpl", discordBtn)
 
     versionText = ConfigFrame:CreateFontString(nil, "OVERLAY")
     versionText:SetPoint("BOTTOMRIGHT", ConfigFrame, "BOTTOMRIGHT", -22, 10)
@@ -384,7 +332,11 @@ local function CreateConfigFrame()
 
     end
 
-    if sortedTabs[1] then
+    -- open on the sidebar's first entry (navOrder only governs page build order)
+    local firstNavTab = categoryHeaders[1] and categoryHeaders[1].tabs[1]
+    if firstNavTab and ns.ConfigTabs and ns.ConfigTabs[firstNavTab] then
+        SelectCategory(firstNavTab)
+    elseif sortedTabs[1] then
         SelectCategory(sortedTabs[1].id)
     end
 
@@ -447,8 +399,6 @@ function API:RebuildConfigFrame(targetTab)
         buttons = {}
         currentTab = nil
         versionText = nil
-        discordText = nil
-        twitchText = nil
         ns.ConfigFrame = nil
         ns.ConfigContent = nil
         ns.ConfigSidebar = nil
