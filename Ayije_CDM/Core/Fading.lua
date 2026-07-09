@@ -67,17 +67,11 @@ Fading:RegisterTarget("fadingDefensives", function(a)
 end)
 
 Fading:RegisterTarget("fadingTrinkets", function(a)
-    local trinketMode = CDM.GetTrinketMode and CDM.GetTrinketMode()
-    if trinketMode == "essential" then
-        local tFrames = CDM.GetTrinketIconFrames and CDM.GetTrinketIconFrames()
-        if tFrames then
-            for _, frame in ipairs(tFrames) do
-                frame:SetAlpha(a)
-            end
+    local tFrames = CDM.GetTrinketIconFrames and CDM.GetTrinketIconFrames()
+    if tFrames then
+        for _, frame in ipairs(tFrames) do
+            frame:SetAlpha(a)
         end
-    else
-        local c = _G["CDM_TrinketsContainer"]
-        if c then c:SetAlpha(a) end
     end
 end)
 

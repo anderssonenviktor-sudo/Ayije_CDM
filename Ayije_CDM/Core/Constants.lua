@@ -62,6 +62,22 @@ CDM.CONST = {
     ITEM_COOLDOWN_GCD_MIN = 1.5,
 }
 
+-- Trinket slots referenced from cooldown groups / the ungrouped cooldown order
+-- are stored as sentinel IDs far above any real spell or item ID
+-- (slot 13 -> 900000013, slot 14 -> 900000014).
+CDM.CONST.TRINKET_SENTINEL_BASE = 900000000
+CDM.CONST.TRINKET_SLOT_IDS = { 13, 14 }
+
+function CDM.CONST.GetTrinketSentinelForSlot(slotID)
+    return CDM.CONST.TRINKET_SENTINEL_BASE + slotID
+end
+
+function CDM.CONST.GetTrinketSlotFromSentinel(id)
+    if id == CDM.CONST.TRINKET_SENTINEL_BASE + 13 then return 13 end
+    if id == CDM.CONST.TRINKET_SENTINEL_BASE + 14 then return 14 end
+    return nil
+end
+
 local VIEWERS = CDM.CONST.VIEWERS
 CDM.CONST.COOLDOWN_VIEWER_NAMES = { VIEWERS.ESSENTIAL, VIEWERS.UTILITY }
 CDM.CONST.ALL_VIEWER_NAMES = {

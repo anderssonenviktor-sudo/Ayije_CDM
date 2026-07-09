@@ -910,6 +910,40 @@ local function CompareIconPositionRecords(a, b)
     return a.sortID < b.sortID
 end
 
+-- User-defined order for ungrouped viewer icons (set by drag-and-drop in the
+-- options grid). Ranked icons take their saved position; unranked icons are
+-- blended in next to their Blizzard-order neighbors (see the merge pass in
+-- PositionEssentialOrUtilityIcons). The -500 offset keeps ranked records
+-- ahead of Blizzard layoutIndex values without colliding with them.
+local ungroupedOrderRankScratch = {}
+local function BuildUngroupedOrderRankMap(db)
+    local bySpec = db.ungroupedCooldownOrder
+    if type(bySpec) ~= "table" then return nil end
+    local specIndex = GetSpecialization()
+    local specID = specIndex and GetSpecializationInfo(specIndex)
+    local order = specID and bySpec[specID]
+    if type(order) ~= "table" or #order == 0 then return nil end
+    table_wipe(ungroupedOrderRankScratch)
+    for i, sid in ipairs(order) do
+        if ungroupedOrderRankScratch[sid] == nil then
+            ungroupedOrderRankScratch[sid] = i
+        end
+    end
+    return ungroupedOrderRankScratch
+end
+
+local function GetCustomOrderRank(rankMap, frame, spellID)
+    if not rankMap then return nil end
+    local candidates = CDM.GetSpellIDCandidates and CDM:GetSpellIDCandidates(frame)
+    if candidates then
+        for i = 1, #candidates do
+            local rank = rankMap[candidates[i]]
+            if rank then return rank end
+        end
+    end
+    return rankMap[spellID]
+end
+
 function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
     local sizeEssRow1, sizeEssRow2, sizeUtility, _, spacing, maxRowEss, _, maxRowUtil, utilityVertical = GetLayoutConfig()
     ResetTempIconPositionRecords()
@@ -926,34 +960,59 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
     local container = self:GetOrCreateAnchorContainer(viewer)
     if not container then return end
 
+    local rankMap = BuildUngroupedOrderRankMap(CDM.db or {})
+
     for _, frame in ipairs(icons) do
         local spellID = ResolveBaseSpellID(frame)
         if spellID or frame.cooldownInfo then
-            PushTempIconPositionRecord(frame, ToSortNumber(frame.layoutIndex, 0), GetStableFrameSortID(frame))
+            local record = PushTempIconPositionRecord(frame, ToSortNumber(frame.layoutIndex, 0), GetStableFrameSortID(frame))
+            record.customRank = rankMap and GetCustomOrderRank(rankMap, frame, spellID) or nil
         end
     end
 
-    local db = CDM.db or {}
-    local injRow = db.trinketsEssentialRow or 1
-    local injPos = db.trinketsEssentialPosition or "end"
+    -- Blend the saved custom order with Blizzard's ordering: icons with a
+    -- saved rank take that position, while icons missing from the saved
+    -- order (new talent picks, swapped spells) stay next to the ranked icon
+    -- that precedes them in Blizzard order instead of being pushed to the
+    -- end of the row.
+    if rankMap and tempIconPositionRecordCount > 0 then
+        if tempIconPositionRecordCount > 1 then
+            table_sort(tempIconPositionRecords, CompareIconPositionRecords)
+        end
+        local lastRank, run = 0, 0
+        for i = 1, tempIconPositionRecordCount do
+            local record = tempIconPositionRecords[i]
+            if record.customRank then
+                record.layoutIndex = -500 + record.customRank
+                lastRank = record.customRank
+                run = 0
+            else
+                run = run + 1
+                record.layoutIndex = -500 + lastRank + run * 0.001
+            end
+        end
+    end
 
     if injFrames then
-        for i, tFrame in ipairs(injFrames) do
+        -- Trinkets with a user-assigned rank sort in place among the other
+        -- icons; only unranked ones cluster at the end of the row.
+        local edgeCount = 0
+        for _, tFrame in ipairs(injFrames) do
             local record = AcquireTempIconPositionRecord()
             record.frame = tFrame
-            if injPos == "start" then
-                record.layoutIndex = -1000 + i
-            else
-                record.layoutIndex = 99000 + i
+            local rank
+            if rankMap and tFrame.slotID then
+                rank = rankMap[CDM_C.TRINKET_SENTINEL_BASE + tFrame.slotID]
             end
-            record.sortID = 90000 + (tFrame.slotID or i)
+            if rank then
+                record.layoutIndex = -500 + rank
+            else
+                edgeCount = edgeCount + 1
+                record.layoutIndex = 99000 + edgeCount
+            end
+            record.sortID = 90000 + (tFrame.slotID or edgeCount)
         end
-        injectedTrinketCount = #injFrames
-
-        if injRow == 2 then
-            local essOnlyCount = tempIconPositionRecordCount - injectedTrinketCount
-            maxRowEss = math_min(maxRowEss, essOnlyCount)
-        end
+        injectedTrinketCount = edgeCount
     end
 
     local totalIcons = tempIconPositionRecordCount
@@ -961,31 +1020,19 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
         table_sort(tempIconPositionRecords, CompareIconPositionRecords)
     end
 
-    if injectedTrinketCount > 0 then
-        if injRow == 2 and injPos == "start" then
-            table_wipe(tempTrinketReorder)
-            for i = 1, injectedTrinketCount do
-                tempTrinketReorder[i] = tempIconPositionRecords[i]
-            end
-            for i = 1, maxRowEss do
-                tempIconPositionRecords[i] = tempIconPositionRecords[injectedTrinketCount + i]
-            end
-            for i = 1, injectedTrinketCount do
-                tempIconPositionRecords[maxRowEss + i] = tempTrinketReorder[i]
-            end
-
-        elseif injRow == 1 and injPos == "end" and totalIcons > maxRowEss then
-            local insertPos = math_max(1, maxRowEss - injectedTrinketCount + 1)
-            table_wipe(tempTrinketReorder)
-            for i = 1, injectedTrinketCount do
-                tempTrinketReorder[i] = tempIconPositionRecords[totalIcons - injectedTrinketCount + i]
-            end
-            for i = totalIcons - injectedTrinketCount, insertPos, -1 do
-                tempIconPositionRecords[i + injectedTrinketCount] = tempIconPositionRecords[i]
-            end
-            for i = 1, injectedTrinketCount do
-                tempIconPositionRecords[insertPos + i - 1] = tempTrinketReorder[i]
-            end
+    -- Keep unranked trinkets on row 1: pull them ahead of the wrap point when
+    -- the essential icons would otherwise push them onto the next row.
+    if injectedTrinketCount > 0 and totalIcons > maxRowEss then
+        local insertPos = math_max(1, maxRowEss - injectedTrinketCount + 1)
+        table_wipe(tempTrinketReorder)
+        for i = 1, injectedTrinketCount do
+            tempTrinketReorder[i] = tempIconPositionRecords[totalIcons - injectedTrinketCount + i]
+        end
+        for i = totalIcons - injectedTrinketCount, insertPos, -1 do
+            tempIconPositionRecords[i + injectedTrinketCount] = tempIconPositionRecords[i]
+        end
+        for i = 1, injectedTrinketCount do
+            tempIconPositionRecords[insertPos + i - 1] = tempTrinketReorder[i]
         end
     end
 

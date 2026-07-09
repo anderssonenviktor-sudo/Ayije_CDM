@@ -303,7 +303,14 @@ function Shared.CreateDragDropController(config)
             dragFrameCache.icon = icon
             dragFrameCache:SetAlpha(0.8)
         end
-        local tex = C_Spell.GetSpellTexture(Shared.GetDisplaySpellID(spellID))
+        local tex
+        local trinketSlot = CDM_C.GetTrinketSlotFromSentinel and CDM_C.GetTrinketSlotFromSentinel(spellID)
+        if trinketSlot then
+            local itemID = GetInventoryItemID("player", trinketSlot)
+            tex = itemID and C_Item.GetItemIconByID(itemID)
+        else
+            tex = C_Spell.GetSpellTexture(Shared.GetDisplaySpellID(spellID))
+        end
         if tex then
             dragFrameCache.icon:SetTexture(tex)
         else

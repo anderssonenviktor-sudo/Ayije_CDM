@@ -21,7 +21,6 @@ local SCROLL_FRAME_NAMES = {
     positions = "AyijeCDM_PosScrollFrame",
     racials = "AyijeCDM_RacialsScrollFrame",
     defensives = "AyijeCDM_DefensivesScrollFrame",
-    trinkets = "AyijeCDM_TrinketsScrollFrame",
     resources = "AyijeCDM_ResourcesScrollFrame",
     bars = "AyijeCDM_BarsScrollFrame",
     castbar = "AyijeCDM_CastBarScrollFrame",
@@ -154,7 +153,7 @@ ns.ConfigCreatePage = CreateCategoryPage
 local categoryHeaders = {
     { label = L["CDM"], tabs = {"layout", "buffgroups", "bars", "positions"} },
     { label = L["Styling"], tabs = {"sizes", "border", "text", "glow", "fading", "assist"} },
-    { label = L["Features"], tabs = {"racials", "resources", "defensives", "trinkets", "castbar"} },
+    { label = L["Features"], tabs = {"racials", "resources", "defensives", "castbar"} },
     { label = L["Utility"], tabs = {"profiles", "importexport"} },
 }
 

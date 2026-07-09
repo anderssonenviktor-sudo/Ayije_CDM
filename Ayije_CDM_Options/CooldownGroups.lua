@@ -12,6 +12,46 @@ local Shared = ns.GroupEditorShared or {}
 local NormalizeToBase = API.NormalizeToBase
 local SharedGetDisplaySpellID = Shared.GetDisplaySpellID
 
+local GetTrinketSlotFromSentinel = CDM_C.GetTrinketSlotFromSentinel
+local GetTrinketSentinelForSlot = CDM_C.GetTrinketSentinelForSlot
+local TRINKET_SLOT_IDS = CDM_C.TRINKET_SLOT_IDS or { 13, 14 }
+
+-- Trinkets participate in the Cooldowns editor per spec: the user adds them
+-- explicitly (Add Trinket / spell picker) and they are stored as tracked
+-- slots in db.cooldownTrinkets[specID][slotID].
+local function IsTrinketTracked(specID, slotID)
+    local bySpec = CDM.db and CDM.db.cooldownTrinkets
+    local slots = bySpec and specID and bySpec[specID]
+    return slots ~= nil and slots[slotID] == true
+end
+
+local function SetTrinketTracked(specID, slotID, tracked)
+    if not specID then return end
+    if not CDM.db.cooldownTrinkets then CDM.db.cooldownTrinkets = {} end
+    local slots = CDM.db.cooldownTrinkets[specID]
+    if tracked then
+        if not slots then
+            slots = {}
+            CDM.db.cooldownTrinkets[specID] = slots
+        end
+        slots[slotID] = true
+    elseif slots then
+        slots[slotID] = nil
+        if not next(slots) then CDM.db.cooldownTrinkets[specID] = nil end
+    end
+end
+
+-- Returns slotID, itemID, name, icon for a trinket sentinel ID (nil otherwise).
+local function GetTrinketInfoForID(spellID)
+    local slotID = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(spellID)
+    if not slotID then return nil end
+    local itemID = GetInventoryItemID("player", slotID)
+    local name = itemID and C_Item.GetItemNameByID(itemID)
+    local icon = itemID and C_Item.GetItemIconByID(itemID)
+    return slotID, itemID, name or (L["Trinket"] .. " " .. (slotID - 12)),
+        icon or "Interface\\Icons\\INV_Misc_QuestionMark"
+end
+
 local lookupCacheBySpec = {}
 
 local function GetSpecLookup(specID)
@@ -168,13 +208,25 @@ local function CreateCooldownGroupsPanel(subPage, page)
         return spellID
     end
 
+    local GetHoveredGridInsertAnchor, ApplyUngroupedGridOrder
+
     local RegisterDropTarget, ClearDropTargets, StartDrag, EndDrag, CancelDrag
     do
         local dragDrop = Shared.CreateDragDropController({
             onDrop = function(spellID, sourceGroup, targetGroupIndex, hitDropTarget)
                 if not spellID or not currentSpecID then return end
                 if not hitDropTarget then return end
-                if sourceGroup == targetGroupIndex then return end
+                if sourceGroup == targetGroupIndex then
+                    -- Grid onto grid: reorder the ungrouped viewer icons.
+                    if not sourceGroup and GetHoveredGridInsertAnchor then
+                        local anchorSpellID, insertBefore = GetHoveredGridInsertAnchor(spellID)
+                        if anchorSpellID and ApplyUngroupedGridOrder(spellID, anchorSpellID, insertBefore) then
+                            SaveAndRefresh()
+                            RefreshLeftPanelIfNeeded()
+                        end
+                    end
+                    return
+                end
 
                 local groups = EnsureGroups()
                 if not groups then return end
@@ -211,6 +263,14 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 elseif srcOvData then
                     local specOv = EnsureUngroupedOverrides()
                     if specOv then StoreMergedOverrideEntry(specOv, spellID, srcOvData) end
+                end
+
+                if not targetGroupIndex and GetHoveredGridInsertAnchor then
+                    -- Un-grouped by dropping onto a specific grid icon: keep that position.
+                    local anchorSpellID, insertBefore = GetHoveredGridInsertAnchor(spellID)
+                    if anchorSpellID then
+                        ApplyUngroupedGridOrder(spellID, anchorSpellID, insertBefore)
+                    end
                 end
 
                 SaveAndRefresh()
@@ -257,6 +317,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
             icon:SetAllPoints()
             frame.icon = icon
             CDM_C.ApplyIconTexCoord(icon, CDM_C.GetEffectiveZoomAmount())
+            local highlight = frame:CreateTexture(nil, "OVERLAY")
+            highlight:SetAllPoints()
+            highlight:SetColorTexture(1, 0.82, 0, 0.35)
+            highlight:Hide()
+            frame.highlight = highlight
             local overlay = CreateFrame("Button", nil, frame)
             overlay:SetAllPoints()
             overlay:SetFrameLevel(frame:GetFrameLevel() + 2)
@@ -357,6 +422,65 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
     ShowSpellSettings = function(spellID, groupIndex)
         if not spellID then ClearRightPanel(); return end
+
+        do
+            local trinketSlot, _, trinketName, trinketIcon = GetTrinketInfoForID(spellID)
+            if trinketSlot then
+                local _, rc = CreateRightScrollContent(200)
+                local header = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
+                header:SetPoint("TOPLEFT", 0, 0)
+                header:SetText(trinketName)
+                header:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
+
+                local iconContainer = CreateFrame("Frame", nil, rc)
+                iconContainer:SetSize(40, 40)
+                iconContainer:SetPoint("TOPLEFT", 0, -40)
+                local iconTex = iconContainer:CreateTexture(nil, "ARTWORK")
+                iconTex:SetAllPoints()
+                if trinketIcon then iconTex:SetTexture(trinketIcon) end
+                CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
+                if CDM.BORDER and CDM.BORDER.CreateBorder then
+                    CDM.BORDER:CreateBorder(iconContainer)
+                    if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[iconContainer] = nil end
+                end
+
+                local note = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+                note:SetPoint("TOPLEFT", 0, -100)
+                note:SetPoint("RIGHT", rc, "RIGHT", -4, 0)
+                note:SetJustifyH("LEFT")
+                note:SetText(L["This icon mirrors the trinket equipped in this slot. Drag it like any other cooldown, or drop it into a group."])
+                UI.SetTextMuted(note)
+
+                local removeBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+                removeBtn:SetSize(140, 22)
+                removeBtn:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
+                removeBtn:SetText(L["Remove Trinket"])
+                removeBtn:SetScript("OnClick", function()
+                    SetTrinketTracked(currentSpecID, trinketSlot, false)
+                    local groups = GetSpecGroups()
+                    if groups then
+                        for _, gd in ipairs(groups) do
+                            if gd.spells then Shared.RemoveSpellFromGroupList(gd.spells, spellID) end
+                        end
+                    end
+                    local orderBySpec = CDM.db.ungroupedCooldownOrder
+                    local order = orderBySpec and orderBySpec[currentSpecID]
+                    if order then
+                        for i = #order, 1, -1 do
+                            if order[i] == spellID then table.remove(order, i) end
+                        end
+                    end
+                    selectedSpellID = nil
+                    selectedSpellGroupIndex = nil
+                    ClearRightPanel()
+                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
+                end)
+
+                rc:SetHeight(200)
+                return
+            end
+        end
+
         local _, rc = CreateRightScrollContent(400)
         local yOff = 0
 
@@ -717,6 +841,15 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 result[#result + 1] = { spellID = spellID, cdID = slot.cdID, name = spellName, icon = icon, isKnown = isKnown }
             end
         end
+        for _, slotID in ipairs(TRINKET_SLOT_IDS) do
+            local sentinel = GetTrinketSentinelForSlot(slotID)
+            if GetInventoryItemID("player", slotID)
+                and not Shared.HasEquivalentSpellID(assigned, sentinel)
+            then
+                local _, _, trinketName, trinketIcon = GetTrinketInfoForID(sentinel)
+                result[#result + 1] = { spellID = sentinel, cdID = nil, name = trinketName, icon = trinketIcon, isKnown = true }
+            end
+        end
         table.sort(result, function(a, b) return a.name < b.name end)
         return result
     end
@@ -736,6 +869,32 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     end
                 end
             end
+        end
+        local rankMap
+        do
+            local bySpec = CDM.db.ungroupedCooldownOrder
+            local order = bySpec and bySpec[currentSpecID]
+            if type(order) == "table" and #order > 0 then
+                rankMap = {}
+                for i, sid in ipairs(order) do
+                    if rankMap[sid] == nil then rankMap[sid] = i end
+                    local baseID = NormalizeToBase and NormalizeToBase(sid)
+                    if baseID and rankMap[baseID] == nil then rankMap[baseID] = i end
+                end
+            end
+        end
+        local function GetSavedRank(spellID)
+            if not rankMap then return nil end
+            local rank = rankMap[spellID]
+            if not rank and NormalizeToBase then
+                local baseID = NormalizeToBase(spellID)
+                if baseID then rank = rankMap[baseID] end
+            end
+            if not rank then
+                local overrideID = ResolveCooldownOverrideID(spellID)
+                if overrideID ~= spellID then rank = rankMap[overrideID] end
+            end
+            return rank
         end
         local seen = {}
         local icons = {}
@@ -757,21 +916,110 @@ local function CreateCooldownGroupsPanel(subPage, page)
                             seen[slotKey] = true
                             local li = frame.layoutIndex
                             local safeLayoutIndex = IsSafeNumber(li) and li or 0
-                            icons[#icons + 1] = { spellID = displayID, layoutIndex = safeLayoutIndex, viewerOrder = viewerOffset }
+                            icons[#icons + 1] = { spellID = displayID, layoutIndex = safeLayoutIndex, viewerOrder = viewerOffset, rank = GetSavedRank(displayID) }
                         end
                     end
                 end
             end
             viewerOffset = viewerOffset + 10000
         end
+        for _, slotID in ipairs(TRINKET_SLOT_IDS) do
+            if IsTrinketTracked(currentSpecID, slotID) then
+                local sentinel = GetTrinketSentinelForSlot(slotID)
+                if not Shared.HasEquivalentSpellID(groupedSet, sentinel) then
+                    icons[#icons + 1] = {
+                        spellID = sentinel,
+                        layoutIndex = 99000 + slotID,
+                        viewerOrder = 0,
+                        rank = GetSavedRank(sentinel),
+                    }
+                end
+            end
+        end
+        -- Blend saved ranks with Blizzard order (mirrors the runtime layout):
+        -- unranked icons follow the ranked icon that precedes them in
+        -- Blizzard order rather than sorting to the end.
         table.sort(icons, function(a, b)
             if a.viewerOrder ~= b.viewerOrder then return a.viewerOrder < b.viewerOrder end
             if a.layoutIndex ~= b.layoutIndex then return a.layoutIndex < b.layoutIndex end
             return a.spellID < b.spellID
         end)
+        do
+            local prevViewer, lastRank, run
+            for _, data in ipairs(icons) do
+                if data.viewerOrder ~= prevViewer then
+                    prevViewer = data.viewerOrder
+                    lastRank, run = 0, 0
+                end
+                if data.rank then
+                    data.effRank = data.rank
+                    lastRank = data.rank
+                    run = 0
+                else
+                    run = run + 1
+                    data.effRank = lastRank + run * 0.001
+                end
+            end
+        end
+        table.sort(icons, function(a, b)
+            if a.viewerOrder ~= b.viewerOrder then return a.viewerOrder < b.viewerOrder end
+            if a.effRank ~= b.effRank then return a.effRank < b.effRank end
+            return a.spellID < b.spellID
+        end)
         local result = {}
         for _, data in ipairs(icons) do result[#result + 1] = data.spellID end
         return result
+    end
+
+    -- Which ungrouped grid icon is the cursor over? Returns that icon's spellID
+    -- and whether the drop lands on its left half (insert before) or right half.
+    GetHoveredGridInsertAnchor = function(spellID)
+        if currentSpecID ~= playerSpecID then return nil end
+        for i = 1, gridIconsActive do
+            local frame = gridIcons[i]
+            if frame:IsShown() and frame.cdmSpellID and frame.cdmSpellID ~= spellID and frame:IsMouseOver() then
+                local left, right = frame:GetLeft(), frame:GetRight()
+                if left and right then
+                    local x = GetCursorPosition()
+                    x = x / frame:GetEffectiveScale()
+                    return frame.cdmSpellID, x < (left + right) / 2
+                end
+            end
+        end
+        return nil
+    end
+
+    ApplyUngroupedGridOrder = function(spellID, anchorSpellID, insertBefore)
+        if not currentSpecID or not anchorSpellID or anchorSpellID == spellID then return false end
+
+        local dragSet = {}
+        Shared.MarkEquivalentSpellIDs(dragSet, spellID)
+        local overrideID = ResolveCooldownOverrideID(spellID)
+        if overrideID ~= spellID then
+            Shared.MarkEquivalentSpellIDs(dragSet, overrideID)
+        end
+
+        local newOrder = {}
+        for _, sid in ipairs(GetUngroupedSpellsFromViewers()) do
+            if not Shared.HasEquivalentSpellID(dragSet, sid) then
+                newOrder[#newOrder + 1] = sid
+            end
+        end
+
+        local insertAt = #newOrder + 1
+        for i, sid in ipairs(newOrder) do
+            if sid == anchorSpellID then
+                insertAt = insertBefore and i or (i + 1)
+                break
+            end
+        end
+        table.insert(newOrder, insertAt, spellID)
+
+        if not CDM.db.ungroupedCooldownOrder then
+            CDM.db.ungroupedCooldownOrder = {}
+        end
+        CDM.db.ungroupedCooldownOrder[currentSpecID] = newOrder
+        return true
     end
 
     ShowSpellPickerPanel = function(groupIndex)
@@ -795,9 +1043,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 local currentGroups = EnsureGroups()
                 if not currentGroups or not currentGroups[groupIndex] then return end
                 if not currentGroups[groupIndex].spells then currentGroups[groupIndex].spells = {} end
+                local pickedTrinketSlot = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(sid)
                 if cdID then
                     local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
                     if info and info.spellID then sid = info.spellID end
+                elseif pickedTrinketSlot then
+                    SetTrinketTracked(currentSpecID, pickedTrinketSlot, true)
                 else
                     sid = ResolveCooldownStableBase(sid)
                 end
@@ -831,8 +1082,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
         row:ClearAllPoints()
         row:SetPoint("TOPLEFT", 8, y)
 
+        local trinketSlot, _, trinketName, trinketIcon = GetTrinketInfoForID(spellID)
         local displayID = GetDisplaySpellID(spellID)
-        local tex = C_Spell.GetSpellTexture(displayID)
+        local tex = trinketSlot and trinketIcon or C_Spell.GetSpellTexture(displayID)
         if tex then widget.iconTex:SetTexture(tex) end
         CDM_C.ApplyIconTexCoord(widget.iconTex, CDM_C.GetEffectiveZoomAmount())
 
@@ -882,7 +1134,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
         widget.nameText:ClearAllPoints()
         widget.nameText:SetPoint("LEFT", widget.iconContainer, "RIGHT", 6, 0)
         widget.nameText:SetPoint("RIGHT", widget.removeBtn:IsShown() and widget.removeBtn or row, widget.removeBtn:IsShown() and "LEFT" or "RIGHT", widget.removeBtn:IsShown() and -2 or -4, 0)
-        widget.nameText:SetText(C_Spell.GetSpellName(displayID) or L["Unknown"])
+        widget.nameText:SetText(trinketSlot and trinketName or C_Spell.GetSpellName(displayID) or L["Unknown"])
         if isActive == false then UI.SetTextMuted(widget.nameText)
         elseif selectedSpellID == spellID then UI.SetTextWhite(widget.nameText)
         else UI.SetTextSubtle(widget.nameText) end
@@ -956,6 +1208,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
         for i, spellID in ipairs(spells) do
             local frame = AcquireGridIcon()
+            frame.cdmSpellID = spellID
 
             if CDM.BORDER and CDM.BORDER.CreateBorder then
                 CDM.BORDER:CreateBorder(frame, { forceUpdate = true })
@@ -967,8 +1220,13 @@ local function CreateCooldownGroupsPanel(subPage, page)
             frame:ClearAllPoints()
             frame:SetPoint("TOPLEFT", col * (GRID_ICON_SIZE + iconGap), -row * (GRID_ICON_SIZE + iconGap))
 
-            local gridDisplayID = GetDisplaySpellID(spellID)
-            local tex = C_Spell.GetSpellTexture(gridDisplayID)
+            local trinketSlot, _, _, trinketIcon = GetTrinketInfoForID(spellID)
+            local tex
+            if trinketSlot then
+                tex = trinketIcon
+            else
+                tex = C_Spell.GetSpellTexture(GetDisplaySpellID(spellID))
+            end
             if tex then frame.icon:SetTexture(tex) end
             frame.icon:SetDesaturated(false)
             frame.icon:SetAlpha(1)
@@ -979,7 +1237,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
             frame.overlay:SetScript("OnEnter", function(self)
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetSpellByID(spellID)
+                if trinketSlot then
+                    GameTooltip:SetInventoryItem("player", trinketSlot)
+                else
+                    GameTooltip:SetSpellByID(spellID)
+                end
                 GameTooltip:Show()
             end)
             frame.overlay:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -1015,6 +1277,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
         emptyRowPool:ReleaseAll()
         ClearDropTargets()
         RegisterDropTarget(iconGridFrame, nil)
+        for i = 1, gridIconsActive do
+            RegisterDropTarget(gridIcons[i], nil)
+        end
 
         local isViewingPlayer = currentSpecID == playerSpecID
         local activeSpellSet = isViewingPlayer and BuildCooldownActiveSet() or nil
@@ -1171,9 +1436,16 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     local groupY = 0
                     if spells and #spells > 0 then
                         for spellIndex, spellID in ipairs(spells) do
-                            local active = not isViewingPlayer
-                                or Shared.HasEquivalentSpellID(activeSpellSet, spellID)
-                                or Shared.HasEquivalentSpellID(activeSpellSet, ResolveCooldownOverrideID(spellID))
+                            local active
+                            local trinketSlot = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(spellID)
+                            if trinketSlot then
+                                active = not isViewingPlayer
+                                    or GetInventoryItemID("player", trinketSlot) ~= nil
+                            else
+                                active = not isViewingPlayer
+                                    or Shared.HasEquivalentSpellID(activeSpellSet, spellID)
+                                    or Shared.HasEquivalentSpellID(activeSpellSet, ResolveCooldownOverrideID(spellID))
+                            end
                             ConfigureSpellRow(
                                 spellRowPool:Acquire(groupContainer),
                                 groupContainer,
@@ -1245,6 +1517,61 @@ local function CreateCooldownGroupsPanel(subPage, page)
             if selectedGroupIndex then ShowSpellPickerPanel(selectedGroupIndex) end
         end)
         addIconBtnRef = addIconBtn
+
+        local addTrinketBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        addTrinketBtn:SetSize(96, 22)
+        addTrinketBtn:SetPoint("LEFT", addIconBtn, "RIGHT", 6, 0)
+        addTrinketBtn:SetText(L["Add Trinket"])
+        addTrinketBtn:SetScript("OnClick", function()
+            if not currentSpecID then return end
+            MenuUtil.CreateContextMenu(addTrinketBtn, function(_, rootDescription)
+                local groupedSet = {}
+                local groups = GetSpecGroups()
+                if groups then
+                    for _, gd in ipairs(groups) do
+                        for _, sid in ipairs(gd.spells or {}) do
+                            groupedSet[sid] = true
+                        end
+                    end
+                end
+                local hidePassive = CDM.db.cooldownTrinketsHidePassive == true
+                local anyOffered = false
+                for _, slotID in ipairs(TRINKET_SLOT_IDS) do
+                    local sentinel = GetTrinketSentinelForSlot(slotID)
+                    local itemID = GetInventoryItemID("player", slotID)
+                    local isOnUse = false
+                    if itemID and C_Item.GetItemSpell then
+                        local _, useSpellID = C_Item.GetItemSpell(itemID)
+                        isOnUse = useSpellID ~= nil
+                    end
+                    if itemID
+                        and not IsTrinketTracked(currentSpecID, slotID)
+                        and not groupedSet[sentinel]
+                        and (isOnUse or not hidePassive)
+                    then
+                        anyOffered = true
+                        local name = C_Item.GetItemNameByID(itemID) or (L["Trinket"] .. " " .. (slotID - 12))
+                        local icon = C_Item.GetItemIconByID(itemID)
+                        local label = icon and ("|T" .. icon .. ":16:16:0:0:64:64:5:59:5:59|t " .. name) or name
+                        rootDescription:CreateButton(label, function()
+                            SetTrinketTracked(currentSpecID, slotID, true)
+                            SaveAndRefresh(); RefreshLeftPanelIfNeeded()
+                        end)
+                    end
+                end
+                if not anyOffered then
+                    rootDescription:CreateTitle(L["No equipped trinkets left to add"])
+                end
+                rootDescription:CreateDivider()
+                rootDescription:CreateCheckbox(
+                    L["Hide passive trinkets"],
+                    function() return CDM.db.cooldownTrinketsHidePassive == true end,
+                    function()
+                        CDM.db.cooldownTrinketsHidePassive = not CDM.db.cooldownTrinketsHidePassive
+                    end
+                )
+            end)
+        end)
     end
 
     RefreshAll = function()

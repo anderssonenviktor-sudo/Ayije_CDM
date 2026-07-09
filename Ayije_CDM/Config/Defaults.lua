@@ -190,7 +190,6 @@ CDM.defaults = {
     -- Module enable/disable toggles
     racialsEnabled = true,
     defensivesEnabled = true,
-    trinketsEnabled = true,
     resourcesEnabled = true,
     externalsEnabled = true,
 
@@ -238,18 +237,10 @@ CDM.defaults = {
     defensivesCustomSpells = {},
     defensivesOrder = {},
 
-    -- Trinkets tracker settings
-    trinketsIconWidth = 40,
-    trinketsIconHeight = 36,
-    trinketsAnchorPoint = "TOPLEFT",
-    trinketsOffsetX = 0,
-    trinketsOffsetY = 0,
-    trinketsCooldownFontSize = 15,
-    trinketsShowPassive = true,
-    trinketsBlacklist = {},
-    trinketsMode = "independent",       -- "independent", "defensives", "essential"
-    trinketsEssentialRow = 1,           -- 1 or 2 (which row trinkets appear in)
-    trinketsEssentialPosition = "end",  -- "start" or "end"
+    -- Trinket icons in the cooldown viewer: per-spec tracked slots,
+    -- cooldownTrinkets[specID] = { [13] = true, [14] = true }.
+    cooldownTrinkets = {},
+    cooldownTrinketsHidePassive = false,
 
     -- Party frame anchoring settings
     racialsUsePartyFrame = false,
@@ -315,6 +306,7 @@ CDM.defaults = {
     ungroupedBuffOverrides = {},
     cooldownGroups = {},
     ungroupedCooldownOverrides = {},
+    ungroupedCooldownOrder = {},
 
     -- Global Text Settings
     textFont = "Friz Quadrata TT",

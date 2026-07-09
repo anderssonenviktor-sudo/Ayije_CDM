@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 23
+local DB_SCHEMA_VERSION = 25
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1090,6 +1090,60 @@ local PROFILE_MIGRATIONS = {
             if rawget(profile, "textFontOutline") == "NONE" then
                 profile.textFontOutline = ""
             end
+        end,
+    },
+    {
+        version = 24,
+        run = function(profile)
+            -- Trinkets moved into the Cooldowns editor: display is now driven
+            -- by per-spec tracked slots in cooldownTrinkets. Profiles that
+            -- showed trinkets among the Essential cooldowns keep them for
+            -- every spec that has cooldown data; the old standalone-tracker
+            -- mode and filter settings are dropped.
+            local wasEssential = rawget(profile, "trinketsEnabled") ~= false
+                and rawget(profile, "trinketsMode") == "essential"
+            if wasEssential then
+                local tracked = rawget(profile, "cooldownTrinkets")
+                if type(tracked) ~= "table" then
+                    tracked = {}
+                    profile.cooldownTrinkets = tracked
+                end
+                local function seed(bySpec)
+                    if type(bySpec) ~= "table" then return end
+                    for specID in pairs(bySpec) do
+                        if type(specID) == "number" then
+                            local slots = tracked[specID]
+                            if type(slots) ~= "table" then
+                                slots = {}
+                                tracked[specID] = slots
+                            end
+                            if slots[13] == nil then slots[13] = true end
+                            if slots[14] == nil then slots[14] = true end
+                        end
+                    end
+                end
+                seed(rawget(profile, "cooldownGroups"))
+                seed(rawget(profile, "ungroupedCooldownOrder"))
+            end
+            profile.trinketsEnabled = nil
+            profile.trinketsMode = nil
+            profile.trinketsShowPassive = nil
+            profile.trinketsBlacklist = nil
+            profile.trinketsEssentialRow = nil
+            profile.trinketsEssentialPosition = nil
+        end,
+    },
+    {
+        version = 25,
+        run = function(profile)
+            -- The standalone trinket tracker's size/position settings are
+            -- gone too; trinket icons take the essential viewer's styling.
+            profile.trinketsIconWidth = nil
+            profile.trinketsIconHeight = nil
+            profile.trinketsAnchorPoint = nil
+            profile.trinketsOffsetX = nil
+            profile.trinketsOffsetY = nil
+            profile.trinketsCooldownFontSize = nil
         end,
     },
 }

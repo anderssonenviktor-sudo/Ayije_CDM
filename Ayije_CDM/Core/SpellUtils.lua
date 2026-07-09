@@ -480,6 +480,21 @@ function CDM.CheckCdGroupMatch(frame)
     local sets = CDM.CooldownGroupSets
     local cdidSet = sets and sets.cooldownIDGrouped or EMPTY_SET
     local spellSet = sets and sets.grouped or EMPTY_SET
+
+    -- Trinket tracker frames (slotID + itemID) match groups via their slot sentinel.
+    if frame and frame.slotID and frame.itemID then
+        local getSentinel = CDM.CONST and CDM.CONST.GetTrinketSentinelForSlot
+        if getSentinel then
+            local sentinel = getSentinel(frame.slotID)
+            local groupIdx = spellSet[sentinel]
+            if groupIdx then
+                GetFrameData(frame).cdGroupSpellID = sentinel
+                return groupIdx
+            end
+        end
+        return nil
+    end
+
     local _, groupIdx = CheckCooldownGroupMatch(frame, cdidSet, spellSet, "cdGroupSpellID")
     return groupIdx
 end

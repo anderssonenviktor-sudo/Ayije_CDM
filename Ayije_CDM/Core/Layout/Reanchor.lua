@@ -326,6 +326,9 @@ local function CollectCrossViewerGroupFrames(activeVName, inEditMode)
 end
 
 local function DispatchCooldownGroupFrames(activeSelf)
+    if CDM.CollectGroupedTrinketFrames then
+        CDM.CollectGroupedTrinketFrames(tempCdGroups)
+    end
     for groupIdx, groupFrames in pairs(tempCdGroups) do
         if #groupFrames > 0 and activeSelf.PositionCooldownGroupFrames then
             activeSelf:PositionCooldownGroupFrames(groupIdx, groupFrames)
