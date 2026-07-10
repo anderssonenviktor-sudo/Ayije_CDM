@@ -19,7 +19,6 @@ local lastFooterFont = nil
 local combatCloseRegistered = false
 local SCROLL_FRAME_NAMES = {
     positions = "AyijeCDM_PosScrollFrame",
-    defensives = "AyijeCDM_DefensivesScrollFrame",
     resources = "AyijeCDM_ResourcesScrollFrame",
     bars = "AyijeCDM_BarsScrollFrame",
     castbar = "AyijeCDM_CastBarScrollFrame",
@@ -147,7 +146,7 @@ ns.ConfigCreatePage = CreateCategoryPage
 local categoryHeaders = {
     { label = L["CDM"], tabs = {"layout", "buffgroups", "bars", "positions"} },
     { label = L["Styling"], tabs = {"sizes", "border", "text", "glow", "fading", "assist"} },
-    { label = L["Features"], tabs = {"resources", "defensives", "castbar"} },
+    { label = L["Features"], tabs = {"resources", "castbar"} },
     { label = L["Utility"], tabs = {"profiles", "importexport"} },
 }
 
@@ -363,23 +362,6 @@ function API:RebuildConfigFrame(targetTab)
     end
 
     if ConfigFrame then
-        if ns.eventRegistryTokens and EventRegistry then
-            for eventKey, tokenEntry in pairs(ns.eventRegistryTokens) do
-                local eventName = eventKey
-                local token = tokenEntry
-
-                if type(tokenEntry) == "table" then
-                    eventName = tokenEntry.eventName or tokenEntry[1] or eventKey
-                    token = tokenEntry.token or tokenEntry[2]
-                end
-
-                if eventName and token then
-                    EventRegistry:UnregisterCallback(eventName, token)
-                end
-            end
-            ns.eventRegistryTokens = {}
-        end
-
         API:UnregisterPositionSliderUpdater("essential")
         API:UnregisterPositionSliderUpdater("buff")
         API:UnregisterPositionSliderUpdater("buffBar")

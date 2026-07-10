@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 26
+local DB_SCHEMA_VERSION = 27
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1177,6 +1177,28 @@ local PROFILE_MIGRATIONS = {
             profile.fadingRacials = nil
         end,
     },
+    {
+        version = 27,
+        run = function(profile)
+            -- The Defensives tracker was removed: all of its settings are
+            -- dropped.
+            profile.defensivesEnabled = nil
+            profile.defensivesIconWidth = nil
+            profile.defensivesIconHeight = nil
+            profile.defensivesAnchorPoint = nil
+            profile.defensivesOffsetX = nil
+            profile.defensivesOffsetY = nil
+            profile.defensivesChargeFontSize = nil
+            profile.defensivesCooldownFontSize = nil
+            profile.defensivesChargePosition = nil
+            profile.defensivesChargeOffsetX = nil
+            profile.defensivesChargeOffsetY = nil
+            profile.defensivesDisabledSpells = nil
+            profile.defensivesCustomSpells = nil
+            profile.defensivesOrder = nil
+            profile.fadingDefensives = nil
+        end,
+    },
 }
 
 local function GetCurrentSchemaVersion(globalData)
@@ -1609,36 +1631,6 @@ end
 
 function CDM:InvalidateSpecIDCache()
     cachedSpecID = nil
-end
-
-local function GetPerSpecSetting(dbFieldName, specID, default)
-    if not specID then return default end
-    local db = CDM.db
-    if not db then return default end
-    local settings = db[dbFieldName]
-    if type(settings) ~= "table" then return default end
-    local stored = settings[specID]
-    if stored ~= nil then return stored end
-    return default
-end
-
-local function SetPerSpecSetting(dbFieldName, specID, value, default)
-    if not specID then return end
-    local db = CDM.db
-    if not db then return end
-    local isDefault = (value == default) or (default == true and value == nil)
-    if isDefault then
-        local settings = db[dbFieldName]
-        if type(settings) == "table" then
-            settings[specID] = nil
-            if not next(settings) then db[dbFieldName] = nil end
-        end
-    else
-        if type(db[dbFieldName]) ~= "table" then
-            db[dbFieldName] = {}
-        end
-        db[dbFieldName][specID] = value
-    end
 end
 
 local _, RESOURCE_PLAYER_CLASS = UnitClass("player")

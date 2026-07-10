@@ -188,7 +188,6 @@ CDM.defaults = {
     pressOverlayBorderColor = { r = 1, g = 1, b = 1, a = 1 },
 
     -- Module enable/disable toggles
-    defensivesEnabled = true,
     resourcesEnabled = true,
     externalsEnabled = true,
 
@@ -203,21 +202,6 @@ CDM.defaults = {
     externalsIconHeight = 30,
     externalsCooldownFontSize = 15,
     externalsDisableBlink = true,
-
-    -- Defensives tracker settings
-    defensivesIconWidth = 40,
-    defensivesIconHeight = 36,
-    defensivesAnchorPoint = "TOPRIGHT",
-    defensivesOffsetX = 0,
-    defensivesOffsetY = 0,
-    defensivesChargeFontSize = 15,
-    defensivesCooldownFontSize = 15,
-    defensivesChargePosition = "TOP",
-    defensivesChargeOffsetX = 0,
-    defensivesChargeOffsetY = 2,
-    defensivesDisabledSpells = {},
-    defensivesCustomSpells = {},
-    defensivesOrder = {},
 
     -- Trinket icons in the cooldown viewer: per-spec tracked slots,
     -- cooldownTrinkets[specID] = { [13] = true, [14] = true }.
@@ -390,7 +374,6 @@ CDM.defaults = {
     fadingUtility = true,
     fadingBuffs = true,
     fadingBuffBars = true,
-    fadingDefensives = true,
     fadingTrinkets = true,
     fadingResources = true,
 }

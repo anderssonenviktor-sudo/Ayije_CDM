@@ -4,7 +4,6 @@
     <Script file="Resources_Trackers.lua"/>
     <Script file="Resources_Conditions.lua"/>
     <Script file="Tags.lua"/>
-    <Script file="Defensives.lua"/>
     <Script file="Trinkets.lua"/>
     <Script file="CustomCooldowns.lua"/>
     <Script file="CustomBuffs.lua"/>

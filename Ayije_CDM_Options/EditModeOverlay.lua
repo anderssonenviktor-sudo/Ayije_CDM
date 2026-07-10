@@ -6,18 +6,23 @@ local UI = ns.ConfigUI
 local L = Runtime.L
 local CDM_C = CDM.CONST
 
+-- Enum may be unavailable (e.g. Blizzard_EditMode not loaded yet); bail so the
+-- rest of the Options embeds still load. ConfigFrame nil-checks ns.CreateEditModeOverlay.
+local SystemIndices = Enum.EditModeCooldownViewerSystemIndices
+if not SystemIndices then return end
+
 local VIEWER_LABELS = {
-    [Enum.EditModeCooldownViewerSystemIndices.Essential] = "Essential",
-    [Enum.EditModeCooldownViewerSystemIndices.Utility]   = "Utility",
-    [Enum.EditModeCooldownViewerSystemIndices.BuffIcon]  = "Buff Icons",
-    [Enum.EditModeCooldownViewerSystemIndices.BuffBar]   = "Buff Bars",
+    [SystemIndices.Essential] = "Essential",
+    [SystemIndices.Utility]   = "Utility",
+    [SystemIndices.BuffIcon]  = "Buff Icons",
+    [SystemIndices.BuffBar]   = "Buff Bars",
 }
 
 local VIEWER_ORDER = {
-    Enum.EditModeCooldownViewerSystemIndices.Essential,
-    Enum.EditModeCooldownViewerSystemIndices.Utility,
-    Enum.EditModeCooldownViewerSystemIndices.BuffIcon,
-    Enum.EditModeCooldownViewerSystemIndices.BuffBar,
+    SystemIndices.Essential,
+    SystemIndices.Utility,
+    SystemIndices.BuffIcon,
+    SystemIndices.BuffBar,
 }
 
 local COLOR_COMPLIANT  = { 0.20, 0.75, 0.30, 1.0 }

@@ -206,8 +206,9 @@ function CDM.CreateTracker(config)
     function tracker.Update()
         if not container then return end
 
+        local currentSpec = GetCurrentSpecID()
+
         if useEntryPool then
-            local currentSpec = GetCurrentSpecID()
             if currentSpec and currentSpec ~= lastSpecID then
                 lastSpecID = currentSpec
                 tracker.Reinit()

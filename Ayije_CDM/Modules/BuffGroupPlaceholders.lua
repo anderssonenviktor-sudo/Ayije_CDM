@@ -8,8 +8,6 @@ CDM.BuffGroupPlaceholders = CDM.BuffGroupPlaceholders or {}
 
 local GetFrameData = CDM.GetFrameData
 
-local math_max = math.max
-local math_floor = math.floor
 local ipairs = ipairs
 local pairs = pairs
 local next = next

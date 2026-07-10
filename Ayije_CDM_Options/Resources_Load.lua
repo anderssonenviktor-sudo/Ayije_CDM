@@ -52,38 +52,6 @@ local function SetLoadMode(classKey, barKey, mode)
     API:Refresh("RESOURCES", "LAYOUT")
 end
 
-local function GetSpecsForBar(classKey, barKey)
-    if barKey == "Mana" then
-        local manaSpecs = CDM.MANA_SPECS
-        if not manaSpecs then return {} end
-        local specs = {}
-        for specID in pairs(manaSpecs) do
-            local _, specName = GetSpecializationInfoByID(specID)
-            if specName then
-                specs[#specs + 1] = { specID = specID, specName = specName }
-            end
-        end
-        table.sort(specs, function(a, b) return a.specID < b.specID end)
-        return specs
-    end
-
-    local _, CLASS_SPECS = Shared.GetClassCatalog()
-    local allSpecs = CLASS_SPECS and CLASS_SPECS[classKey] or {}
-
-    -- Druid form-swapping: any spec can bear into Rage or cat into Energy/ComboPoints.
-    -- Ironfur (Guardian-only) and LunarPower (Balance-only) remain single-spec via SPEC_POWER_MAP.
-    local isDruidShared = classKey == "DRUID"
-        and (barKey == "Rage" or barKey == "Energy" or barKey == "ComboPoints")
-
-    local result = {}
-    for _, specInfo in ipairs(allSpecs) do
-        if isDruidShared or ns.IsBarActiveForSpec(barKey, specInfo.specID) then
-            result[#result + 1] = specInfo
-        end
-    end
-    return result
-end
-
 local function SetDimmed(frame, dimmed)
     frame:SetAlpha(dimmed and 0.4 or 1)
 end
@@ -188,7 +156,7 @@ local function ShowBarLoad(loadPage, loadManager, classKey, barKey)
         cYOff = cYOff - 40
     end
 
-    local specs = GetSpecsForBar(classKey, barKey)
+    local specs = ns.GetSpecsForBar(classKey, barKey)
     if #specs > 1 then
         local specLabel = condContainer:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
         specLabel:SetText(L["Specialization"])

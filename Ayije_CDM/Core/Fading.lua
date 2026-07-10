@@ -56,11 +56,6 @@ Fading:RegisterTarget("fadingBuffs", function(a)
     end
 end)
 
-Fading:RegisterTarget("fadingDefensives", function(a)
-    local c = _G["CDM_DefensivesContainer"]
-    if c then c:SetAlpha(a) end
-end)
-
 Fading:RegisterTarget("fadingTrinkets", function(a)
     local tFrames = CDM.GetTrinketIconFrames and CDM.GetTrinketIconFrames()
     if tFrames then
@@ -188,14 +183,6 @@ end
 function Fading:ReapplyCurrent()
     if currentAlpha >= 1.0 and not animating then return end
     ApplyAlphaToAll(currentAlpha)
-end
-
-function Fading:GetAlpha(targetKey)
-    if not isEnabled then return 1.0 end
-    if CDM.db[targetKey] ~= false then
-        return currentAlpha
-    end
-    return 1.0
 end
 
 local function OnTargetChanged()

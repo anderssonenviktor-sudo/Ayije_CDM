@@ -567,13 +567,6 @@ function Shared.BuildGroupContextMenu(rootDescription, labels, onRename, onDupli
     end
 end
 
-local HIDE_BY_DEFAULT_FLAG = Enum.CooldownSetSpellFlags and Enum.CooldownSetSpellFlags.HideByDefault
-
-function Shared.IsHiddenByDefault(info)
-    return info and info.flags and HIDE_BY_DEFAULT_FLAG and FlagsUtil and FlagsUtil.IsSet
-        and FlagsUtil.IsSet(info.flags, HIDE_BY_DEFAULT_FLAG) or false
-end
-
 function Shared.GetConfiguredBorderColor()
     if Runtime.GetConfiguredBorderColor then
         return Runtime.GetConfiguredBorderColor()

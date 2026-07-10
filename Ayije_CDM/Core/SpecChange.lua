@@ -70,7 +70,6 @@ function CDM:InitializeSpecChangeSystem()
 
         C_Timer.After(0.1, function()
             if specChangeVersion ~= myVersion then return end
-            if self.UpdateDefensives then self:UpdateDefensives() end
             if self.UpdateCustomCooldowns then self:UpdateCustomCooldowns() end
             if self.UpdateResources then self:UpdateResources() end
             if self.UpdatePlayerCastBar then self:UpdatePlayerCastBar() end

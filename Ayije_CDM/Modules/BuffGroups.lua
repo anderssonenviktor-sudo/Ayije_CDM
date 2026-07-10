@@ -211,32 +211,6 @@ local function BuildGroupSpellLookup(spells)
     return scratchGroupSpellLookup
 end
 
-local function IsSpellEligible(spellID, groupSpellLookup, activeSpellSet)
-    if not spellID then return false end
-
-    local registryMatched = false
-    if CDM.CheckIDAgainstRegistry then
-        local matchType = CDM.CheckIDAgainstRegistry(spellID)
-        if matchType == "buffgroup" then
-            registryMatched = true
-        end
-    end
-
-    if not registryMatched then
-        if type(groupSpellLookup) ~= "table" then
-            return false
-        end
-
-        registryMatched = groupSpellLookup[spellID] == true
-    end
-
-    if not registryMatched then
-        return false
-    end
-
-    return IsSpellActiveInViewer(spellID, activeSpellSet)
-end
-
 local function IsSpellMarkedActive(spellID, activeSpellIDs)
     return activeSpellIDs[spellID] == true
 end

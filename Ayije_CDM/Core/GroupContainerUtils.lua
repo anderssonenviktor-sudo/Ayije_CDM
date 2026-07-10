@@ -1,6 +1,5 @@
 local AddonName = "Ayije_CDM"
 local CDM = _G[AddonName]
-local CDM_C = CDM.CONST
 local Pixel = CDM.Pixel
 local Snap = Pixel.Snap
 

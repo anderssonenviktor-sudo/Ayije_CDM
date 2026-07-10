@@ -88,7 +88,6 @@ local function CreateFadingTab(page, tabId)
         { key = "fadingUtility",    label = L["Utility"] },
         { key = "fadingBuffs",      label = L["Buffs"] },
         { key = "fadingBuffBars",   label = L["Buff Bars"] },
-        { key = "fadingDefensives", label = L["Defensives"] },
         { key = "fadingTrinkets",   label = L["Trinkets"] },
         { key = "fadingResources",  label = L["Resources"] },
     }

@@ -436,27 +436,6 @@ local function EnsureBuffGlowTargetHooks(frame)
     end)
 end
 
-function Glow:StartGlow(frame, overrideColor)
-    ShowCustomGlow(frame, overrideColor)
-end
-
-function Glow:StopGlow(frame)
-    if frame then
-        local frameData = GetFrameData(frame)
-        frameData.cdmBuffGlowWanted = nil
-        frameData.cdmBuffGlowSourceID = nil
-        frameData.cdmBuffGlowOverrideColor = nil
-
-        local host = frameData.cdmBuffGlowHost
-        if host then
-            HideCustomGlow(host)
-            host:Hide()
-        end
-    end
-
-    HideCustomGlow(frame)
-end
-
 function Glow:RequestBuffGlow(frame, enabled, overrideColor, sourceID)
     if not frame or not LCG then return end
 

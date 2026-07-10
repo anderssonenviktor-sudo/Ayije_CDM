@@ -9,7 +9,6 @@ local InCombatLockdown = InCombatLockdown
 local VIEWERS = CDM_C.VIEWERS
 local ALL_VIEWER_NAMES = CDM_C.ALL_VIEWER_NAMES
 local UPDATE_CONSTANTS_METHODS = {
-    "UpdateDefensives",
     "UpdateTrinkets",
     "UpdateCustomCooldowns",
     "UpdateResources",
@@ -376,7 +375,6 @@ local function SetupZoneTransitionEvents()
 end
 
 local function RunProfileAppliedHooks()
-    CDM.OnDefensivesProfileApplied()
     CDM.OnTrinketsProfileApplied()
     CDM.OnCustomCooldownsProfileApplied()
     CDM.OnResourcesProfileApplied()
@@ -386,7 +384,6 @@ end
 CDM.RunProfileAppliedHooks = RunProfileAppliedHooks
 
 local function InitializeModules()
-    CDM.ReconcileDefensives()
     CDM.ReconcileTrinkets()
     CDM.ReconcileCustomCooldowns()
     CDM.ReconcileResources()
@@ -486,7 +483,6 @@ local function RegisterRefreshCallbacks()
     CDM:RegisterRefreshCallback("viewers_style", ForceRestyleAll, 45, { "STYLE", "BUFF_DATA", "CD_DATA" })
 
     CDM:RegisterRefreshCallback("trackerModules", function()
-        CDM.ReconcileDefensives()
         CDM.ReconcileTrinkets()
         CDM.ReconcileCustomCooldowns()
         CDM.ReconcileExternals()

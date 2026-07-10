@@ -1,10 +1,8 @@
 local AddonName = "Ayije_CDM"
 local CDM = _G[AddonName]
-local CDM_C = CDM.CONST
 local pairs, ipairs = pairs, ipairs
 local math_huge = math.huge
 local CreateFrame = CreateFrame
-local InCombatLockdown = InCombatLockdown
 local Pixel = CDM.Pixel
 
 local OVERLAY_PADDING = 3
@@ -198,35 +196,19 @@ function CDM:RefreshBuffGroupOverlayVisibility()
     end
 end
 
-local PREVIEW_VIEWERS = { CDM_C.VIEWERS.BUFF, CDM_C.VIEWERS.BUFF_BAR }
-
--- Buff icons/bars hide themselves when the aura is inactive
--- (CooldownViewerItemMixin:ShouldBeShown). Flipping the viewer-level editing
--- flag makes Blizzard's own logic show them, exactly like Edit Mode and the
--- Blizzard CDM settings panel do.
-local function SetBuffViewerPreview(enabled)
-    if InCombatLockdown() then return end
-    if not enabled then
-        -- Don't clear the flag while real Edit Mode owns it.
-        local editModeFrame = _G.EditModeManagerFrame
-        if editModeFrame and editModeFrame:IsShown() then return end
-    end
-    for _, vName in ipairs(PREVIEW_VIEWERS) do
-        local viewer = _G[vName]
-        if viewer and viewer.SetIsEditing then
-            viewer:SetIsEditing(enabled)
-        end
-    end
-end
-
+-- NOTE: never call viewer:SetIsEditing() (or otherwise run Blizzard's
+-- CooldownViewer refresh pipeline) from addon code. Everything it writes
+-- (cooldownID, aura caches, the shared totem cache) becomes tainted, and
+-- Blizzard's own event handlers then throw secret-value errors in combat.
+-- Consequence: while the config is open, only currently active buff
+-- icons/bars are visible.
 function CDM:SetConfigWindowActive(active)
     active = active and true or false
     if configWindowActive == active then return end
     configWindowActive = active
-    SetBuffViewerPreview(active)
     self:RefreshBuffGroupOverlayVisibility()
     -- Overlay rects are only computed during a layout pass; force one so
-    -- overlays and previewed buffs appear/disappear immediately.
+    -- overlays appear/disappear immediately.
     self:Refresh("LAYOUT")
 end
 
