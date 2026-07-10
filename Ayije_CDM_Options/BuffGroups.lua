@@ -491,10 +491,6 @@ local function CreateBuffGroupsTab(page)
                     local ov = ensureOv()
                     if not ov then return end
                     ov.hideCooldown = checked or nil
-                    if checked then
-                        ov.hideVisuals = nil
-                        if hideVisualsCheckbox then hideVisualsCheckbox:SetChecked(false) end
-                    end
                     SaveAndRefresh()
                 end
             )
@@ -511,10 +507,6 @@ local function CreateBuffGroupsTab(page)
                     local ov = ensureOv()
                     if not ov then return end
                     ov.hideVisuals = checked or nil
-                    if checked then
-                        ov.hideCooldown = nil
-                        if hideCdCheckbox then hideCdCheckbox:SetChecked(false) end
-                    end
                     SaveAndRefresh()
                 end
             )
@@ -1739,9 +1731,6 @@ local function CreateBuffGroupsTab(page)
             local gd = groups and groups[renameActiveGroupIndex]
             if gd and newName and newName ~= "" then
                 gd.name = newName
-                if CDM.RefreshBuffGroupOverlayLabels then
-                    CDM:RefreshBuffGroupOverlayLabels()
-                end
             end
             renameActiveGroupIndex = nil
             renameActiveEditBox = nil
@@ -1778,9 +1767,6 @@ local function CreateBuffGroupsTab(page)
                             groupData.name = newName
                             renameActiveGroupIndex = nil
                             renameActiveEditBox = nil
-                            if CDM.RefreshBuffGroupOverlayLabels then
-                                CDM:RefreshBuffGroupOverlayLabels()
-                            end
                             if selectedGroupIndex == groupIndex then ShowGroupSettings(groupIndex) end
                             RefreshLeftPanelIfNeeded()
                         end,

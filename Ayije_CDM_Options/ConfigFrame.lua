@@ -19,7 +19,6 @@ local lastFooterFont = nil
 local combatCloseRegistered = false
 local SCROLL_FRAME_NAMES = {
     positions = "AyijeCDM_PosScrollFrame",
-    racials = "AyijeCDM_RacialsScrollFrame",
     defensives = "AyijeCDM_DefensivesScrollFrame",
     resources = "AyijeCDM_ResourcesScrollFrame",
     bars = "AyijeCDM_BarsScrollFrame",
@@ -112,8 +111,6 @@ local function SetCategoryButtonState(button, isActive)
     UI.SetTextInactive(button.Text)
 end
 
-local BLIZZARD_PANEL_TAB = "buffgroups"
-
 local function SelectCategory(id)
     if UI and UI.CloseAllDropdownMenus then
         UI.CloseAllDropdownMenus()
@@ -132,9 +129,6 @@ local function SelectCategory(id)
         end
     end
 
-    if CDM.SetBuffGroupsTabActive then
-        CDM:SetBuffGroupsTabActive(currentTab == BLIZZARD_PANEL_TAB)
-    end
 end
 
 ns.ConfigSelectCategory = SelectCategory
@@ -153,7 +147,7 @@ ns.ConfigCreatePage = CreateCategoryPage
 local categoryHeaders = {
     { label = L["CDM"], tabs = {"layout", "buffgroups", "bars", "positions"} },
     { label = L["Styling"], tabs = {"sizes", "border", "text", "glow", "fading", "assist"} },
-    { label = L["Features"], tabs = {"racials", "resources", "defensives", "castbar"} },
+    { label = L["Features"], tabs = {"resources", "defensives", "castbar"} },
     { label = L["Utility"], tabs = {"profiles", "importexport"} },
 }
 
@@ -171,8 +165,13 @@ local function CreateConfigFrame()
             UI.CloseAllDropdownMenus()
         end
         HideConfigPopups()
-        if CDM.SetBuffGroupsTabActive then
-            CDM:SetBuffGroupsTabActive(false)
+        if CDM.SetConfigWindowActive then
+            CDM:SetConfigWindowActive(false)
+        end
+    end)
+    ConfigFrame:HookScript("OnShow", function()
+        if CDM.SetConfigWindowActive then
+            CDM:SetConfigWindowActive(true)
         end
     end)
 

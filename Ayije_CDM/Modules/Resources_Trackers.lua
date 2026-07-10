@@ -43,19 +43,14 @@ local GUARDIAN_OF_ELUNE_DURATION = 15
 local IGNORE_PAIN_SPELL_ID = 190456
 local IRONFUR_UPDATE_INTERVAL = 0.021
 
-local maelstromInstanceID
 local maelstromStacks = 0
 
-local feralOverflowingInstanceID
 local feralOverflowingStacks = 0
 
-local tipOfTheSpearInstanceID
 local tipOfTheSpearStacks = 0
 local tipOfTheSpearExpirationTime
 
-local devourerResourceInstanceID
 local devourerResourceStacks = 0
-local devourerCollapsingStarInstanceID
 local devourerCollapsingStarStacks = 0
 local devourerVoidMetaInstanceID
 
@@ -505,7 +500,6 @@ end
 
 local function SeedMaelstrom()
     local a = GetPlayerAuraBySpellID(CDM_C.MAELSTROM_WEAPON_SPELL_ID)
-    maelstromInstanceID = a and a.auraInstanceID or nil
     maelstromStacks = a and a.applications or 0
 end
 
@@ -515,7 +509,6 @@ end
 
 local function SeedFeralOverflowing()
     local a = GetPlayerAuraBySpellID(CDM_C.FERAL_OVERFLOWING_POWER_SPELL_ID)
-    feralOverflowingInstanceID = a and a.auraInstanceID or nil
     feralOverflowingStacks = a and a.applications or 0
 end
 
@@ -525,7 +518,6 @@ end
 
 local function SeedTipOfTheSpear()
     local a = GetPlayerAuraBySpellID(CDM_C.TIP_OF_THE_SPEAR_SPELL_ID)
-    tipOfTheSpearInstanceID = a and a.auraInstanceID or nil
     tipOfTheSpearStacks = a and a.applications or 0
     tipOfTheSpearExpirationTime = a and a.expirationTime or nil
 end
@@ -789,116 +781,34 @@ local function UnregisterBrewmasterCombatStateListener()
     end
 end
 
-local function OnMaelstromUnitAura(event, unit, info)
+-- 12.1: the UNIT_AURA payload is fully secret while auras are secret
+-- (combat, encounters, M+, PvP), and instance-ID aura queries hard-error in
+-- that state. Treat the event purely as a "something changed" ping and
+-- re-query by spell ID, which still returns readable data for normal spells.
+local function OnMaelstromUnitAura(event, unit)
     if unit ~= "player" then return end
-    if not info or info.isFullUpdate then
-        SeedMaelstrom()
-    else
-        if info.addedAuras then
-            for _, a in ipairs(info.addedAuras) do
-                if IsSafeNumber(a.spellId) and a.spellId == CDM_C.MAELSTROM_WEAPON_SPELL_ID then
-                    maelstromInstanceID = a.auraInstanceID
-                    maelstromStacks = a.applications or 0
-                end
-            end
-        end
-        if maelstromInstanceID and info.updatedAuraInstanceIDs then
-            for _, id in ipairs(info.updatedAuraInstanceIDs) do
-                if id == maelstromInstanceID then
-                    local a = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, id)
-                    maelstromStacks = a and a.applications or 0
-                end
-            end
-        end
-        if maelstromInstanceID and info.removedAuraInstanceIDs then
-            for _, id in ipairs(info.removedAuraInstanceIDs) do
-                if id == maelstromInstanceID then
-                    maelstromInstanceID = nil
-                    maelstromStacks = 0
-                end
-            end
-        end
-    end
+    SeedMaelstrom()
     res.UpdateBarValue(CUSTOM_POWER_TYPES.MaelstromWeapon)
 end
 
-local function OnFeralOverflowingUnitAura(event, unit, info)
+local function OnFeralOverflowingUnitAura(event, unit)
     if unit ~= "player" then return end
-    if not info or info.isFullUpdate then
-        SeedFeralOverflowing()
-    else
-        if info.addedAuras then
-            for _, a in ipairs(info.addedAuras) do
-                if IsSafeNumber(a.spellId) and a.spellId == CDM_C.FERAL_OVERFLOWING_POWER_SPELL_ID then
-                    feralOverflowingInstanceID = a.auraInstanceID
-                    feralOverflowingStacks = a.applications or 0
-                end
-            end
-        end
-        if feralOverflowingInstanceID and info.updatedAuraInstanceIDs then
-            for _, id in ipairs(info.updatedAuraInstanceIDs) do
-                if id == feralOverflowingInstanceID then
-                    local a = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, id)
-                    feralOverflowingStacks = a and a.applications or 0
-                end
-            end
-        end
-        if feralOverflowingInstanceID and info.removedAuraInstanceIDs then
-            for _, id in ipairs(info.removedAuraInstanceIDs) do
-                if id == feralOverflowingInstanceID then
-                    feralOverflowingInstanceID = nil
-                    feralOverflowingStacks = 0
-                end
-            end
-        end
-    end
+    SeedFeralOverflowing()
     res.UpdateBarValue(POWER_TYPES.ComboPoints)
 end
 
-local function OnTipOfTheSpearUnitAura(event, unit, info)
+local function OnTipOfTheSpearUnitAura(event, unit)
     if unit ~= "player" then return end
-    if not info or info.isFullUpdate then
-        SeedTipOfTheSpear()
-    else
-        if info.addedAuras then
-            for _, a in ipairs(info.addedAuras) do
-                if IsSafeNumber(a.spellId) and a.spellId == CDM_C.TIP_OF_THE_SPEAR_SPELL_ID then
-                    tipOfTheSpearInstanceID = a.auraInstanceID
-                    tipOfTheSpearStacks = a.applications or 0
-                    tipOfTheSpearExpirationTime = a.expirationTime
-                end
-            end
-        end
-        if tipOfTheSpearInstanceID and info.updatedAuraInstanceIDs then
-            for _, id in ipairs(info.updatedAuraInstanceIDs) do
-                if id == tipOfTheSpearInstanceID then
-                    local a = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, id)
-                    tipOfTheSpearStacks = a and a.applications or 0
-                    tipOfTheSpearExpirationTime = a and a.expirationTime or nil
-                end
-            end
-        end
-        if tipOfTheSpearInstanceID and info.removedAuraInstanceIDs then
-            for _, id in ipairs(info.removedAuraInstanceIDs) do
-                if id == tipOfTheSpearInstanceID then
-                    tipOfTheSpearInstanceID = nil
-                    tipOfTheSpearStacks = 0
-                    tipOfTheSpearExpirationTime = nil
-                end
-            end
-        end
-    end
+    SeedTipOfTheSpear()
     res.UpdateBarValue(CUSTOM_POWER_TYPES.TipOfTheSpear)
 end
 
 local function SeedDevourer()
     local resourceAura = GetPlayerAuraBySpellID(CDM_C.DEVOURER_RESOURCE_AURA_SPELL_ID)
-    devourerResourceInstanceID = resourceAura and resourceAura.auraInstanceID or nil
     devourerResourceStacks = resourceAura and resourceAura.applications or 0
 
     local collapsingStarAura = CDM_C.DEVOURER_COLLAPSING_STAR_SPELL_ID
         and GetPlayerAuraBySpellID(CDM_C.DEVOURER_COLLAPSING_STAR_SPELL_ID) or nil
-    devourerCollapsingStarInstanceID = collapsingStarAura and collapsingStarAura.auraInstanceID or nil
     devourerCollapsingStarStacks = collapsingStarAura and collapsingStarAura.applications or 0
 
     local voidMetaAura = CDM_C.DEVOURER_VOID_METAMORPHOSIS_SPELL_ID
@@ -906,53 +816,11 @@ local function SeedDevourer()
     devourerVoidMetaInstanceID = voidMetaAura and voidMetaAura.auraInstanceID or nil
 end
 
-local function OnDevourerUnitAura(event, unit, info)
+local function OnDevourerUnitAura(event, unit)
     if unit ~= "player" then return end
     local wasInVoidMeta = devourerVoidMetaInstanceID ~= nil
 
-    if not info or info.isFullUpdate then
-        SeedDevourer()
-    else
-        if info.addedAuras then
-            for _, a in ipairs(info.addedAuras) do
-                if IsSafeNumber(a.spellId) then
-                    if a.spellId == CDM_C.DEVOURER_RESOURCE_AURA_SPELL_ID then
-                        devourerResourceInstanceID = a.auraInstanceID
-                        devourerResourceStacks = a.applications or 0
-                    elseif a.spellId == CDM_C.DEVOURER_COLLAPSING_STAR_SPELL_ID then
-                        devourerCollapsingStarInstanceID = a.auraInstanceID
-                        devourerCollapsingStarStacks = a.applications or 0
-                    elseif a.spellId == CDM_C.DEVOURER_VOID_METAMORPHOSIS_SPELL_ID then
-                        devourerVoidMetaInstanceID = a.auraInstanceID
-                    end
-                end
-            end
-        end
-        if info.updatedAuraInstanceIDs then
-            for _, id in ipairs(info.updatedAuraInstanceIDs) do
-                if id == devourerResourceInstanceID then
-                    local a = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, id)
-                    devourerResourceStacks = a and a.applications or 0
-                elseif id == devourerCollapsingStarInstanceID then
-                    local a = C_UnitAuras.GetAuraDataByAuraInstanceID(unit, id)
-                    devourerCollapsingStarStacks = a and a.applications or 0
-                end
-            end
-        end
-        if info.removedAuraInstanceIDs then
-            for _, id in ipairs(info.removedAuraInstanceIDs) do
-                if id == devourerResourceInstanceID then
-                    devourerResourceInstanceID = nil
-                    devourerResourceStacks = 0
-                elseif id == devourerCollapsingStarInstanceID then
-                    devourerCollapsingStarInstanceID = nil
-                    devourerCollapsingStarStacks = 0
-                elseif id == devourerVoidMetaInstanceID then
-                    devourerVoidMetaInstanceID = nil
-                end
-            end
-        end
-    end
+    SeedDevourer()
 
     local nowInVoidMeta = devourerVoidMetaInstanceID ~= nil
     if nowInVoidMeta ~= wasInVoidMeta then
@@ -1039,7 +907,6 @@ end
 
 local function DisableMaelstromTracking()
     res.UnregisterResUnitEvent("UNIT_AURA")
-    maelstromInstanceID = nil
     maelstromStacks = 0
 end
 
@@ -1053,7 +920,6 @@ end
 
 local function DisableFeralOverflowingTracking()
     res.UnregisterResUnitEvent("UNIT_AURA")
-    feralOverflowingInstanceID = nil
     feralOverflowingStacks = 0
     res.UpdateBarValue(POWER_TYPES.ComboPoints)
 end
@@ -1068,7 +934,6 @@ end
 
 local function DisableTipOfTheSpearTracking()
     res.UnregisterResUnitEvent("UNIT_AURA")
-    tipOfTheSpearInstanceID = nil
     tipOfTheSpearStacks = 0
     tipOfTheSpearExpirationTime = nil
 end
@@ -1085,9 +950,7 @@ end
 local function DisableDevourerTracking()
     res.UnregisterResUnitEvent("UNIT_AURA")
     res.UnregisterResEvent("SPELLS_CHANGED")
-    devourerResourceInstanceID = nil
     devourerResourceStacks = 0
-    devourerCollapsingStarInstanceID = nil
     devourerCollapsingStarStacks = 0
     devourerVoidMetaInstanceID = nil
 end
@@ -1170,16 +1033,11 @@ local function DisableAllTrackerTickers()
         essenceBar.hasEssenceRecharging = false
     end
     guardianOfEluneExpiry = 0
-    maelstromInstanceID = nil
     maelstromStacks = 0
-    feralOverflowingInstanceID = nil
     feralOverflowingStacks = 0
-    tipOfTheSpearInstanceID = nil
     tipOfTheSpearStacks = 0
     tipOfTheSpearExpirationTime = nil
-    devourerResourceInstanceID = nil
     devourerResourceStacks = 0
-    devourerCollapsingStarInstanceID = nil
     devourerCollapsingStarStacks = 0
     devourerVoidMetaInstanceID = nil
 end

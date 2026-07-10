@@ -56,11 +56,6 @@ Fading:RegisterTarget("fadingBuffs", function(a)
     end
 end)
 
-Fading:RegisterTarget("fadingRacials", function(a)
-    local c = _G["CDM_RacialsContainer"]
-    if c then c:SetAlpha(a) end
-end)
-
 Fading:RegisterTarget("fadingDefensives", function(a)
     local c = _G["CDM_DefensivesContainer"]
     if c then c:SetAlpha(a) end

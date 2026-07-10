@@ -312,8 +312,6 @@ local function OnGlowHide(event, spellID)
     DeactivateCustomBuff(374968)
 end
 
-local bloodlustDebuffInstanceID
-
 local function ActivateBloodlustFromDebuff(aura, lustBuffID, requireWithinWindow)
     local config = CDM.db.customBuffRegistry and CDM.db.customBuffRegistry[2825]
     if not config then return end
@@ -333,43 +331,21 @@ local function ActivateBloodlustFromDebuff(aura, lustBuffID, requireWithinWindow
 end
 
 local function SeedBloodlust()
-    bloodlustDebuffInstanceID = nil
     for debuffID, lustBuffID in pairs(BLOODLUST_DEBUFFS) do
         local aura = GetPlayerAuraBySpellID(debuffID)
         if aura and aura.auraInstanceID and aura.expirationTime then
-            bloodlustDebuffInstanceID = aura.auraInstanceID
             ActivateBloodlustFromDebuff(aura, lustBuffID, true)
             return
         end
     end
 end
 
-local function OnBloodlustAura(event, unit, info)
-    if not info or info.isFullUpdate then
-        SeedBloodlust()
-        return
-    end
-    if info.addedAuras then
-        for _, aura in ipairs(info.addedAuras) do
-            local sid = aura.spellId
-            if CDM.IsSafeNumber(sid) then
-                local lustBuffID = BLOODLUST_DEBUFFS[sid]
-                if lustBuffID and aura.auraInstanceID and aura.expirationTime then
-                    bloodlustDebuffInstanceID = aura.auraInstanceID
-                    ActivateBloodlustFromDebuff(aura, lustBuffID, false)
-                    break
-                end
-            end
-        end
-    end
-    if bloodlustDebuffInstanceID and info.removedAuraInstanceIDs then
-        for _, id in ipairs(info.removedAuraInstanceIDs) do
-            if id == bloodlustDebuffInstanceID then
-                bloodlustDebuffInstanceID = nil
-                break
-            end
-        end
-    end
+-- 12.1: the UNIT_AURA payload is fully secret while auras are secret
+-- (combat, encounters, M+, PvP), so it must never be inspected. Treat the
+-- event purely as a "something changed" ping and re-query by spell ID,
+-- which still returns readable data for normal spells.
+local function OnBloodlustAura()
+    SeedBloodlust()
 end
 
 function CDM:AddCustomBuffSpell(spellID, duration, templateOverrides)

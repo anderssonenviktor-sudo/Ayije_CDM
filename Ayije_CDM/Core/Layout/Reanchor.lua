@@ -329,10 +329,16 @@ local function DispatchCooldownGroupFrames(activeSelf)
     if CDM.CollectGroupedTrinketFrames then
         CDM.CollectGroupedTrinketFrames(tempCdGroups)
     end
+    if CDM.CollectGroupedCustomCooldownFrames then
+        CDM.CollectGroupedCustomCooldownFrames(tempCdGroups)
+    end
     for groupIdx, groupFrames in pairs(tempCdGroups) do
         if #groupFrames > 0 and activeSelf.PositionCooldownGroupFrames then
             activeSelf:PositionCooldownGroupFrames(groupIdx, groupFrames)
         end
+    end
+    if activeSelf.UpdateCooldownGroupOverlays then
+        activeSelf:UpdateCooldownGroupOverlays(tempCdGroups)
     end
 end
 
@@ -489,6 +495,9 @@ local function RunReanchor()
 
         CollectCrossViewerGroupFrames(activeVName, inEditMode)
         DispatchCooldownGroupFrames(activeSelf)
+        if activeSelf.UpdateUngroupedCooldownOverlay then
+            activeSelf:UpdateUngroupedCooldownOverlay(VIEWERS.ESSENTIAL, tempEssential)
+        end
 
     elseif activeVName == VIEWERS.UTILITY then
         local utilContainer = activeSelf.anchorContainers and activeSelf.anchorContainers[VIEWERS.UTILITY]
@@ -506,6 +515,9 @@ local function RunReanchor()
 
         CollectCrossViewerGroupFrames(activeVName, inEditMode)
         DispatchCooldownGroupFrames(activeSelf)
+        if activeSelf.UpdateUngroupedCooldownOverlay then
+            activeSelf:UpdateUngroupedCooldownOverlay(VIEWERS.UTILITY, tempUtility)
+        end
 
     elseif activeVName == VIEWERS.BUFF then
         PositionBuffFramesForReanchor(activeSelf, activeViewer, activeVName)

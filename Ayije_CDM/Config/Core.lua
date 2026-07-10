@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 25
+local DB_SCHEMA_VERSION = 26
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1144,6 +1144,37 @@ local PROFILE_MIGRATIONS = {
             profile.trinketsOffsetX = nil
             profile.trinketsOffsetY = nil
             profile.trinketsCooldownFontSize = nil
+        end,
+    },
+    {
+        version = 26,
+        run = function(profile)
+            -- The Racials tracker was removed: Blizzard's viewer covers
+            -- racial spells, and arbitrary spells/items are tracked via
+            -- customCooldownEntries (Cooldowns page > Add Custom). All of
+            -- its settings are dropped, including any custom entries users
+            -- added there (they can be re-added on the Cooldowns page).
+            profile.racialsEnabled = nil
+            profile.racialsIconWidth = nil
+            profile.racialsIconHeight = nil
+            profile.racialsAnchorPoint = nil
+            profile.racialsOffsetX = nil
+            profile.racialsOffsetY = nil
+            profile.racialsChargeFontSize = nil
+            profile.racialsChargeColor = nil
+            profile.racialsCooldownFontSize = nil
+            profile.racialsChargePosition = nil
+            profile.racialsChargeOffsetX = nil
+            profile.racialsChargeOffsetY = nil
+            profile.racialsShowItemsAtZeroStacks = nil
+            profile.racialsCustomEntries = nil
+            profile.racialsOrderPerSpec = nil
+            profile.racialsDisabled = nil
+            profile.racialsUsePartyFrame = nil
+            profile.racialsPartyFrameSide = nil
+            profile.racialsPartyFrameOffsetX = nil
+            profile.racialsPartyFrameOffsetY = nil
+            profile.fadingRacials = nil
         end,
     },
 }

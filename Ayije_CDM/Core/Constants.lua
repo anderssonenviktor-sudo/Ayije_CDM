@@ -78,6 +78,25 @@ function CDM.CONST.GetTrinketSlotFromSentinel(id)
     return nil
 end
 
+-- Custom cooldown items referenced from cooldown groups / the ungrouped
+-- cooldown order are stored as sentinel IDs (itemID + base) so they can never
+-- collide with real spell IDs. Custom cooldown spells use their spell ID as-is.
+CDM.CONST.CUSTOM_ITEM_SENTINEL_BASE = 910000000
+CDM.CONST.CUSTOM_ITEM_SENTINEL_MAX = 920000000
+
+function CDM.CONST.GetCustomItemSentinelForItem(itemID)
+    return CDM.CONST.CUSTOM_ITEM_SENTINEL_BASE + itemID
+end
+
+function CDM.CONST.GetCustomItemIDFromSentinel(id)
+    if type(id) == "number"
+        and id > CDM.CONST.CUSTOM_ITEM_SENTINEL_BASE
+        and id < CDM.CONST.CUSTOM_ITEM_SENTINEL_MAX then
+        return id - CDM.CONST.CUSTOM_ITEM_SENTINEL_BASE
+    end
+    return nil
+end
+
 local VIEWERS = CDM.CONST.VIEWERS
 CDM.CONST.COOLDOWN_VIEWER_NAMES = { VIEWERS.ESSENTIAL, VIEWERS.UTILITY }
 CDM.CONST.ALL_VIEWER_NAMES = {
@@ -108,7 +127,7 @@ CDM.CONST.MAX_TICKS_PER_BAR = 5
 CDM.CONST.TRACKER_FRAME_ACCESSORS = {
     "GetTrinketIconFrames",
     "GetDefensiveIconFrames",
-    "GetRacialsIconFrames",
+    "GetCustomCooldownIconFrames",
 }
 
 

@@ -9,9 +9,9 @@ local InCombatLockdown = InCombatLockdown
 local VIEWERS = CDM_C.VIEWERS
 local ALL_VIEWER_NAMES = CDM_C.ALL_VIEWER_NAMES
 local UPDATE_CONSTANTS_METHODS = {
-    "UpdateRacials",
     "UpdateDefensives",
     "UpdateTrinkets",
+    "UpdateCustomCooldowns",
     "UpdateResources",
 }
 local LSM_MEDIA_EVENT = "LibSharedMedia_Registered"
@@ -376,9 +376,9 @@ local function SetupZoneTransitionEvents()
 end
 
 local function RunProfileAppliedHooks()
-    CDM.OnRacialsProfileApplied()
     CDM.OnDefensivesProfileApplied()
     CDM.OnTrinketsProfileApplied()
+    CDM.OnCustomCooldownsProfileApplied()
     CDM.OnResourcesProfileApplied()
     CDM.OnExternalsProfileApplied()
 end
@@ -386,9 +386,9 @@ end
 CDM.RunProfileAppliedHooks = RunProfileAppliedHooks
 
 local function InitializeModules()
-    CDM.ReconcileRacials()
     CDM.ReconcileDefensives()
     CDM.ReconcileTrinkets()
+    CDM.ReconcileCustomCooldowns()
     CDM.ReconcileResources()
     CDM.ReconcileExternals()
 
@@ -487,8 +487,8 @@ local function RegisterRefreshCallbacks()
 
     CDM:RegisterRefreshCallback("trackerModules", function()
         CDM.ReconcileDefensives()
-        CDM.ReconcileRacials()
         CDM.ReconcileTrinkets()
+        CDM.ReconcileCustomCooldowns()
         CDM.ReconcileExternals()
     end, 50, { "TRACKERS" })
 

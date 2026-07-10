@@ -188,7 +188,6 @@ CDM.defaults = {
     pressOverlayBorderColor = { r = 1, g = 1, b = 1, a = 1 },
 
     -- Module enable/disable toggles
-    racialsEnabled = true,
     defensivesEnabled = true,
     resourcesEnabled = true,
     externalsEnabled = true,
@@ -204,23 +203,6 @@ CDM.defaults = {
     externalsIconHeight = 30,
     externalsCooldownFontSize = 15,
     externalsDisableBlink = true,
-
-    -- Racials tracker settings
-    racialsIconWidth = 40,
-    racialsIconHeight = 36,
-    racialsAnchorPoint = "BOTTOMLEFT",
-    racialsOffsetX = 0,
-    racialsOffsetY = 0,
-    racialsChargeFontSize = 15,
-    racialsChargeColor = { r = 1, g = 1, b = 1, a = 1 },
-    racialsCooldownFontSize = 15,
-    racialsChargePosition = "BOTTOM",
-    racialsChargeOffsetX = 0,
-    racialsChargeOffsetY = -2,
-    racialsShowItemsAtZeroStacks = false,
-    racialsCustomEntries = {},
-    racialsOrderPerSpec = {},
-    racialsDisabled = {},
 
     -- Defensives tracker settings
     defensivesIconWidth = 40,
@@ -242,11 +224,9 @@ CDM.defaults = {
     cooldownTrinkets = {},
     cooldownTrinketsHidePassive = false,
 
-    -- Party frame anchoring settings
-    racialsUsePartyFrame = false,
-    racialsPartyFrameSide = "LEFT",
-    racialsPartyFrameOffsetX = -1,
-    racialsPartyFrameOffsetY = 20,
+    -- Custom cooldown icons in the cooldown viewer: per-spec entries,
+    -- customCooldownEntries[specID] = { { id = <spell/item ID>, isItem = bool }, ... }.
+    customCooldownEntries = {},
 
     -- Per-bar resource settings (schema v9)
     resourceBarSettings = {},
@@ -410,7 +390,6 @@ CDM.defaults = {
     fadingUtility = true,
     fadingBuffs = true,
     fadingBuffBars = true,
-    fadingRacials = true,
     fadingDefensives = true,
     fadingTrinkets = true,
     fadingResources = true,

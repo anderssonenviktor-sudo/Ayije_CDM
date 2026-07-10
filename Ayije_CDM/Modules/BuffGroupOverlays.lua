@@ -1,57 +1,74 @@
 local AddonName = "Ayije_CDM"
 local CDM = _G[AddonName]
-local L = CDM.L
+local CDM_C = CDM.CONST
 local pairs, ipairs = pairs, ipairs
 local math_huge = math.huge
 local CreateFrame = CreateFrame
-local NineSliceUtil = NineSliceUtil
-local SetRegionBlendMode = CDM.SetRegionBlendMode
+local InCombatLockdown = InCombatLockdown
+local Pixel = CDM.Pixel
 
-local UNGROUPED_LABEL = (L and L["Ungrouped"]) or "Ungrouped"
-
-local OVERLAY_LAYOUT = {
-    ["TopRightCorner"]    = { atlas = "%s-NineSlice-Corner",     mirrorLayout = true, x = 8,  y = 8 },
-    ["TopLeftCorner"]     = { atlas = "%s-NineSlice-Corner",     mirrorLayout = true, x = -8, y = 8 },
-    ["BottomLeftCorner"]  = { atlas = "%s-NineSlice-Corner",     mirrorLayout = true, x = -8, y = -8 },
-    ["BottomRightCorner"] = { atlas = "%s-NineSlice-Corner",     mirrorLayout = true, x = 8,  y = -8 },
-    ["TopEdge"]           = { atlas = "_%s-NineSlice-EdgeTop" },
-    ["BottomEdge"]        = { atlas = "_%s-NineSlice-EdgeBottom" },
-    ["LeftEdge"]          = { atlas = "!%s-NineSlice-EdgeLeft" },
-    ["RightEdge"]         = { atlas = "!%s-NineSlice-EdgeRight" },
-    ["Center"]            = { atlas = "%s-NineSlice-Center", x = -8, y = 8, x1 = 8, y1 = -8 },
+local OVERLAY_PADDING = 3
+local OVERLAY_COLORS = {
+    cd   = { bg = { 0.05, 0.20, 0.45, 0.35 }, border = { 0.25, 0.60, 1.00, 0.90 } },
+    buff = { bg = { 0.45, 0.22, 0.05, 0.35 }, border = { 1.00, 0.60, 0.15, 0.90 } },
 }
 
-local OVERLAY_PADDING = 2
-local LABEL_GAP = 4
-
 local overlayPool = {}
-local activeOverlays = {}
-local buffGroupsTabActive = false
+local activeBuffOverlays = {}
+local activeCdOverlays = {}
+local activeUngroupedCdOverlays = {}
+local configWindowActive = false
 
 local function CreateOverlay()
-    local overlay = CreateFrame("Frame", nil, UIParent, "NineSliceCodeTemplate")
+    local overlay = CreateFrame("Frame", nil, UIParent)
     overlay:SetFrameStrata("BACKGROUND")
     overlay:EnableMouse(false)
-    if NineSliceUtil and NineSliceUtil.ApplyLayout then
-        NineSliceUtil.ApplyLayout(overlay, OVERLAY_LAYOUT, "editmode-actionbar-highlight")
-        if SetRegionBlendMode then
-            SetRegionBlendMode("ADD", overlay:GetRegions())
-        end
-        overlay:SetAlpha(0.4)
+
+    local bg = Pixel.CreateSolidTexture(overlay, "BACKGROUND")
+    bg:SetAllPoints()
+    overlay.bg = bg
+
+    local function CreateBorderLine()
+        return Pixel.CreateSolidTexture(overlay, "BORDER")
     end
-    local label = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    label:SetPoint("BOTTOM", overlay, "TOP", 0, LABEL_GAP)
-    label:SetIgnoreParentAlpha(true)
-    overlay.label = label
+
+    local top = CreateBorderLine()
+    top:SetPoint("TOPLEFT")
+    top:SetPoint("TOPRIGHT")
+
+    local bottom = CreateBorderLine()
+    bottom:SetPoint("BOTTOMLEFT")
+    bottom:SetPoint("BOTTOMRIGHT")
+
+    local left = CreateBorderLine()
+    left:SetPoint("TOPLEFT")
+    left:SetPoint("BOTTOMLEFT")
+
+    local right = CreateBorderLine()
+    right:SetPoint("TOPRIGHT")
+    right:SetPoint("BOTTOMRIGHT")
+
+    overlay.borderTop = top
+    overlay.borderBottom = bottom
+    overlay.borderLeft = left
+    overlay.borderRight = right
+
     overlay:Hide()
     return overlay
 end
 
-local function AcquireOverlay()
+local function AcquireOverlay(kind)
     local overlay = table.remove(overlayPool)
     if not overlay then
         overlay = CreateOverlay()
     end
+    local colors = OVERLAY_COLORS[kind] or OVERLAY_COLORS.cd
+    local bg, border = colors.bg, colors.border
+    overlay.bg:SetVertexColor(bg[1], bg[2], bg[3], bg[4])
+    overlay.borderTop:SetVertexColor(border[1], border[2], border[3], border[4])
+    overlay.borderBottom:SetVertexColor(border[1], border[2], border[3], border[4])
+    overlay.borderLeft:SetVertexColor(border[1], border[2], border[3], border[4])
+    overlay.borderRight:SetVertexColor(border[1], border[2], border[3], border[4])
     return overlay
 end
 
@@ -66,17 +83,7 @@ local function IsBlizzardPanelVisible()
 end
 
 local function ShouldShowOverlays()
-    return buffGroupsTabActive or IsBlizzardPanelVisible()
-end
-
-local function GetGroupName(groupIdx)
-    local sets = CDM.BuffGroupSets
-    local groups = sets and sets.groups
-    local gd = groups and groups[groupIdx]
-    if gd and gd.name and gd.name ~= "" then
-        return gd.name
-    end
-    return "Group " .. groupIdx
+    return configWindowActive or IsBlizzardPanelVisible()
 end
 
 local function ComputeRectForFrames(frames)
@@ -101,67 +108,126 @@ local function ComputeRectForFrames(frames)
     return left, right, top, bottom
 end
 
-local function ApplyRect(overlay, left, right, top, bottom, groupIdx, label)
+local function ApplyRect(overlay, left, right, top, bottom, show)
     overlay:ClearAllPoints()
     local pad = OVERLAY_PADDING
-    overlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", left - pad,  bottom - pad)
-    overlay:SetPoint("TOPRIGHT",   UIParent, "BOTTOMLEFT", right + pad, top + pad)
-    overlay.groupIdx = groupIdx
-    overlay.label:SetText(label)
-    overlay:SetShown(ShouldShowOverlays())
+    local Snap = Pixel.Snap
+    overlay:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", Snap(left - pad),  Snap(bottom - pad))
+    overlay:SetPoint("TOPRIGHT",   UIParent, "BOTTOMLEFT", Snap(right + pad), Snap(top + pad))
+
+    local px = Pixel.GetSize()
+    overlay.borderTop:SetHeight(px)
+    overlay.borderBottom:SetHeight(px)
+    overlay.borderLeft:SetWidth(px)
+    overlay.borderRight:SetWidth(px)
+
+    overlay:SetShown(show)
 end
 
-function CDM:UpdateBuffGroupOverlays(tempBuffGroups, tempBuff)
-    for groupIdx, overlay in pairs(activeOverlays) do
+local function ReleaseActiveOverlays(activeOverlays)
+    for key, overlay in pairs(activeOverlays) do
         ReleaseOverlay(overlay)
-        activeOverlays[groupIdx] = nil
+        activeOverlays[key] = nil
     end
+end
 
-    if not ShouldShowOverlays() then return end
+local function UpdateGroupOverlays(activeOverlays, groupFramesMap, show, kind)
+    ReleaseActiveOverlays(activeOverlays)
 
-    if tempBuffGroups then
-        for groupIdx, groupFrames in pairs(tempBuffGroups) do
-            if groupFrames and #groupFrames > 0 then
-                local l, r, t, b = ComputeRectForFrames(groupFrames)
-                if l then
-                    local overlay = AcquireOverlay()
-                    activeOverlays[groupIdx] = overlay
-                    ApplyRect(overlay, l, r, t, b, groupIdx, GetGroupName(groupIdx))
-                end
+    if not show or not groupFramesMap then return end
+
+    for groupIdx, groupFrames in pairs(groupFramesMap) do
+        if groupFrames and #groupFrames > 0 then
+            local l, r, t, b = ComputeRectForFrames(groupFrames)
+            if l then
+                local overlay = AcquireOverlay(kind)
+                activeOverlays[groupIdx] = overlay
+                ApplyRect(overlay, l, r, t, b, show)
             end
         end
     end
+end
 
-    if tempBuff and #tempBuff > 0 then
+function CDM:UpdateBuffGroupOverlays(tempBuffGroups, tempBuff)
+    local show = ShouldShowOverlays()
+    UpdateGroupOverlays(activeBuffOverlays, tempBuffGroups, show, "buff")
+
+    if show and tempBuff and #tempBuff > 0 then
         local l, r, t, b = ComputeRectForFrames(tempBuff)
         if l then
-            local overlay = AcquireOverlay()
-            activeOverlays["__ungrouped"] = overlay
-            ApplyRect(overlay, l, r, t, b, nil, UNGROUPED_LABEL)
+            local overlay = AcquireOverlay("buff")
+            activeBuffOverlays["__ungrouped"] = overlay
+            ApplyRect(overlay, l, r, t, b, show)
         end
+    end
+end
+
+function CDM:UpdateCooldownGroupOverlays(tempCdGroups)
+    UpdateGroupOverlays(activeCdOverlays, tempCdGroups, ShouldShowOverlays(), "cd")
+end
+
+-- One overlay per viewer (essential/utility) covering the icons that are not
+-- assigned to any cooldown group.
+function CDM:UpdateUngroupedCooldownOverlay(viewerKey, frames)
+    local overlay = activeUngroupedCdOverlays[viewerKey]
+    if overlay then
+        ReleaseOverlay(overlay)
+        activeUngroupedCdOverlays[viewerKey] = nil
+    end
+
+    if not ShouldShowOverlays() or not frames or #frames == 0 then return end
+
+    local l, r, t, b = ComputeRectForFrames(frames)
+    if l then
+        overlay = AcquireOverlay("cd")
+        activeUngroupedCdOverlays[viewerKey] = overlay
+        ApplyRect(overlay, l, r, t, b, true)
     end
 end
 
 function CDM:RefreshBuffGroupOverlayVisibility()
     local show = ShouldShowOverlays()
-    for _, overlay in pairs(activeOverlays) do
+    for _, overlay in pairs(activeBuffOverlays) do
+        overlay:SetShown(show)
+    end
+    for _, overlay in pairs(activeCdOverlays) do
+        overlay:SetShown(show)
+    end
+    for _, overlay in pairs(activeUngroupedCdOverlays) do
         overlay:SetShown(show)
     end
 end
 
-function CDM:RefreshBuffGroupOverlayLabels()
-    for _, overlay in pairs(activeOverlays) do
-        if overlay.groupIdx then
-            overlay.label:SetText(GetGroupName(overlay.groupIdx))
+local PREVIEW_VIEWERS = { CDM_C.VIEWERS.BUFF, CDM_C.VIEWERS.BUFF_BAR }
+
+-- Buff icons/bars hide themselves when the aura is inactive
+-- (CooldownViewerItemMixin:ShouldBeShown). Flipping the viewer-level editing
+-- flag makes Blizzard's own logic show them, exactly like Edit Mode and the
+-- Blizzard CDM settings panel do.
+local function SetBuffViewerPreview(enabled)
+    if InCombatLockdown() then return end
+    if not enabled then
+        -- Don't clear the flag while real Edit Mode owns it.
+        local editModeFrame = _G.EditModeManagerFrame
+        if editModeFrame and editModeFrame:IsShown() then return end
+    end
+    for _, vName in ipairs(PREVIEW_VIEWERS) do
+        local viewer = _G[vName]
+        if viewer and viewer.SetIsEditing then
+            viewer:SetIsEditing(enabled)
         end
     end
 end
 
-function CDM:SetBuffGroupsTabActive(active)
+function CDM:SetConfigWindowActive(active)
     active = active and true or false
-    if buffGroupsTabActive == active then return end
-    buffGroupsTabActive = active
+    if configWindowActive == active then return end
+    configWindowActive = active
+    SetBuffViewerPreview(active)
     self:RefreshBuffGroupOverlayVisibility()
+    -- Overlay rects are only computed during a layout pass; force one so
+    -- overlays and previewed buffs appear/disappear immediately.
+    self:Refresh("LAYOUT")
 end
 
 local function RegisterBlizzardPanelCallbacks()
@@ -170,6 +236,7 @@ local function RegisterBlizzardPanelCallbacks()
     local owner = {}
     registry:RegisterCallback("CooldownViewerSettings.OnShow", function()
         CDM:RefreshBuffGroupOverlayVisibility()
+        CDM:Refresh("LAYOUT")
     end, owner)
     registry:RegisterCallback("CooldownViewerSettings.OnHide", function()
         CDM:RefreshBuffGroupOverlayVisibility()

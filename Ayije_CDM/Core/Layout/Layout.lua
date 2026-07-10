@@ -952,8 +952,9 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
 
     local injectedTrinketCount = 0
     local injFrames = isEssential and CDM.GetTrinketInjectionFrames and CDM.GetTrinketInjectionFrames() or nil
+    local customInjFrames = isEssential and CDM.GetCustomCooldownInjectionFrames and CDM.GetCustomCooldownInjectionFrames() or nil
 
-    if #icons == 0 and not injFrames then
+    if #icons == 0 and not injFrames and not customInjFrames then
         return
     end
 
@@ -993,24 +994,44 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
         end
     end
 
-    if injFrames then
-        -- Trinkets with a user-assigned rank sort in place among the other
-        -- icons; only unranked ones cluster at the end of the row.
+    if injFrames or customInjFrames then
+        -- Injected tracker icons (trinkets, custom cooldowns) with a
+        -- user-assigned rank sort in place among the other icons; only
+        -- unranked ones cluster at the end of the row.
         local edgeCount = 0
-        for _, tFrame in ipairs(injFrames) do
-            local record = AcquireTempIconPositionRecord()
-            record.frame = tFrame
-            local rank
-            if rankMap and tFrame.slotID then
-                rank = rankMap[CDM_C.TRINKET_SENTINEL_BASE + tFrame.slotID]
+        if injFrames then
+            for _, tFrame in ipairs(injFrames) do
+                local record = AcquireTempIconPositionRecord()
+                record.frame = tFrame
+                local rank
+                if rankMap and tFrame.slotID then
+                    rank = rankMap[CDM_C.TRINKET_SENTINEL_BASE + tFrame.slotID]
+                end
+                if rank then
+                    record.layoutIndex = -500 + rank
+                else
+                    edgeCount = edgeCount + 1
+                    record.layoutIndex = 99000 + edgeCount
+                end
+                record.sortID = 90000 + (tFrame.slotID or edgeCount)
             end
-            if rank then
-                record.layoutIndex = -500 + rank
-            else
-                edgeCount = edgeCount + 1
-                record.layoutIndex = 99000 + edgeCount
+        end
+        if customInjFrames then
+            for i, cFrame in ipairs(customInjFrames) do
+                local record = AcquireTempIconPositionRecord()
+                record.frame = cFrame
+                local rank
+                if rankMap and cFrame.cdmCustomIdentityID then
+                    rank = rankMap[cFrame.cdmCustomIdentityID]
+                end
+                if rank then
+                    record.layoutIndex = -500 + rank
+                else
+                    edgeCount = edgeCount + 1
+                    record.layoutIndex = 99000 + edgeCount
+                end
+                record.sortID = 95000 + i
             end
-            record.sortID = 90000 + (tFrame.slotID or edgeCount)
         end
         injectedTrinketCount = edgeCount
     end

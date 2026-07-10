@@ -15,6 +15,7 @@ local SharedGetDisplaySpellID = Shared.GetDisplaySpellID
 local GetTrinketSlotFromSentinel = CDM_C.GetTrinketSlotFromSentinel
 local GetTrinketSentinelForSlot = CDM_C.GetTrinketSentinelForSlot
 local TRINKET_SLOT_IDS = CDM_C.TRINKET_SLOT_IDS or { 13, 14 }
+local GetCustomItemIDFromSentinel = CDM_C.GetCustomItemIDFromSentinel
 
 -- Trinkets participate in the Cooldowns editor per spec: the user adds them
 -- explicitly (Add Trinket / spell picker) and they are stored as tracked
@@ -50,6 +51,20 @@ local function GetTrinketInfoForID(spellID)
     local icon = itemID and C_Item.GetItemIconByID(itemID)
     return slotID, itemID, name or (L["Trinket"] .. " " .. (slotID - 12)),
         icon or "Interface\\Icons\\INV_Misc_QuestionMark"
+end
+
+-- Returns itemID, name, icon for a custom-cooldown item sentinel ID
+-- (nil otherwise). Custom-cooldown spells use their spell ID as-is and go
+-- through the normal spell display paths.
+local function GetCustomItemInfoForID(spellID)
+    local itemID = GetCustomItemIDFromSentinel and GetCustomItemIDFromSentinel(spellID)
+    if not itemID then return nil end
+    local name = C_Item.GetItemNameByID(itemID)
+    if not name then
+        C_Item.RequestLoadItemDataByID(itemID)
+    end
+    return itemID, name or (L["Item"] .. " " .. itemID),
+        C_Item.GetItemIconByID(itemID) or "Interface\\Icons\\INV_Misc_QuestionMark"
 end
 
 local lookupCacheBySpec = {}
@@ -142,6 +157,19 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
     local function GetDisplaySpellID(spellID)
         return SharedGetDisplaySpellID(ResolveCooldownOverrideID(spellID))
+    end
+
+    -- Stored custom cooldown entry for an identity ID under the viewed spec
+    -- (nil when the ID is not a custom entry).
+    local function GetCustomEntryForID(spellID)
+        if not (IsSafeNumber(spellID) and currentSpecID) then return nil end
+        return API.GetCustomCooldownEntryForID
+            and API.GetCustomCooldownEntryForID(currentSpecID, spellID) or nil
+    end
+
+    local function GetCustomEntriesForViewedSpec()
+        local bySpec = CDM.db and CDM.db.customCooldownEntries
+        return bySpec and currentSpecID and bySpec[currentSpecID] or nil
     end
 
     local _helpers = Shared.CreateGroupEditorHelpers({
@@ -470,6 +498,62 @@ local function CreateCooldownGroupsPanel(subPage, page)
                             if order[i] == spellID then table.remove(order, i) end
                         end
                     end
+                    selectedSpellID = nil
+                    selectedSpellGroupIndex = nil
+                    ClearRightPanel()
+                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
+                end)
+
+                rc:SetHeight(200)
+                return
+            end
+        end
+
+        do
+            local customEntry = GetCustomEntryForID(spellID)
+            if customEntry then
+                local customName, customIcon
+                if customEntry.isItem then
+                    customName = C_Item.GetItemNameByID(customEntry.id) or (L["Item"] .. " " .. customEntry.id)
+                    customIcon = C_Item.GetItemIconByID(customEntry.id)
+                else
+                    customName = C_Spell.GetSpellName(customEntry.id) or ("Spell " .. customEntry.id)
+                    customIcon = C_Spell.GetSpellTexture(customEntry.id)
+                end
+
+                local _, rc = CreateRightScrollContent(200)
+                local header = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
+                header:SetPoint("TOPLEFT", 0, 0)
+                header:SetText(customName)
+                header:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
+
+                local iconContainer = CreateFrame("Frame", nil, rc)
+                iconContainer:SetSize(40, 40)
+                iconContainer:SetPoint("TOPLEFT", 0, -40)
+                local iconTex = iconContainer:CreateTexture(nil, "ARTWORK")
+                iconTex:SetAllPoints()
+                if customIcon then iconTex:SetTexture(customIcon) end
+                CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
+                if CDM.BORDER and CDM.BORDER.CreateBorder then
+                    CDM.BORDER:CreateBorder(iconContainer)
+                    if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[iconContainer] = nil end
+                end
+
+                local note = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+                note:SetPoint("TOPLEFT", 0, -100)
+                note:SetPoint("RIGHT", rc, "RIGHT", -4, 0)
+                note:SetJustifyH("LEFT")
+                note:SetText(customEntry.isItem
+                    and L["This icon tracks a custom item. Drag it like any other cooldown, or drop it into a group."]
+                    or L["This icon tracks a custom spell. Drag it like any other cooldown, or drop it into a group."])
+                UI.SetTextMuted(note)
+
+                local removeBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+                removeBtn:SetSize(140, 22)
+                removeBtn:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
+                removeBtn:SetText(L["Remove"])
+                removeBtn:SetScript("OnClick", function()
+                    API:RemoveCustomCooldownEntry(spellID, currentSpecID)
                     selectedSpellID = nil
                     selectedSpellGroupIndex = nil
                     ClearRightPanel()
@@ -850,6 +934,23 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 result[#result + 1] = { spellID = sentinel, cdID = nil, name = trinketName, icon = trinketIcon, isKnown = true }
             end
         end
+        local customList = CDM.db.customCooldownEntries and CDM.db.customCooldownEntries[specID]
+        if customList then
+            for _, stored in ipairs(customList) do
+                local identity = API.GetCustomCooldownIdentityForEntry(stored)
+                if not Shared.HasEquivalentSpellID(assigned, identity) then
+                    local name, icon
+                    if stored.isItem then
+                        name = C_Item.GetItemNameByID(stored.id) or (L["Item"] .. " " .. stored.id)
+                        icon = C_Item.GetItemIconByID(stored.id)
+                    else
+                        name = C_Spell.GetSpellName(stored.id) or ("Spell " .. stored.id)
+                        icon = C_Spell.GetSpellTexture(stored.id)
+                    end
+                    result[#result + 1] = { spellID = identity, cdID = nil, name = name, icon = icon, isKnown = true }
+                end
+            end
+        end
         table.sort(result, function(a, b) return a.name < b.name end)
         return result
     end
@@ -932,6 +1033,20 @@ local function CreateCooldownGroupsPanel(subPage, page)
                         layoutIndex = 99000 + slotID,
                         viewerOrder = 0,
                         rank = GetSavedRank(sentinel),
+                    }
+                end
+            end
+        end
+        local customList = GetCustomEntriesForViewedSpec()
+        if customList then
+            for i, stored in ipairs(customList) do
+                local identity = API.GetCustomCooldownIdentityForEntry(stored)
+                if not Shared.HasEquivalentSpellID(groupedSet, identity) then
+                    icons[#icons + 1] = {
+                        spellID = identity,
+                        layoutIndex = 99100 + i,
+                        viewerOrder = 0,
+                        rank = GetSavedRank(identity),
                     }
                 end
             end
@@ -1083,8 +1198,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
         row:SetPoint("TOPLEFT", 8, y)
 
         local trinketSlot, _, trinketName, trinketIcon = GetTrinketInfoForID(spellID)
+        local customItemID, customItemName, customItemIcon = GetCustomItemInfoForID(spellID)
         local displayID = GetDisplaySpellID(spellID)
-        local tex = trinketSlot and trinketIcon or C_Spell.GetSpellTexture(displayID)
+        local tex = (trinketSlot and trinketIcon)
+            or (customItemID and customItemIcon)
+            or C_Spell.GetSpellTexture(displayID)
         if tex then widget.iconTex:SetTexture(tex) end
         CDM_C.ApplyIconTexCoord(widget.iconTex, CDM_C.GetEffectiveZoomAmount())
 
@@ -1134,7 +1252,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
         widget.nameText:ClearAllPoints()
         widget.nameText:SetPoint("LEFT", widget.iconContainer, "RIGHT", 6, 0)
         widget.nameText:SetPoint("RIGHT", widget.removeBtn:IsShown() and widget.removeBtn or row, widget.removeBtn:IsShown() and "LEFT" or "RIGHT", widget.removeBtn:IsShown() and -2 or -4, 0)
-        widget.nameText:SetText(trinketSlot and trinketName or C_Spell.GetSpellName(displayID) or L["Unknown"])
+        widget.nameText:SetText((trinketSlot and trinketName)
+            or (customItemID and customItemName)
+            or C_Spell.GetSpellName(displayID) or L["Unknown"])
         if isActive == false then UI.SetTextMuted(widget.nameText)
         elseif selectedSpellID == spellID then UI.SetTextWhite(widget.nameText)
         else UI.SetTextSubtle(widget.nameText) end
@@ -1221,9 +1341,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
             frame:SetPoint("TOPLEFT", col * (GRID_ICON_SIZE + iconGap), -row * (GRID_ICON_SIZE + iconGap))
 
             local trinketSlot, _, _, trinketIcon = GetTrinketInfoForID(spellID)
+            local customItemID, _, customItemIcon = GetCustomItemInfoForID(spellID)
             local tex
             if trinketSlot then
                 tex = trinketIcon
+            elseif customItemID then
+                tex = customItemIcon
             else
                 tex = C_Spell.GetSpellTexture(GetDisplaySpellID(spellID))
             end
@@ -1239,6 +1362,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
                 if trinketSlot then
                     GameTooltip:SetInventoryItem("player", trinketSlot)
+                elseif customItemID then
+                    GameTooltip:SetItemByID(customItemID)
                 else
                     GameTooltip:SetSpellByID(spellID)
                 end
@@ -1441,6 +1566,10 @@ local function CreateCooldownGroupsPanel(subPage, page)
                             if trinketSlot then
                                 active = not isViewingPlayer
                                     or GetInventoryItemID("player", trinketSlot) ~= nil
+                            elseif GetCustomEntryForID(spellID) then
+                                active = not isViewingPlayer
+                                    or (API.IsCustomCooldownEntryActive and API.IsCustomCooldownEntryActive(spellID))
+                                    or false
                             else
                                 active = not isViewingPlayer
                                     or Shared.HasEquivalentSpellID(activeSpellSet, spellID)
@@ -1571,6 +1700,223 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     end
                 )
             end)
+        end)
+
+        local customOverlay
+        local function CreateCustomEntryOverlay()
+            local overlay = UI.CreateModalOverlay()
+            local window = overlay.window
+
+            local paddingX = 18
+            window:SetSize(430, 170)
+
+            local title = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
+            title:SetText(L["Add Custom Spell or Item"])
+            title:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
+            title:SetPoint("TOPLEFT", window, "TOPLEFT", paddingX, -34)
+
+            local desc = window:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+            desc:SetPoint("RIGHT", window, "RIGHT", -paddingX, 0)
+            desc:SetJustifyH("LEFT")
+            desc:SetWordWrap(true)
+            desc:SetText(L["Track any spell or item by ID. New icons appear with the ungrouped cooldowns and can be dragged into groups."])
+            UI.SetTextMuted(desc)
+
+            local addRow = CreateFrame("Frame", nil, window)
+            addRow:SetSize(400, 26)
+            addRow:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -14)
+
+            local editBox = CreateFrame("EditBox", nil, addRow, "InputBoxTemplate")
+            editBox:SetSize(120, 22)
+            editBox:SetPoint("LEFT", addRow, "LEFT", 6, 0)
+            editBox:SetAutoFocus(false)
+            editBox:SetNumeric(true)
+            editBox:SetMaxLetters(7)
+
+            UI.AttachPlaceholder(editBox, "ID")
+
+            local addSpellBtn = CreateFrame("Button", nil, addRow, "UIPanelButtonTemplate")
+            addSpellBtn:SetSize(60, 22)
+            addSpellBtn:SetPoint("LEFT", editBox, "RIGHT", 6, 0)
+            addSpellBtn:SetText(L["Spell"])
+
+            local addItemBtn = CreateFrame("Button", nil, addRow, "UIPanelButtonTemplate")
+            addItemBtn:SetSize(60, 22)
+            addItemBtn:SetPoint("LEFT", addSpellBtn, "RIGHT", 4, 0)
+            addItemBtn:SetText(L["Item"])
+
+            local statusText = window:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            statusText:SetPoint("TOPLEFT", addRow, "BOTTOMLEFT", 6, -8)
+            statusText:SetPoint("RIGHT", window, "RIGHT", -paddingX, 0)
+            statusText:SetJustifyH("LEFT")
+            statusText:SetWordWrap(false)
+            statusText:SetText("")
+
+            local SetStatus = UI.CreateTimedStatus(statusText, 3)
+            local RebuildQuickAdd
+
+            -- Items that used to be built into the Racials tracker
+            -- (Healthstone, combat potions), offered as one-click adds.
+            local quickHeader = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+            quickHeader:SetText(L["Suggested Items"])
+            quickHeader:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
+            quickHeader:SetPoint("TOPLEFT", statusText, "BOTTOMLEFT", -6, -10)
+
+            local quickRows = {}
+            local quickRowHeight = 26
+            local quickRetryPending = false
+
+            RebuildQuickAdd = function()
+                for _, row in ipairs(quickRows) do
+                    row:Hide()
+                end
+
+                local shownCount = 0
+                local order, items = API.GetCustomCooldownBuiltinItems()
+                if order and items then
+                    local _, playerClassTag = UnitClass("player")
+                    local existing = {}
+                    local list = CDM.db.customCooldownEntries and CDM.db.customCooldownEntries[currentSpecID]
+                    if list then
+                        for _, stored in ipairs(list) do
+                            if stored.isItem then existing[stored.id] = true end
+                        end
+                    end
+
+                    for _, itemID in ipairs(order) do
+                        local info = items[itemID]
+                        if (not info.class or info.class == playerClassTag) and not existing[itemID] then
+                            shownCount = shownCount + 1
+                            local row = quickRows[shownCount]
+                            if not row then
+                                row = CreateFrame("Frame", nil, window)
+                                row:SetHeight(quickRowHeight)
+                                row:SetPoint("RIGHT", window, "RIGHT", -paddingX, 0)
+
+                                local iconTex = row:CreateTexture(nil, "ARTWORK")
+                                iconTex:SetSize(20, 20)
+                                iconTex:SetPoint("LEFT", row, "LEFT", 0, 0)
+                                row.iconTex = iconTex
+
+                                local addBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                                addBtn:SetSize(50, 20)
+                                addBtn:SetPoint("RIGHT", row, "RIGHT", 0, 0)
+                                addBtn:SetText(L["Add"])
+                                row.addBtn = addBtn
+
+                                local nameText = row:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+                                nameText:SetPoint("LEFT", iconTex, "RIGHT", 6, 0)
+                                nameText:SetPoint("RIGHT", addBtn, "LEFT", -6, 0)
+                                nameText:SetJustifyH("LEFT")
+                                nameText:SetWordWrap(false)
+                                row.nameText = nameText
+
+                                quickRows[shownCount] = row
+                            end
+
+                            local name = C_Item.GetItemNameByID(itemID)
+                            local icon = C_Item.GetItemIconByID(itemID)
+                            if not name or not icon then
+                                C_Item.RequestLoadItemDataByID(itemID)
+                                if not quickRetryPending then
+                                    quickRetryPending = true
+                                    C_Timer.After(0.3, function()
+                                        quickRetryPending = false
+                                        if overlay:IsShown() then
+                                            RebuildQuickAdd()
+                                        end
+                                    end)
+                                end
+                            end
+
+                            row.iconTex:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
+                            CDM_C.ApplyIconTexCoord(row.iconTex, CDM_C.GetEffectiveZoomAmount())
+                            row.nameText:SetText(name or (L["Item"] .. " " .. itemID))
+                            row.addBtn:SetScript("OnClick", function()
+                                local ok = API:AddCustomCooldownEntry(itemID, true, currentSpecID)
+                                if ok then
+                                    SetStatus("|cff44ff44" .. string.format(L["Added: %s"], name or tostring(itemID)) .. "|r")
+                                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
+                                else
+                                    SetStatus("|cffff4444" .. L["Already tracked"] .. "|r")
+                                end
+                                RebuildQuickAdd()
+                            end)
+
+                            row:ClearAllPoints()
+                            row:SetPoint("TOPLEFT", quickHeader, "BOTTOMLEFT", 0, -6 - (shownCount - 1) * quickRowHeight)
+                            row:SetPoint("RIGHT", window, "RIGHT", -paddingX, 0)
+                            row:Show()
+                        end
+                    end
+                end
+
+                quickHeader:SetShown(shownCount > 0)
+                local extraHeight = shownCount > 0 and (24 + shownCount * quickRowHeight) or 0
+                window:SetSize(430, 170 + extraHeight)
+            end
+
+            local function DoAddEntry(isItem)
+                local id = tonumber(editBox:GetText())
+                if not id or id <= 0 then
+                    SetStatus("|cffff4444" .. L["Enter a valid ID"] .. "|r")
+                    return
+                end
+
+                local displayName
+                if isItem then
+                    displayName = C_Item.GetItemNameByID(id)
+                    if not displayName then
+                        SetStatus("|cffff4444" .. L["Loading item data, try again"] .. "|r")
+                        C_Item.RequestLoadItemDataByID(id)
+                        return
+                    end
+                else
+                    displayName = C_Spell.GetSpellName(id)
+                    if not displayName then
+                        SetStatus("|cffff4444" .. L["Unknown spell ID"] .. "|r")
+                        return
+                    end
+                end
+
+                local ok, reason = API:AddCustomCooldownEntry(id, isItem, currentSpecID)
+                if ok then
+                    editBox:SetText("")
+                    SetStatus("|cff44ff44" .. string.format(L["Added: %s"], displayName or tostring(id)) .. "|r")
+                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
+                    RebuildQuickAdd()
+                elseif reason == "viewer" then
+                    SetStatus("|cffff4444" .. L["Already shown by the Cooldown Manager"] .. "|r")
+                else
+                    SetStatus("|cffff4444" .. L["Already tracked"] .. "|r")
+                end
+            end
+
+            addSpellBtn:SetScript("OnClick", function() DoAddEntry(false) end)
+            addItemBtn:SetScript("OnClick", function() DoAddEntry(true) end)
+            editBox:SetScript("OnEnterPressed", function(self) DoAddEntry(false); self:ClearFocus() end)
+            editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+
+            overlay:HookScript("OnShow", function()
+                SetStatus("")
+                editBox:SetText("")
+                RebuildQuickAdd()
+            end)
+
+            return overlay
+        end
+
+        local addCustomBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        addCustomBtn:SetSize(96, 22)
+        addCustomBtn:SetPoint("LEFT", addTrinketBtn, "RIGHT", 6, 0)
+        addCustomBtn:SetText(L["Add Custom"])
+        addCustomBtn:SetScript("OnClick", function()
+            if not currentSpecID then return end
+            if not customOverlay then
+                customOverlay = CreateCustomEntryOverlay()
+            end
+            customOverlay:Show()
         end)
     end
 
