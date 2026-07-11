@@ -1886,6 +1886,16 @@ local function OnSpecChanged()
         CDM._Res.StopIgnorePainTracking()
     end
 
+    -- All three Evoker specs share the essence tracker, so it stays enabled
+    -- across Evoker spec switches.
+    local newIsEvoker = SPEC_TO_CLASS[newSpecID] == "EVOKER"
+    local wasEvoker = currentSpecID and SPEC_TO_CLASS[currentSpecID] == "EVOKER"
+    if newIsEvoker then
+        if not wasEvoker then CDM._Res.EnableEvokerTracking() end
+    elseif wasEvoker then
+        CDM._Res.DisableEvokerTracking()
+    end
+
     currentSpecID = newSpecID
     CDM.resourcesSpecReady = (newSpecID ~= nil)
 
@@ -2133,6 +2143,7 @@ local function DisableResources()
     CDM._Res.DisableTipOfTheSpearTracking()
     CDM._Res.DisableDevourerTracking()
     CDM._Res.DisableGuardianTracking()
+    CDM._Res.DisableEvokerTracking()
     CDM._Res.StopIgnorePainTracking()
     CDM._Res.DisableAllTrackerTickers()
     HideAllResourceBars()

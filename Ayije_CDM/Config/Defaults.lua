@@ -68,6 +68,10 @@ local RESOURCE_BAR_PER_KEY = {
     Essence         = {
         color = { r = 0.16, g = 0.57, b = 0.49, a = 1 },
         rechargingColor = { r = 0.08, g = 0.28, b = 0.25, a = 1 },
+        capColor = { r = 0.93, g = 0.21, b = 0.35, a = 1 },
+        nearlyCapColor = { r = 1, g = 0.5, b = 0.2, a = 1 },
+        dynamicColors = true,
+        essenceBurstGlow = true,
         anchorTo = "Mana",
         offsetY = 1,
     },

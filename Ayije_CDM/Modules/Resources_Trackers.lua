@@ -23,6 +23,8 @@ local table_wipe = table.wipe
 local table_remove = table.remove
 local GetPlayerAuraBySpellID = C_UnitAuras.GetPlayerAuraBySpellID
 local IsSpellKnown = C_SpellBook.IsSpellKnown
+local GetSpellInfo = C_Spell.GetSpellInfo
+local LCG = LibStub("LibCustomGlow-1.0", true)
 
 local POWER_TYPES = res.POWER_TYPES
 local CUSTOM_POWER_TYPES = res.CUSTOM_POWER_TYPES
@@ -83,6 +85,10 @@ local cachedRuneReadyColor
 local cachedRuneRechargingColor
 local cachedEssenceReadyColor
 local cachedEssenceRechargingColor
+local cachedEssenceCapColor
+local cachedEssenceNearlyCapColor
+local cachedEssenceDynamicColors = true
+local cachedEssenceBurstGlow = true
 local cachedBar2TagEnabled = false
 local cachedBar2OffsetX = 0
 local cachedBar2OffsetY = 0
@@ -97,6 +103,10 @@ local function RefreshTrackerFontCache()
     cachedRuneRechargingColor = CDM:GetBarSetting("Runes", "rechargingColor") or cachedRuneReadyColor
     cachedEssenceReadyColor = GetPowerColor(POWER_TYPES.Essence)
     cachedEssenceRechargingColor = CDM:GetBarSetting("Essence", "rechargingColor") or cachedEssenceReadyColor
+    cachedEssenceCapColor = CDM:GetBarSetting("Essence", "capColor") or cachedEssenceReadyColor
+    cachedEssenceNearlyCapColor = CDM:GetBarSetting("Essence", "nearlyCapColor") or cachedEssenceReadyColor
+    cachedEssenceDynamicColors = CDM:GetBarSetting("Essence", "dynamicColors") ~= false
+    cachedEssenceBurstGlow = CDM:GetBarSetting("Essence", "essenceBurstGlow") ~= false
     cachedBar2TagEnabled = CDM:GetBarSetting("Runes", "tagEnabled") ~= false
     cachedBar2OffsetX = CDM:GetBarSetting("Runes", "tagOffsetX") or 0
     cachedBar2OffsetY = CDM:GetBarSetting("Runes", "tagOffsetY") or 0
@@ -691,8 +701,85 @@ local function UpdateRuneCooldowns(bar)
     end
 end
 
-local function EssenceFillingPipOnUpdate(pip)
-    pip:SetValue(UnitPartialPower("player", POWER_TYPES.Essence) / 1000, Enum.StatusBarInterpolation.Immediate)
+-- Evoker essence enhancements (ported from ljosberinn's "Essences" addon):
+-- smooth haste-aware recharge fill, cap/nearly-cap colors, Essence Burst glow.
+local ESSENCE_RECHARGE_RATE_SPELL_ID = 361227
+local ESSENCE_GLOW_KEY = "CDM_EssenceBurst"
+
+local ESSENCE_BURST_OVERLAY_SPELL_IDS = {
+    [359618] = true, -- Essence Burst (Devastation)
+    [361519] = true, -- Essence Burst (secondary overlay)
+    [369299] = true, -- Essence Burst (Preservation)
+    [392268] = true, -- Essence Burst (Augmentation)
+}
+
+local availableEssenceBursts = 0
+local essencePrevPartial = 0
+local essencePrevPower = 0
+local essenceRechargeRate = 0.2
+
+local function GetEssenceRechargeRate()
+    local info = GetSpellInfo(ESSENCE_RECHARGE_RATE_SPELL_ID)
+    if info and info.castTime and info.castTime > 0 then
+        return 1 / (info.castTime / 2000)
+    end
+    return 0.2
+end
+
+local function CountActiveEssenceBursts()
+    local overlayFrame = _G.SpellActivationOverlayFrame
+    if not overlayFrame then return 0 end
+
+    local active = 0
+    for i = 1, select("#", overlayFrame:GetChildren()) do
+        local child = select(i, overlayFrame:GetChildren())
+        if child and child:IsShown() and ESSENCE_BURST_OVERLAY_SPELL_IDS[child.spellID] then
+            active = active + 1
+        end
+    end
+    return active
+end
+
+local function UpdateEssenceBurstGlow(bar)
+    if not LCG or not bar then return end
+    local show = cachedEssenceBurstGlow and availableEssenceBursts > 0 and bar:IsShown()
+    if show and not bar._cdmEssenceGlowActive then
+        LCG.PixelGlow_Start(bar, nil, nil, 0.2, nil, nil, 1, 1, false, ESSENCE_GLOW_KEY)
+        bar._cdmEssenceGlowActive = true
+    elseif not show and bar._cdmEssenceGlowActive then
+        LCG.PixelGlow_Stop(bar, ESSENCE_GLOW_KEY)
+        bar._cdmEssenceGlowActive = nil
+    end
+end
+
+local function ResolveEssenceDisplayColors(current, max)
+    local readyColor = cachedEssenceReadyColor or GetPowerColor(POWER_TYPES.Essence)
+    local rechargingColor = cachedEssenceRechargingColor or readyColor
+
+    if cachedEssenceDynamicColors then
+        if current >= max then
+            readyColor = cachedEssenceCapColor or readyColor
+        elseif current >= max - 1 then
+            readyColor = cachedEssenceNearlyCapColor or readyColor
+        end
+    end
+
+    return readyColor, rechargingColor
+end
+
+-- UnitPartialPower only updates in coarse steps, so the filling pip advances
+-- by the recharge rate each frame and snaps forward whenever the real value
+-- catches up (never backward within one essence).
+local function EssenceFillingPipOnUpdate(pip, elapsed)
+    local actual = UnitPartialPower("player", POWER_TYPES.Essence) / 1000
+    if actual > essencePrevPartial then
+        essencePrevPartial = actual
+    else
+        actual = essencePrevPartial
+    end
+
+    local smooth = math_min(1, pip:GetValue() + elapsed * essenceRechargeRate)
+    pip:SetValue(math_max(smooth, actual), Enum.StatusBarInterpolation.Immediate)
 end
 
 local function ApplyEssenceStates(bar, current, max, readyColor, rechargingColor)
@@ -703,7 +790,8 @@ local function ApplyEssenceStates(bar, current, max, readyColor, rechargingColor
             pip:SetValue(1, Enum.StatusBarInterpolation.Immediate)
             SetStatusBarColorIfChanged(pip, readyColor)
         elseif i == current + 1 and current < max then
-            pip:SetValue(UnitPartialPower("player", POWER_TYPES.Essence) / 1000, Enum.StatusBarInterpolation.Immediate)
+            local partial = UnitPartialPower("player", POWER_TYPES.Essence) / 1000
+            pip:SetValue(math_max(partial, essencePrevPartial), Enum.StatusBarInterpolation.Immediate)
             SetStatusBarColorIfChanged(pip, rechargingColor)
             pip:SetScript("OnUpdate", EssenceFillingPipOnUpdate)
         else
@@ -721,23 +809,79 @@ local function UpdateEssenceCooldowns(bar)
                 pip:SetScript("OnUpdate", nil)
             end
         end
-        if bar then bar.hasEssenceRecharging = false end
+        if bar then
+            bar.hasEssenceRecharging = false
+            UpdateEssenceBurstGlow(bar)
+        end
         return
     end
 
-    local readyColor = cachedEssenceReadyColor or GetPowerColor(POWER_TYPES.Essence)
-    local rechargingColor = cachedEssenceRechargingColor or readyColor
+    if not cachedEssenceReadyColor then
+        RefreshTrackerFontCache()
+    end
 
     local current = UnitPower("player", POWER_TYPES.Essence)
     local max = UnitPowerMax("player", POWER_TYPES.Essence)
+
+    if current > essencePrevPower then
+        essencePrevPartial = 0
+    end
+    essencePrevPower = current
+
+    essenceRechargeRate = GetEssenceRechargeRate()
 
     if bar._essencePrevCurrent ~= current then
         bar._essencePrevCurrent = current
         UpdateTagTextForPowerType(POWER_TYPES.Essence)
     end
 
+    local readyColor, rechargingColor = ResolveEssenceDisplayColors(current, max)
     ApplyEssenceStates(bar, current, max, readyColor, rechargingColor)
+    UpdateEssenceBurstGlow(bar)
     bar.hasEssenceRecharging = (current < max)
+end
+
+local function RefreshEssenceBurstState()
+    local bursts = CountActiveEssenceBursts()
+    if bursts == availableEssenceBursts then return end
+    availableEssenceBursts = bursts
+    res.UpdateBarValue(POWER_TYPES.Essence)
+    UpdateEssenceBurstGlow(CDM.resourceBars[POWER_TYPES.Essence])
+end
+
+local function OnEssenceOverlayShow(event, spellID)
+    if ESSENCE_BURST_OVERLAY_SPELL_IDS[spellID] then
+        RefreshEssenceBurstState()
+    end
+end
+
+local function OnEssenceOverlayHide(event, spellID)
+    -- nil spellID means "all overlays reset"; a specific ID is still animating
+    -- out when the event fires, so re-count shortly after.
+    if spellID == nil then
+        RefreshEssenceBurstState()
+    elseif ESSENCE_BURST_OVERLAY_SPELL_IDS[spellID] then
+        C_Timer.After(0.2, RefreshEssenceBurstState)
+    end
+end
+
+local function EnableEvokerTracking()
+    essenceRechargeRate = GetEssenceRechargeRate()
+    res.RegisterResEvent("SPELL_ACTIVATION_OVERLAY_SHOW", OnEssenceOverlayShow)
+    res.RegisterResEvent("SPELL_ACTIVATION_OVERLAY_HIDE", OnEssenceOverlayHide)
+    availableEssenceBursts = CountActiveEssenceBursts()
+    C_Timer.After(0.1, function()
+        res.UpdateBarValue(POWER_TYPES.Essence)
+    end)
+end
+
+local function DisableEvokerTracking()
+    res.UnregisterResEvent("SPELL_ACTIVATION_OVERLAY_SHOW")
+    res.UnregisterResEvent("SPELL_ACTIVATION_OVERLAY_HIDE")
+    availableEssenceBursts = 0
+    essencePrevPartial = 0
+    essencePrevPower = 0
+    UpdateEssenceBurstGlow(CDM.resourceBars[POWER_TYPES.Essence])
 end
 
 local function OnSpellUpdateUses(event, spellID, baseSpellID)
@@ -1015,6 +1159,10 @@ local function OnTrackerProfileApplied()
     cachedRuneRechargingColor = nil
     cachedEssenceReadyColor = nil
     cachedEssenceRechargingColor = nil
+    cachedEssenceCapColor = nil
+    cachedEssenceNearlyCapColor = nil
+    cachedEssenceDynamicColors = true
+    cachedEssenceBurstGlow = true
     cachedBar2TagEnabled = false
     cachedBar2OffsetX = 0
     cachedBar2OffsetY = 0
@@ -1090,6 +1238,8 @@ res.EnableTipOfTheSpearTracking = EnableTipOfTheSpearTracking
 res.DisableTipOfTheSpearTracking = DisableTipOfTheSpearTracking
 res.EnableDevourerTracking = EnableDevourerTracking
 res.DisableDevourerTracking = DisableDevourerTracking
+res.EnableEvokerTracking = EnableEvokerTracking
+res.DisableEvokerTracking = DisableEvokerTracking
 res.EnableGuardianTracking = EnableGuardianTracking
 res.RefreshGuardianTracking = RefreshGuardianTracking
 res.DisableGuardianTracking = DisableGuardianTracking

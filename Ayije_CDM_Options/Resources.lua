@@ -35,7 +35,11 @@ local IsBarActiveForSpec = ns.IsBarActiveForSpec
 
 local SECONDARY_COLOR_FIELDS = {
     Runes = { { key = "rechargingColor", label = L["Recharging"] } },
-    Essence = { { key = "rechargingColor", label = L["Recharging"] } },
+    Essence = {
+        { key = "rechargingColor", label = L["Recharging"] },
+        { key = "nearlyCapColor", label = L["Nearly Capped"] },
+        { key = "capColor", label = L["Capped"] },
+    },
     SoulShards = { { key = "rechargingColor", label = L["Partial Fill"] } },
     ComboPoints = {
         ROGUE = {
@@ -886,6 +890,30 @@ local function CreateResourcesTab(page, tabId)
             yOff = yOff - 35
         end
 
+        if barKey == "Essence" then
+            local essenceHeader = UI.CreateHeader(rc, L["Evoker"])
+            essenceHeader:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 25
+
+            local dynColorsCB = UI.CreateModernCheckbox(rc, L["Capped / nearly capped colors"],
+                CDM:GetBarSettingForClass(classKey, barKey, "dynamicColors") ~= false,
+                function(checked)
+                    CDM:SetBarSettingForClass(classKey, barKey, "dynamicColors", checked)
+                    API:Refresh("RESOURCES")
+                end)
+            dynColorsCB:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 35
+
+            local burstGlowCB = UI.CreateModernCheckbox(rc, L["Glow on Essence Burst"],
+                CDM:GetBarSettingForClass(classKey, barKey, "essenceBurstGlow") ~= false,
+                function(checked)
+                    CDM:SetBarSettingForClass(classKey, barKey, "essenceBurstGlow", checked)
+                    API:Refresh("RESOURCES")
+                end)
+            burstGlowCB:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 35
+        end
+
         yOff = BuildTicksSection(rc, classKey, barKey, yOff)
 
         rc:SetHeight(math.abs(yOff) + 20)
@@ -1078,21 +1106,22 @@ local function CreateResourcesTab(page, tabId)
             local bars = CLASS_BARS[groupKey]
             if bars and #bars > 0 then
                 local isExpanded = expandedGroups[groupKey]
+                local groupAlpha = (groupKey == "General" or groupKey == playerClass) and 1 or 0.4
 
                 if headerPool then
                     local h = headerPool:Acquire(leftChild)
                     Shared.ConfigureExpandableHeader(h, yOff, isExpanded, group.label, false)
                     h.row:SetSize(HEADER_W, GROUP_HEADER_H)
+                    h.row:SetAlpha(groupAlpha)
                     if h.deleteBtn then h.deleteBtn:Hide() end
-                    if h.selectBtn then
-                        h.selectBtn:SetScript("OnClick", function()
-                            ToggleGroupExpand(groupKey)
-                        end)
-                    end
-                    if h.expandBtn then
-                        h.expandBtn:SetScript("OnClick", function()
-                            ToggleGroupExpand(groupKey)
-                        end)
+                    for _, btn in ipairs({ h.selectBtn, h.expandBtn }) do
+                        if btn then
+                            btn:SetScript("OnClick", function()
+                                ToggleGroupExpand(groupKey)
+                            end)
+                            btn:SetScript("OnEnter", function() h.row:SetAlpha(1) end)
+                            btn:SetScript("OnLeave", function() h.row:SetAlpha(groupAlpha) end)
+                        end
                     end
                 end
 
@@ -1108,6 +1137,7 @@ local function CreateResourcesTab(page, tabId)
 
                         local isSelected = (selectedClassKey == groupKey and selectedBarKey == barKey)
                         local isActive = IsBarActiveForSpec(barKey, currentSpecID)
+                        row:SetAlpha(isSelected and 1 or groupAlpha)
 
                         if isSelected then
                             widget.bg:SetAtlas("Options_List_Active")
@@ -1124,6 +1154,7 @@ local function CreateResourcesTab(page, tabId)
 
                         row:SetScript("OnClick", function() SelectBar(groupKey, barKey) end)
                         row:SetScript("OnEnter", function()
+                            row:SetAlpha(1)
                             if not isSelected then
                                 widget.bg:SetAtlas("Options_List_Hover")
                                 widget.bg:Show()
@@ -1131,6 +1162,7 @@ local function CreateResourcesTab(page, tabId)
                         end)
                         row:SetScript("OnLeave", function()
                             if not (selectedClassKey == groupKey and selectedBarKey == barKey) then
+                                row:SetAlpha(groupAlpha)
                                 widget.bg:Hide()
                             end
                         end)
