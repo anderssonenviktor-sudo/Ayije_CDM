@@ -1,12 +1,4 @@
-name: Release 
-
-on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-
+name: Release AddOn
 
 on:
   push:
