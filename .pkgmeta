@@ -1,1 +1,9 @@
 package-as: AyijeCDM
+
+ignore:
+ - .claude/
+ - .vscode/
+ - CLAUDE.md
+ - .DesignTools/
+ 
+
