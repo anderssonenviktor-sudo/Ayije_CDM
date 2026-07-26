@@ -4,6 +4,5 @@ ignore:
  - .claude/
  - .vscode/
  - CLAUDE.md
- - .DesignTools/
 
 
