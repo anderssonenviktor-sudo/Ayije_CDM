@@ -4,6 +4,8 @@ move-folders:
   Ayije_CDM/Ayije_CDM: Ayije_CDM
   Ayije_CDM/Ayije_CDM_Options: Ayije_CDM_Options
 
+manual-changelog: CHANGELOG.md
+
 
 ignore:
  - .claude/
