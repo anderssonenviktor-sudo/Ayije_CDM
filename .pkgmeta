@@ -1,4 +1,3 @@
-package-as: Ayije_CDM
 
 ignore:
  - .claude/
