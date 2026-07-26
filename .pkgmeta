@@ -1,3 +1,7 @@
+move-folders:
+  Ayije_CDM/Ayije_CDM: Ayije_CDM
+  Ayije_CDM/Ayije_CDM_Options: Ayije_CDM_Options
+
 
 ignore:
  - .claude/
