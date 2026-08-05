@@ -52,6 +52,14 @@ local feralOverflowingStacks = 0
 local tipOfTheSpearStacks = 0
 local tipOfTheSpearExpirationTime
 
+-- Mage charge bars (Frost: Flurry, Fire: Fire Blast). Both are charge spells
+-- whose max charges depend on talents, so the counts are re-read rather than
+-- assumed. Values are cached from SPELL_UPDATE_CHARGES and the filling pip
+-- interpolates between events off the charge duration object. State is keyed
+-- by bar key so each spell's bar is fully independent.
+local MAGE_CHARGE_FALLBACK_MAX = 3
+local mageChargeState = {}
+
 local devourerResourceStacks = 0
 local devourerCollapsingStarStacks = 0
 local devourerVoidMetaInstanceID
@@ -92,6 +100,12 @@ local cachedEssenceBurstGlow = true
 local cachedBar2TagEnabled = false
 local cachedBar2OffsetX = 0
 local cachedBar2OffsetY = 0
+-- Per-bar recharge-text style for the Mage charge bars, keyed by bar key.
+-- Listed here (rather than derived from MAGE_CHARGE_BARS) because the font
+-- cache refresh below runs before that table is defined.
+local MAGE_CHARGE_BAR_KEYS = { CUSTOM_POWER_TYPES.Flurry, CUSTOM_POWER_TYPES.FireBlast }
+local cachedMageChargeText = {}
+local cachedMageChargeTickWidth = {}
 
 local function RefreshTrackerFontCache()
     CDM_C.RefreshBaseFontCache()
@@ -110,6 +124,18 @@ local function RefreshTrackerFontCache()
     cachedBar2TagEnabled = CDM:GetBarSetting("Runes", "tagEnabled") ~= false
     cachedBar2OffsetX = CDM:GetBarSetting("Runes", "tagOffsetX") or 0
     cachedBar2OffsetY = CDM:GetBarSetting("Runes", "tagOffsetY") or 0
+
+    for _, barKey in ipairs(MAGE_CHARGE_BAR_KEYS) do
+        local entry = cachedMageChargeText[barKey]
+        if not entry then
+            entry = {}
+            cachedMageChargeText[barKey] = entry
+        end
+        entry.enabled = CDM:GetBarSetting(barKey, "rechargeTextEnabled") ~= false
+        entry.fontSize = CDM:GetBarSetting(barKey, "rechargeTextFontSize") or 10
+        entry.color = CDM:GetBarSetting(barKey, "rechargeTextColor") or CDM_C.WHITE
+        cachedMageChargeTickWidth[barKey] = CDM:GetBarSetting(barKey, "chargeTickWidth") or 1
+    end
 end
 
 local function RefreshCachedRuneTimerSlot()
@@ -542,6 +568,402 @@ end
 
 function CDM:GetTipOfTheSpearExpirationTime()
     return tipOfTheSpearExpirationTime
+end
+
+-- Flurry (Frost) and Fire Blast (Fire) are independent bars. Each owns its own
+-- charge state, keyed by bar key, so they can be configured and shown
+-- separately.
+local MAGE_CHARGE_BARS = {
+    [CUSTOM_POWER_TYPES.Flurry] = {
+        spellID = CDM_C.FLURRY_SPELL_ID,
+        specID = 64,
+    },
+    [CUSTOM_POWER_TYPES.FireBlast] = {
+        spellID = CDM_C.FIRE_BLAST_SPELL_ID,
+        specID = 63,
+    },
+}
+
+local function GetMageChargeState(barKey)
+    local def = MAGE_CHARGE_BARS[barKey]
+    if not def then return nil end
+    local state = mageChargeState[barKey]
+    if not state then
+        -- Only max is tracked; the live charge count is never held in Lua.
+        state = { max = 0 }
+        mageChargeState[barKey] = state
+    end
+    return state, def
+end
+
+-- Only maxCharges is ever inspected, because it drives layout arithmetic (the
+-- recharge segment width and tick placement). currentCharges and the recharge
+-- duration are NEVER read or compared -- they go straight into SetValue /
+-- SetTimerDuration, which accept secret values and render them correctly.
+-- Branching on them is what taints, not passing them through.
+local function SeedMageChargeMax(barKey)
+    local state, def = GetMageChargeState(barKey)
+    if not state then return 0 end
+
+    local chargeInfo = C_Spell.GetSpellCharges(def.spellID)
+    if not chargeInfo then
+        state.max = 0
+        return 0
+    end
+
+    local max = chargeInfo.maxCharges
+    if IsSafeNumber(max) and max > 0 then
+        state.max = max
+    elseif state.max <= 0 then
+        -- Secret before we ever cached a real value: fall back so the bar can
+        -- still be laid out rather than vanishing.
+        state.max = MAGE_CHARGE_FALLBACK_MAX
+    end
+
+    return state.max
+end
+
+-- Renders the countdown straight from the recharge bar's own duration object.
+-- The remaining time is never compared or guarded -- SetFormattedText accepts a
+-- secret value, so the text keeps ticking in combat.
+local function MageChargeRechargeOnUpdate(rechargeBar)
+    local text = rechargeBar.timerText
+    if not text then return end
+
+    -- A finished recharge leaves a duration object behind that still reads zero,
+    -- so isActive (a plain boolean, safe to branch on) decides visibility --
+    -- otherwise the bar sits at full charges showing "0.0".
+    local spellID = rechargeBar._cdmMageSpellID
+    local chargeInfo = spellID and C_Spell.GetSpellCharges(spellID)
+    if not (chargeInfo and chargeInfo.isActive) then
+        text:SetText("")
+        rechargeBar:Hide()
+        if rechargeBar._cdmTimerHolder then rechargeBar._cdmTimerHolder:Hide() end
+        return
+    end
+
+    local durObj = rechargeBar:GetTimerDuration()
+    if durObj then
+        text:SetFormattedText("%.1f", durObj:GetRemainingDuration())
+    else
+        text:SetText("")
+    end
+end
+
+local function ApplyMageChargeTimerFont(rechargeBar, barKey)
+    local text = rechargeBar.timerText
+    if not text then return end
+
+    local style = cachedMageChargeText[barKey]
+    if not style then return end
+
+    local pixelSize = Pixel.FontSize(style.fontSize)
+    if rechargeBar._cdmTimerFontSize ~= pixelSize
+        or rechargeBar._cdmTimerFontPath ~= cachedFontPath
+        or rechargeBar._cdmTimerFontOutline ~= cachedFontOutline then
+        rechargeBar._cdmTimerFontSize = pixelSize
+        rechargeBar._cdmTimerFontPath = cachedFontPath
+        rechargeBar._cdmTimerFontOutline = cachedFontOutline
+        text:SetIgnoreParentScale(true)
+        text:SetFont(cachedFontPath or CDM_C.FONT_PATH, pixelSize,
+            cachedFontOutline or CDM_C.FONT_OUTLINE)
+    end
+
+    local c = style.color
+    text:SetTextColor(c.r, c.g, c.b, c.a or 1)
+end
+
+-- Builds the segmented structure: the bar itself is the charge fill, with a
+-- recharge sub-bar anchored to the fill texture's right edge so it always sits
+-- in the next empty segment, plus tick textures dividing the charges.
+local function EnsureMageChargeParts(bar)
+    if not bar.mageClip then
+        -- The recharge segment is anchored to the fill texture's right edge, so
+        -- at full charges it would extend a whole segment past the bar. A
+        -- clipping container keeps it inside the frame.
+        local clip = CreateFrame("Frame", nil, bar)
+        clip:SetAllPoints(bar)
+        clip:SetClipsChildren(true)
+        clip:SetFrameLevel(bar:GetFrameLevel() + 1)
+        bar.mageClip = clip
+    end
+
+    if not bar.mageRecharge then
+        local recharge = CreateFrame("StatusBar", nil, bar.mageClip)
+        recharge:SetMinMaxValues(0, 1)
+        recharge:SetValue(0)
+        recharge:SetFrameLevel(bar.mageClip:GetFrameLevel() + 1)
+        bar.mageRecharge = recharge
+    end
+
+    if not bar.mageTimerText then
+        -- Centred on the recharge segment so the countdown sits in the charge
+        -- that is actually filling, but parented outside the clip container --
+        -- otherwise a segment at the bar's edge would have its text cropped.
+        local textHolder = CreateFrame("Frame", nil, bar)
+        textHolder:SetAllPoints(bar.mageRecharge)
+        textHolder:SetFrameLevel(bar:GetFrameLevel() + 5)
+        local text = textHolder:CreateFontString(nil, "OVERLAY")
+        text:SetDrawLayer("OVERLAY", 7)
+        text:SetJustifyH("CENTER")
+        text:SetJustifyV("MIDDLE")
+        text:SetPoint("CENTER", textHolder, "CENTER", 0, 0)
+        text:SetIgnoreParentScale(true)
+        text:SetFont(CDM_C.FONT_PATH, Pixel.FontSize(10), CDM_C.FONT_OUTLINE)
+        bar.mageTimerHolder = textHolder
+        bar.mageTimerText = text
+        bar.mageRecharge.timerText = text
+    end
+
+    if not bar.mageTickHolder then
+        -- Frame level beats draw layer: ticks on the bar itself get covered by
+        -- the recharge StatusBar as it fills.
+        local tickHolder = CreateFrame("Frame", nil, bar)
+        tickHolder:SetAllPoints(bar)
+        tickHolder:SetFrameLevel(bar.mageRecharge:GetFrameLevel() + 1)
+        bar.mageTickHolder = tickHolder
+    end
+
+    bar.mageTicks = bar.mageTicks or {}
+    return bar.mageRecharge
+end
+
+local function GetMageChargeTickThickness(barKey)
+    local configured = cachedMageChargeTickWidth[barKey] or 1
+    if configured < 1 then configured = 1 end
+    return configured * Pixel.GetSize()
+end
+
+-- Segment widths and tick offsets depend on maxCharges, so this reruns whenever
+-- that or the bar size changes (talents, profile edits).
+local function LayoutMageChargeBar(bar, max, barKey)
+    local recharge = EnsureMageChargeParts(bar)
+
+    local width, height = bar:GetWidth() or 0, bar:GetHeight() or 0
+    local fillTexture = bar:GetStatusBarTexture()
+    if width <= 0 or height <= 0 or not max or max < 1 or not fillTexture then
+        return recharge
+    end
+
+    local segmentWidth = width / max
+
+    -- Match whatever statusbar texture the bar itself resolved to, so the
+    -- recharge segment honours the user's texture choice.
+    local texturePath = fillTexture.GetTexture and fillTexture:GetTexture()
+    recharge:SetStatusBarTexture(texturePath or CDM_C.TEX_WHITE8X8)
+    local rechargeTexture = recharge:GetStatusBarTexture()
+    if rechargeTexture then
+        rechargeTexture:SetHorizTile(false)
+        rechargeTexture:SetVertTile(false)
+    end
+
+    -- Anchoring to the fill texture (not the bar) is what makes the recharge
+    -- segment slide along with the charge count.
+    recharge:ClearAllPoints()
+    recharge:SetPoint("LEFT", fillTexture, "RIGHT", 0, 0)
+    recharge:SetSize(segmentWidth, height)
+
+    -- Re-assert after the segment is repositioned so the countdown stays
+    -- centred on it rather than on a stale rect.
+    if bar.mageTimerHolder then
+        bar.mageTimerHolder:ClearAllPoints()
+        bar.mageTimerHolder:SetAllPoints(recharge)
+    end
+
+    -- Dividers between charge segments, drawn over the fill.
+    local tickColor = (CDM.db and CDM.db.borderColor) or CDM_C.WHITE
+    local thickness = GetMageChargeTickThickness(barKey or bar.powerType)
+
+    for i = 1, max - 1 do
+        local tick = bar.mageTicks[i]
+        if not tick then
+            tick = Pixel.CreateSolidTexture(bar.mageTickHolder, "OVERLAY", 7)
+            bar.mageTicks[i] = tick
+        end
+        tick:SetVertexColor(tickColor.r, tickColor.g, tickColor.b, tickColor.a or 1)
+        tick:SetSize(thickness, height)
+        tick:ClearAllPoints()
+        tick:SetPoint("LEFT", bar.mageTickHolder, "LEFT", Pixel.Snap(segmentWidth * i - thickness / 2), 0)
+        tick:Show()
+    end
+    for i = max, #bar.mageTicks do
+        if bar.mageTicks[i] then bar.mageTicks[i]:Hide() end
+    end
+
+    return recharge
+end
+
+local function ClearMageChargeBar(bar)
+    if not bar then return end
+    if bar.mageRecharge then
+        bar.mageRecharge:SetScript("OnUpdate", nil)
+        bar.mageRecharge:Hide()
+    end
+    if bar.mageTimerText then bar.mageTimerText:SetText("") end
+    if bar.mageTimerHolder then bar.mageTimerHolder:Hide() end
+    if bar.mageTicks then
+        for _, tick in ipairs(bar.mageTicks) do tick:Hide() end
+    end
+end
+
+local function UpdateMageChargeBar(bar, barKey)
+    barKey = barKey or (bar and bar.powerType)
+    local state, def = GetMageChargeState(barKey)
+    if not state then return 0, 0 end
+
+    if not bar or not bar:IsShown() then
+        ClearMageChargeBar(bar)
+        return 0, state.max
+    end
+
+    local chargeInfo = C_Spell.GetSpellCharges(def.spellID)
+    if not chargeInfo then
+        ClearMageChargeBar(bar)
+        return 0, 0
+    end
+
+    local max = SeedMageChargeMax(barKey)
+    if max < 1 then
+        ClearMageChargeBar(bar)
+        return 0, 0
+    end
+
+    -- Relayout only when the geometry actually changed; SetPoint on every
+    -- update would fight the engine's animation of the recharge segment.
+    local width, height = bar:GetWidth() or 0, bar:GetHeight() or 0
+    local tickWidth = cachedMageChargeTickWidth[barKey] or 1
+    local recharge = bar.mageRecharge
+    if not recharge or bar._mageLayoutMax ~= max
+        or bar._mageLayoutWidth ~= width or bar._mageLayoutHeight ~= height
+        or bar._mageLayoutTickWidth ~= tickWidth then
+        recharge = LayoutMageChargeBar(bar, max, barKey)
+        bar._mageLayoutMax, bar._mageLayoutWidth, bar._mageLayoutHeight = max, width, height
+        bar._mageLayoutTickWidth = tickWidth
+    end
+    if not recharge then return 0, max end
+
+    local readyColor = GetPowerColor(barKey) or CDM_C.WHITE
+    local rechargingColor = CDM:GetBarSetting(barKey, "rechargingColor") or readyColor
+    SetStatusBarColorIfChanged(bar, readyColor)
+    SetStatusBarColorIfChanged(recharge, rechargingColor)
+
+    -- Straight through to the engine. currentCharges may be a secret value in
+    -- combat; SetValue renders it correctly, and inspecting it here is exactly
+    -- what would break the bar.
+    bar:SetMinMaxValues(0, max)
+    bar:SetValue(chargeInfo.currentCharges)
+
+    recharge._cdmMageSpellID = def.spellID
+    recharge._cdmTimerHolder = bar.mageTimerHolder
+
+    -- isActive is a plain boolean even in combat, so it is safe to branch on.
+    -- At full charges nothing is recharging: hide the segment and its text
+    -- rather than leaving a stalled bar reading "0.0".
+    local isRecharging = chargeInfo.isActive and true or false
+    local style = cachedMageChargeText[barKey]
+    local wantsText = isRecharging and style and style.enabled
+
+    if isRecharging then
+        recharge:SetTimerDuration(
+            C_Spell.GetSpellChargeDuration(def.spellID),
+            Enum.StatusBarInterpolation.Immediate,
+            Enum.StatusBarTimerDirection.ElapsedTime
+        )
+        recharge:Show()
+    else
+        recharge:SetValue(0)
+        recharge:Hide()
+    end
+
+    if wantsText then
+        ApplyMageChargeTimerFont(recharge, barKey)
+        recharge:SetScript("OnUpdate", MageChargeRechargeOnUpdate)
+        if bar.mageTimerHolder then bar.mageTimerHolder:Show() end
+    else
+        recharge:SetScript("OnUpdate", nil)
+        if recharge.timerText then recharge.timerText:SetText("") end
+        if bar.mageTimerHolder then bar.mageTimerHolder:Hide() end
+    end
+
+    return 0, max
+end
+
+-- A bar is meaningless if its spell isn't learned, so it is suppressed entirely
+-- rather than drawn with a fallback segment count.
+local function IsMageChargeSpellAvailable(barKey, specID)
+    local def = MAGE_CHARGE_BARS[barKey]
+    if not def then return false end
+    if specID and def.specID ~= specID then return false end
+    return IsSpellKnown(def.spellID) and true or false
+end
+
+local function OnMageSpellUpdateCharges()
+    for barKey in pairs(MAGE_CHARGE_BARS) do
+        res.UpdateBarValue(barKey)
+    end
+end
+
+-- Talents can change max charges (e.g. Perpetual Winter), which changes the
+-- segment count, so a talent swap has to rebuild bar layout rather than refill.
+local function ReseedMageChargesAfterTalentChange()
+    local needsLayout = false
+    for barKey in pairs(MAGE_CHARGE_BARS) do
+        local state = GetMageChargeState(barKey)
+        local prevMax = state and state.max
+        SeedMageChargeMax(barKey)
+        if state and state.max ~= prevMax then
+            needsLayout = true
+        end
+    end
+
+    if needsLayout then
+        UpdateBarPositions()
+        return
+    end
+
+    for barKey in pairs(MAGE_CHARGE_BARS) do
+        res.UpdateBarValue(barKey)
+    end
+end
+
+local function OnMageChargeTalentDataChanged()
+    -- Relayout anchors protected frames, which is forbidden in combat. The
+    -- talent dispatch fires again on PLAYER_REGEN_ENABLED, so dropping this one
+    -- is safe.
+    if InCombatLockdown() then return end
+    -- Max charges do not reflect the new talents until the next frame.
+    C_Timer.After(0, ReseedMageChargesAfterTalentChange)
+end
+
+local function EnableMageChargeTracking()
+    for barKey in pairs(MAGE_CHARGE_BARS) do
+        SeedMageChargeMax(barKey)
+    end
+    res.RegisterResEvent("SPELL_UPDATE_CHARGES", OnMageSpellUpdateCharges)
+    -- Covers SPELLS_CHANGED, TRAIT_CONFIG_UPDATED and spec/talent swaps in one
+    -- coalesced callback, instead of a raw per-event registration.
+    CDM:RegisterTalentDataHandler(OnMageChargeTalentDataChanged)
+    C_Timer.After(0.1, function()
+        for barKey in pairs(MAGE_CHARGE_BARS) do
+            SeedMageChargeMax(barKey)
+            res.UpdateBarValue(barKey)
+        end
+    end)
+end
+
+local function DisableMageChargeTracking()
+    res.UnregisterResEvent("SPELL_UPDATE_CHARGES")
+    CDM:UnregisterTalentDataHandler(OnMageChargeTalentDataChanged)
+    for barKey in pairs(MAGE_CHARGE_BARS) do
+        local bar = CDM.resourceBars and CDM.resourceBars[barKey]
+        ClearMageChargeBar(bar)
+        if bar then
+            bar._mageLayoutMax, bar._mageLayoutWidth, bar._mageLayoutHeight = nil, nil, nil
+            bar._mageLayoutTickWidth = nil
+        end
+        local state = GetMageChargeState(barKey)
+        if state then state.max = 0 end
+    end
 end
 
 local function ApplyRuneStates(bar, readyColor, rechargingColor, textEnabled)
@@ -1180,6 +1602,10 @@ local function DisableAllTrackerTickers()
         end
         essenceBar.hasEssenceRecharging = false
     end
+    for barKey, state in pairs(mageChargeState) do
+        ClearMageChargeBar(CDM.resourceBars and CDM.resourceBars[barKey])
+        state.max = 0
+    end
     guardianOfEluneExpiry = 0
     maelstromStacks = 0
     feralOverflowingStacks = 0
@@ -1236,6 +1662,10 @@ res.DisableFeralOverflowingTracking = DisableFeralOverflowingTracking
 res.UpdateTipOfTheSpearBar = UpdateTipOfTheSpearBar
 res.EnableTipOfTheSpearTracking = EnableTipOfTheSpearTracking
 res.DisableTipOfTheSpearTracking = DisableTipOfTheSpearTracking
+res.UpdateMageChargeBar = UpdateMageChargeBar
+res.IsMageChargeSpellAvailable = IsMageChargeSpellAvailable
+res.EnableMageChargeTracking = EnableMageChargeTracking
+res.DisableMageChargeTracking = DisableMageChargeTracking
 res.EnableDevourerTracking = EnableDevourerTracking
 res.DisableDevourerTracking = DisableDevourerTracking
 res.EnableEvokerTracking = EnableEvokerTracking

@@ -41,6 +41,8 @@ local SECONDARY_COLOR_FIELDS = {
         { key = "capColor", label = L["Capped"] },
     },
     SoulShards = { { key = "rechargingColor", label = L["Partial Fill"] } },
+    Flurry = { { key = "rechargingColor", label = L["Recharging"] } },
+    FireBlast = { { key = "rechargingColor", label = L["Recharging"] } },
     ComboPoints = {
         ROGUE = {
             { key = "chargedColor", label = L["Charged"] },
@@ -51,6 +53,12 @@ local SECONDARY_COLOR_FIELDS = {
             { key = "overflowingEmptyColor", label = L["Overflowing Empty"] },
         },
     },
+}
+
+-- Bars that show a per-pip recharge countdown instead of a value tag. These
+-- also skip the Conditions tab, which doesn't apply to them.
+local USES_RECHARGE_TEXT = {
+    Flurry = true, FireBlast = true,
 }
 
 local LEFT_INSET = Shared.LEFT_INSET or 35
@@ -789,6 +797,49 @@ local function CreateResourcesTab(page, tabId)
             yOff = yOff - 60
         end
 
+        -- Charge bars draw a recharge countdown on the recharging pip instead of
+        -- a value tag, so they get their own text settings block.
+        if USES_RECHARGE_TEXT[barKey] then
+            local rechargeHeader = UI.CreateHeader(rc, L["Cooldown Text"])
+            rechargeHeader:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 30
+
+            local rechargeCB = UI.CreateModernCheckbox(rc, L["Enable Cooldown Text"],
+                CDM:GetBarSettingForClass(classKey, barKey, "rechargeTextEnabled") ~= false,
+                function(checked)
+                    CDM:SetBarSettingForClass(classKey, barKey, "rechargeTextEnabled", checked)
+                    API:Refresh("RESOURCES")
+                end)
+            rechargeCB:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 35
+
+            local rechargeFontSlider = UI.CreateModernSlider(rc, L["Font Size"], 6, 32,
+                CDM:GetBarSettingForClass(classKey, barKey, "rechargeTextFontSize") or 10,
+                function(v)
+                    CDM:SetBarSettingForClass(classKey, barKey, "rechargeTextFontSize", UI.RoundToInt(v))
+                    API:Refresh("RESOURCES")
+                end, SLIDER_LABEL_W, SLIDER_W)
+            rechargeFontSlider:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 60
+
+            local rechargeColorPicker = CreateBarColorPicker(rc, L["Text Color"], classKey, barKey, "rechargeTextColor")
+            rechargeColorPicker:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 50
+
+            local chargeTickSlider = UI.CreateModernSlider(rc, L["Tick Width"], 1, 10,
+                CDM:GetBarSettingForClass(classKey, barKey, "chargeTickWidth") or 1,
+                function(v)
+                    CDM:SetBarSettingForClass(classKey, barKey, "chargeTickWidth", UI.RoundToInt(v))
+                    API:Refresh("RESOURCES")
+                end, SLIDER_LABEL_W, SLIDER_W)
+            chargeTickSlider:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 60
+
+            yOff = BuildTicksSection(rc, classKey, barKey, yOff)
+            rc:SetHeight(math.abs(yOff) + 20)
+            return
+        end
+
         local tagHeader = UI.CreateHeader(rc, L["Tag (Value Text)"])
         tagHeader:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 30
@@ -1056,7 +1107,8 @@ local function CreateResourcesTab(page, tabId)
         SetSubTabButton("load", true)
         local condBtn = subTabs.tabButtons and subTabs.tabButtons["conditions"]
         if condBtn then
-            if barKey == "Stagger" or barKey == "Ironfur" or barKey == "IgnorePain" then
+            if barKey == "Stagger" or barKey == "Ironfur" or barKey == "IgnorePain"
+                or USES_RECHARGE_TEXT[barKey] then
                 condBtn:Hide()
                 if currentSubTab == "conditions" then subTabs.selectTab("display") end
             else

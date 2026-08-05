@@ -98,6 +98,30 @@ local RESOURCE_BAR_PER_KEY = {
     Ironfur         = { color = { r = 0.153, g = 0.616, b = 1.0, a = 1 }, anchorTo = "Rage" },
     IgnorePain      = { color = { r = 0.9, g = 0.8, b = 0.2, a = 1 }, hideIcon = false, anchorTo = "Rage" },
     TipOfTheSpear   = { color = { r = 0.9, g = 0.3, b = 0.15, a = 1 }, anchorTo = "Focus", tagShowAuraTime = false },
+    Flurry          = {
+        color = { r = 0.35, g = 0.75, b = 0.95, a = 1 },
+        rechargingColor = { r = 0.12, g = 0.26, b = 0.36, a = 1 },
+        anchorTo = "Mana",
+        offsetY = 1,
+        loadMode = "never",
+        tagEnabled = false,
+        rechargeTextEnabled = true,
+        rechargeTextFontSize = 10,
+        rechargeTextColor = { r = 1, g = 1, b = 1, a = 1 },
+        chargeTickWidth = 1,
+    },
+    FireBlast       = {
+        color = { r = 0.95, g = 0.45, b = 0.15, a = 1 },
+        rechargingColor = { r = 0.34, g = 0.15, b = 0.05, a = 1 },
+        anchorTo = "Mana",
+        offsetY = 1,
+        loadMode = "never",
+        tagEnabled = false,
+        rechargeTextEnabled = true,
+        rechargeTextFontSize = 10,
+        rechargeTextColor = { r = 1, g = 1, b = 1, a = 1 },
+        chargeTickWidth = 1,
+    },
 }
 
 local function BuildResourceBarDefaults()

@@ -58,6 +58,8 @@ local CUSTOM_POWER_TYPES = {
     Ironfur = "Ironfur",
     IgnorePain = "IgnorePain",
     TipOfTheSpear = "TipOfTheSpear",
+    Flurry = "Flurry",
+    FireBlast = "FireBlast",
 }
 CDM.CUSTOM_POWER_TYPES = CUSTOM_POWER_TYPES
 
@@ -101,7 +103,7 @@ local CLASS_BARS = {
     PRIEST      = { "Insanity" },
     DEATHKNIGHT = { "RunicPower", "Runes" },
     SHAMAN      = { "Maelstrom", "MaelstromWeapon" },
-    MAGE        = { "ArcaneCharges" },
+    MAGE        = { "ArcaneCharges", "FireBlast", "Flurry" },
     WARLOCK     = { "SoulShards" },
     MONK        = { "Energy", "Chi", "Stagger" },
     DRUID       = { "Rage", "Energy", "ComboPoints", "LunarPower", "Ironfur" },
@@ -417,6 +419,8 @@ local SPEC_POWER_MAP = {
     [262] = POWER_TYPES.Maelstrom,                              -- Elemental Shaman
     [263] = {CUSTOM_POWER_TYPES.MaelstromWeapon},               -- Enhancement Shaman
     [62] = POWER_TYPES.ArcaneCharges,                           -- Arcane Mage
+    [63] = {CUSTOM_POWER_TYPES.FireBlast},                      -- Fire Mage
+    [64] = {CUSTOM_POWER_TYPES.Flurry},                         -- Frost Mage
     [265] = POWER_TYPES.SoulShards,                             -- Affliction Warlock
     [266] = POWER_TYPES.SoulShards,                             -- Demonology Warlock
     [267] = POWER_TYPES.SoulShards,                             -- Destruction Warlock
@@ -630,7 +634,12 @@ local function GetActiveBarKeys()
         local powers = type(specPowers) == "table" and specPowers or {specPowers}
         for _, pt in ipairs(powers) do
             local barKey = GetBarKey(pt)
-            if EvalLoadConditions(barKey, specID) then
+            local available = true
+            if pt == CUSTOM_POWER_TYPES.Flurry or pt == CUSTOM_POWER_TYPES.FireBlast then
+                -- Untalented Flurry / unlearned Fire Blast: suppress the bar.
+                available = CDM._Res.IsMageChargeSpellAvailable(pt, specID)
+            end
+            if available and EvalLoadConditions(barKey, specID) then
                 scratchActiveKeys[#scratchActiveKeys + 1] = barKey
             end
         end
@@ -742,6 +751,14 @@ local function UsesPips(powerType)
         powerType == CUSTOM_POWER_TYPES.DevourerSoulFragments or
         powerType == CUSTOM_POWER_TYPES.TipOfTheSpear
     )
+end
+
+-- Flurry/Fire Blast are segmented bars, not pip bars: a single continuous fill
+-- scaled 0..maxCharges, with a recharge sub-bar riding the fill texture's right
+-- edge and tick textures dividing the charges.
+local function IsMageChargeBar(powerType)
+    return powerType == CUSTOM_POWER_TYPES.Flurry
+        or powerType == CUSTOM_POWER_TYPES.FireBlast
 end
 
 local function CreatePipBar(powerType)
@@ -1019,7 +1036,9 @@ local function CreateBar(powerType)
 
     CDM.resourceBars[powerType] = bar
 
-    if CDM.TAGS and not bar.isPipBar then
+    -- Mage charge bars draw a recharge countdown on the recharge segment, so a
+    -- value tag would just duplicate/obscure it.
+    if CDM.TAGS and not bar.isPipBar and not IsMageChargeBar(powerType) then
         CDM.TAGS:CreateTag(bar, powerType)
     end
 
@@ -1426,6 +1445,11 @@ UpdateBarValue = function(powerType)
         current, max = CDM._Res.UpdateMaelstromBar(bar)
     elseif powerType == CUSTOM_POWER_TYPES.TipOfTheSpear then
         current, max = CDM._Res.UpdateTipOfTheSpearBar(bar)
+    elseif IsMageChargeBar(powerType) then
+        -- Segmented bar: no value tag and no pip conditions, because the charge
+        -- count is never read into Lua (it stays a secret value in combat).
+        CDM._Res.UpdateMageChargeBar(bar, powerType)
+        return
     elseif powerType == CUSTOM_POWER_TYPES.DevourerSoulFragments then
         current, max = CDM._Res.GetDevourerSoulValueMax()
         current = current / DEVOURER_STACKS_PER_PIP
@@ -1839,6 +1863,12 @@ local SPEC_TRACKER_TOGGLES = {
     [1480] = { "EnableDevourerTracking",         "DisableDevourerTracking" },
 }
 
+-- Fire and Frost each own a separate charge bar, but they share one tracker
+-- (one event registration covering both spells). Handled outside
+-- SPEC_TRACKER_TOGGLES so a Fire<->Frost swap re-enables rather than disables,
+-- which pairs() ordering makes unsafe to express as two entries.
+local MAGE_CHARGE_SPECS = { [63] = true, [64] = true }
+
 local function OnSpecChanged()
     if CDM.InvalidateSpecIDCache then
         CDM:InvalidateSpecIDCache()
@@ -1868,6 +1898,17 @@ local function OnSpecChanged()
         elseif currentSpecID == specID then
             CDM._Res[fns[2]]()
         end
+    end
+
+    if MAGE_CHARGE_SPECS[newSpecID] then
+        -- Re-enable on every entry, including Fire<->Frost, since the tracked
+        -- spell differs per spec.
+        if currentSpecID ~= newSpecID then
+            CDM._Res.DisableMageChargeTracking()
+            CDM._Res.EnableMageChargeTracking()
+        end
+    elseif MAGE_CHARGE_SPECS[currentSpecID] then
+        CDM._Res.DisableMageChargeTracking()
     end
 
     if newSpecID == 104 then
@@ -2141,6 +2182,7 @@ local function DisableResources()
     CDM._Res.DisableMaelstromTracking()
     CDM._Res.DisableFeralOverflowingTracking()
     CDM._Res.DisableTipOfTheSpearTracking()
+    CDM._Res.DisableMageChargeTracking()
     CDM._Res.DisableDevourerTracking()
     CDM._Res.DisableGuardianTracking()
     CDM._Res.DisableEvokerTracking()
