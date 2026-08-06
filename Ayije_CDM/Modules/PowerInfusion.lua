@@ -272,7 +272,26 @@ local function StyleButton()
     needsStyleUpdate = false
 end
 
+-- A talent/spec change makes Blizzard rebuild the buff viewer's frames. Our
+-- container survives in this local, but the engine has released the slot behind
+-- it, leaving `button` a stale handle -- touching it raises "forbidden object
+-- from code tainted by an AddOn". Detect the rebuild and start over.
+local function ContainerIsStale()
+    if not container then return false end
+    if not button then return true end
+    local viewer = GetBuffViewer()
+    if not viewer then return true end
+    return container:GetParent() ~= viewer
+end
+
 local function BuildContainer()
+    if ContainerIsStale() then
+        container:Hide()
+        container = nil
+        button = nil
+        needsStyleUpdate = true
+    end
+
     if container then return true end
 
     local viewer = GetBuffViewer()

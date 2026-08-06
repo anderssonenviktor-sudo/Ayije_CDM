@@ -218,7 +218,12 @@ function BORDER:UpdateAllBorders()
     lastAppliedBorderDef = borderDef
 
     for frame, meta in pairs(BORDER.activeBorders) do
-        if frame.border then
+        -- A border parented into an engine-owned frame (e.g. an AuraButton) can
+        -- outlive the slot the engine released, and then throws on any access.
+        -- Drop it rather than re-erroring on every STYLE refresh.
+        if frame.border and not pcall(frame.border.GetParent, frame.border) then
+            BORDER.activeBorders[frame] = nil
+        elseif frame.border then
             if not borderDef then
                 if defChanged then
                     frame.border:SetBackdrop(nil)
