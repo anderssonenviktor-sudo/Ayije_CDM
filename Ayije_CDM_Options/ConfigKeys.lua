@@ -12,6 +12,7 @@ ns.ConfigKeys = {
         "resources",
         "externals",
         "castbar",
+        "powerinfusion",
         "glow",
         "fading",
         "assist",
@@ -27,6 +28,7 @@ ns.ConfigKeys = {
                 "ungroupedCooldownOrder",
                 "cooldownTrinkets",
                 "cooldownTrinketsHidePassive",
+                "trinketsForceEnable",
                 "customCooldownEntries",
                 "sizeEssRow1",
                 "sizeEssRow2",
@@ -156,6 +158,12 @@ ns.ConfigKeys = {
                 "externalsIconHeight",
                 "externalsCooldownFontSize",
                 "externalsDisableBlink",
+            },
+        },
+        powerinfusion = {
+            label = "Power Infusion Settings",
+            keys = {
+                "powerInfusionSpec",
             },
         },
         castbar = {

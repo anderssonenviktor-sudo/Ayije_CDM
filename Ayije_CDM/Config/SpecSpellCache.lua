@@ -8,9 +8,24 @@ local function IsHiddenByDefault(info)
         and FlagsUtil.IsSet(info.flags, HIDE_BY_DEFAULT_FLAG) or false
 end
 
-local CAT_ESSENTIAL = Enum.CooldownViewerCategory and Enum.CooldownViewerCategory.Essential
-local CAT_UTILITY   = Enum.CooldownViewerCategory and Enum.CooldownViewerCategory.Utility
-local CAT_BUFF      = Enum.CooldownViewerCategory and Enum.CooldownViewerCategory.TrackedBuff
+-- 12.1 splits cooldowns across more categories; each cache folds in the
+-- item-backed ones that belong to it. Missing members are skipped on 12.0.
+local function CategoryGroup(...)
+    local evc = Enum and Enum.CooldownViewerCategory
+    local list = {}
+    if not evc then return list end
+    for i = 1, select("#", ...) do
+        local value = evc[select(i, ...)]
+        if value ~= nil then
+            list[#list + 1] = value
+        end
+    end
+    return list
+end
+
+local CATS_ESSENTIAL = CategoryGroup("Essential", "SpecAgnosticEssential", "EquipSlotEssential")
+local CATS_UTILITY   = CategoryGroup("Utility")
+local CATS_BUFF      = CategoryGroup("TrackedBuff", "SpecAgnosticTracked", "EquipSlotTracked")
 
 local specCacheScheduled = false
 local specEssentialCache = {}
@@ -29,26 +44,31 @@ local function EnsureStorage()
     return s
 end
 
-local function CollectCategory(cat)
-    if not cat or not C_CooldownViewer or not C_CooldownViewer.GetCooldownViewerCategorySet then
+local function CollectCategories(cats)
+    if not cats or not C_CooldownViewer or not C_CooldownViewer.GetCooldownViewerCategorySet then
         return nil
     end
 
-    local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
-    if not ids or #ids == 0 then return nil end
-
-    local result = {}
-    for _, cooldownID in ipairs(ids) do
-        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
-        if info then
-            local spellID = info.overrideTooltipSpellID or info.overrideSpellID or info.spellID
-            result[#result + 1] = {
-                cooldownID = cooldownID,
-                spellID = spellID,
-                baseSpellID = info.spellID,
-                hidden = IsHiddenByDefault(info),
-                charges = info.charges or false,
-            }
+    local result, seen = {}, {}
+    for _, cat in ipairs(cats) do
+        local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
+        if ids then
+            for _, cooldownID in ipairs(ids) do
+                if not seen[cooldownID] then
+                    seen[cooldownID] = true
+                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
+                    if info and CDM.CONST.IsViewerEntryVisible(info) then
+                        local spellID = CDM.CONST.ResolveViewerEntryIdentity(info)
+                        result[#result + 1] = {
+                            cooldownID = cooldownID,
+                            spellID = spellID,
+                            baseSpellID = info.spellID,
+                            hidden = IsHiddenByDefault(info),
+                            charges = info.charges or false,
+                        }
+                    end
+                end
+            end
         end
     end
 
@@ -59,9 +79,9 @@ local function RefreshSpecSpellCache()
     specCacheScheduled = false
     local specID = PlayerUtil and PlayerUtil.GetCurrentSpecID and PlayerUtil.GetCurrentSpecID()
     if not specID then return end
-    specEssentialCache[specID] = CollectCategory(CAT_ESSENTIAL)
-    specUtilityCache[specID]   = CollectCategory(CAT_UTILITY)
-    specBuffSpellCache[specID] = CollectCategory(CAT_BUFF)
+    specEssentialCache[specID] = CollectCategories(CATS_ESSENTIAL)
+    specUtilityCache[specID]   = CollectCategories(CATS_UTILITY)
+    specBuffSpellCache[specID] = CollectCategories(CATS_BUFF)
 
     local storage = EnsureStorage()
     if storage then

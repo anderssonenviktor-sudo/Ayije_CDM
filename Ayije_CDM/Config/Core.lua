@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 27
+local DB_SCHEMA_VERSION = 28
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1202,6 +1202,44 @@ local PROFILE_MIGRATIONS = {
             profile.fadingDefensives = nil
         end,
     },
+    {
+        version = 28,
+        run = function(profile)
+            -- Power Infusion settings became per-spec.
+            local keys = {
+                "powerInfusionEnabled",
+                "powerInfusionIconWidth",
+                "powerInfusionIconHeight",
+                "powerInfusionFontSize",
+                "powerInfusionAnchorGroup",
+                "powerInfusionAnchorPoint",
+                "powerInfusionRelativePoint",
+                "powerInfusionOffsetX",
+                "powerInfusionOffsetY",
+            }
+
+            local carried = nil
+            for _, key in ipairs(keys) do
+                if profile[key] ~= nil then
+                    carried = carried or {}
+                    carried[key] = profile[key]
+                    profile[key] = nil
+                end
+            end
+
+            if carried then
+                profile.powerInfusionSpec = profile.powerInfusionSpec or {}
+                local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID() or nil
+                if specID then
+                    local existing = profile.powerInfusionSpec[specID] or {}
+                    for k, v in pairs(carried) do
+                        if existing[k] == nil then existing[k] = v end
+                    end
+                    profile.powerInfusionSpec[specID] = existing
+                end
+            end
+        end,
+    },
 }
 
 local function GetCurrentSchemaVersion(globalData)
@@ -1778,14 +1816,7 @@ if CDM.RegisterEvent then
     end)
 end
 
-local ALL_VIEWER_CATEGORIES = {}
-if Enum and Enum.CooldownViewerCategory then
-    local evc = Enum.CooldownViewerCategory
-    if evc.Essential then ALL_VIEWER_CATEGORIES[#ALL_VIEWER_CATEGORIES + 1] = evc.Essential end
-    if evc.Utility then ALL_VIEWER_CATEGORIES[#ALL_VIEWER_CATEGORIES + 1] = evc.Utility end
-    if evc.TrackedBuff then ALL_VIEWER_CATEGORIES[#ALL_VIEWER_CATEGORIES + 1] = evc.TrackedBuff end
-    if evc.TrackedBar then ALL_VIEWER_CATEGORIES[#ALL_VIEWER_CATEGORIES + 1] = evc.TrackedBar end
-end
+local ALL_VIEWER_CATEGORIES = CDM.CONST.VIEWER_CATEGORIES_ALL
 
 local function ResolveStableBase(spellID)
     if not IsUsableSpellID(spellID) then return nil end

@@ -327,16 +327,18 @@ local function CreateBuffGroupsTab(page)
     local function GetViewerSpellListForSpec(specID)
         if specID == playerSpecID then
             local seen, list = {}, {}
-            local ids = C_CooldownViewer.GetCooldownViewerCategorySet(Enum.CooldownViewerCategory.TrackedBuff, true)
-            if ids then
-                for _, cdID in ipairs(ids) do
-                    if not seen[cdID] then
-                        seen[cdID] = true
-                        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                        if info then
-                            local sid = info.overrideTooltipSpellID or info.overrideSpellID or info.spellID
-                            if sid then
-                                list[#list + 1] = { cdID = cdID, spellID = sid }
+            for _, cat in ipairs(CDM_C.VIEWER_CATEGORIES_BUFF) do
+                local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
+                if ids then
+                    for _, cdID in ipairs(ids) do
+                        if not seen[cdID] then
+                            seen[cdID] = true
+                            local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+                            if info and CDM_C.IsViewerEntryVisible(info) then
+                                local sid = CDM_C.ResolveViewerEntryIdentity(info)
+                                if sid then
+                                    list[#list + 1] = { cdID = cdID, spellID = sid }
+                                end
                             end
                         end
                     end
@@ -383,16 +385,18 @@ local function CreateBuffGroupsTab(page)
             end
         end
         local seen, list = {}, {}
-        local ids = C_CooldownViewer.GetCooldownViewerCategorySet(Enum.CooldownViewerCategory.TrackedBuff, true)
-        if ids then
-            for _, cdID in ipairs(ids) do
-                if not seen[cdID] then
-                    seen[cdID] = true
-                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                    if info then
-                        local sid = info.overrideTooltipSpellID or info.overrideSpellID or info.spellID
-                        if sid and not activeSet[sid] then
-                            list[#list + 1] = { cdID = cdID, spellID = sid }
+        for _, cat in ipairs(CDM_C.VIEWER_CATEGORIES_BUFF) do
+            local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
+            if ids then
+                for _, cdID in ipairs(ids) do
+                    if not seen[cdID] then
+                        seen[cdID] = true
+                        local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+                        if info and CDM_C.IsViewerEntryVisible(info) then
+                            local sid = CDM_C.ResolveViewerEntryIdentity(info)
+                            if sid and not activeSet[sid] then
+                                list[#list + 1] = { cdID = cdID, spellID = sid }
+                            end
                         end
                     end
                 end
@@ -1374,16 +1378,21 @@ local function CreateBuffGroupsTab(page)
     local function BuildTooltipOverrideMap()
         if not (C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet) then return nil end
         local map = {}
-        local ids = C_CooldownViewer.GetCooldownViewerCategorySet(
-            Enum.CooldownViewerCategory.TrackedBuff, true)
-        if ids then
-            for _, cdID in ipairs(ids) do
-                local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                if info and info.overrideTooltipSpellID
-                    and info.overrideTooltipSpellID ~= info.spellID then
-                    map[info.spellID] = info.overrideTooltipSpellID
-                    if info.overrideSpellID then
-                        map[info.overrideSpellID] = info.overrideTooltipSpellID
+        for _, cat in ipairs(CDM_C.VIEWER_CATEGORIES_BUFF) do
+            local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
+            if ids then
+                for _, cdID in ipairs(ids) do
+                    local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
+                    -- Viewer spell IDs can be secret values; they must not be
+                    -- used as table keys.
+                    if info and IsSafeNumber(info.overrideTooltipSpellID)
+                        and info.overrideTooltipSpellID ~= info.spellID then
+                        if IsSafeNumber(info.spellID) then
+                            map[info.spellID] = info.overrideTooltipSpellID
+                        end
+                        if IsSafeNumber(info.overrideSpellID) then
+                            map[info.overrideSpellID] = info.overrideTooltipSpellID
+                        end
                     end
                 end
             end

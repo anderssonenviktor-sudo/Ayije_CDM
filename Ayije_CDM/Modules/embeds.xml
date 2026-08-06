@@ -15,5 +15,6 @@
     <Script file="RotationAssist.lua"/>
     <Script file="PressOverlay.lua"/>
     <Script file="Externals.lua"/>
+    <Script file="PowerInfusion.lua"/>
 </Ui>
 

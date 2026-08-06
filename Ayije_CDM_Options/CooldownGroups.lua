@@ -827,15 +827,15 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local function GetViewerSpellListForSpec(specID)
         local seen, list = {}, {}
         if specID == playerSpecID then
-            for _, cat in ipairs({ Enum.CooldownViewerCategory.Essential, Enum.CooldownViewerCategory.Utility }) do
+            for _, cat in ipairs(CDM_C.VIEWER_CATEGORIES_COOLDOWN) do
                 local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
                 if ids then
                     for _, cdID in ipairs(ids) do
                         if not seen[cdID] then
                             seen[cdID] = true
                             local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                            if info then
-                                local sid = info.overrideTooltipSpellID or info.overrideSpellID or info.spellID
+                            if info and CDM_C.IsViewerEntryVisible(info) then
+                                local sid = CDM_C.ResolveViewerEntryIdentity(info)
                                 if sid then
                                     list[#list + 1] = { cdID = cdID, spellID = sid }
                                 end
@@ -866,15 +866,15 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local function GetUntrackedViewerSpellListForCurrentSpec()
         local activeSet = BuildCooldownActiveSet()
         local seen, list = {}, {}
-        for _, cat in ipairs({ Enum.CooldownViewerCategory.Essential, Enum.CooldownViewerCategory.Utility }) do
+        for _, cat in ipairs(CDM_C.VIEWER_CATEGORIES_COOLDOWN) do
             local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
             if ids then
                 for _, cdID in ipairs(ids) do
                     if not seen[cdID] then
                         seen[cdID] = true
                         local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
-                        if info then
-                            local sid = info.overrideTooltipSpellID or info.overrideSpellID or info.spellID
+                        if info and CDM_C.IsViewerEntryVisible(info) then
+                            local sid = CDM_C.ResolveViewerEntryIdentity(info)
                             if sid and not activeSet[sid] then
                                 list[#list + 1] = { cdID = cdID, spellID = sid }
                             end

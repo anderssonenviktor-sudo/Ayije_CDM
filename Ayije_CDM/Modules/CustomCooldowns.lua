@@ -144,7 +144,7 @@ local function IsSpellTrackedByViewer(spellID)
         return false
     end
     local IsSafeNumber = CDM.IsSafeNumber
-    for _, cat in ipairs({ Enum.CooldownViewerCategory.Essential, Enum.CooldownViewerCategory.Utility }) do
+    for _, cat in ipairs(CDM_C.VIEWER_CATEGORIES_COOLDOWN) do
         local cooldownIDs = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
         if cooldownIDs then
             for _, cdID in ipairs(cooldownIDs) do

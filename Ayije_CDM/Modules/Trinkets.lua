@@ -314,6 +314,28 @@ local function EnableTrinkets()
     RegisterTrinketSpellWatches()
 end
 
+local function DisableTrinkets()
+    local updater = CDM.trinketsUpdater
+    if updater then
+        updater:UnregisterEvent("BAG_UPDATE_DELAYED")
+        updater:UnregisterEvent("PLAYER_EQUIPMENT_CHANGED")
+        updater:UnregisterEvent("PLAYER_ENTERING_WORLD")
+        updater:UnregisterEvent("PLAYER_SPECIALIZATION_CHANGED")
+    end
+    if CDM.UnwatchAllCooldowns then
+        CDM.UnwatchAllCooldowns(TRINKETS_COOLDOWN_WATCH_OWNER)
+    end
+    if CDM.UnwatchAllSpellStates then
+        CDM.UnwatchAllSpellStates(TRINKETS_SPELL_WATCH_OWNER)
+    end
+
+    for _, frame in ipairs(trinketsTracker.GetIconFrames()) do
+        frame:Hide()
+    end
+
+    trinketsTracker.Disable()
+end
+
 function CDM:UpdateTrinkets()
     local container = trinketsTracker.GetContainer()
     if not container then return end
@@ -365,7 +387,24 @@ local function OnTrinketsProfileApplied()
     end
 end
 
+-- Patch 12.1 tracks trinkets natively via the EquipSlot* viewer categories.
+-- Running this tracker alongside it shows every trinket twice, so it stands
+-- down when the client provides native tracking. `trinketsForceEnable` lets a
+-- user keep the custom row anyway (for its styling / grouping behaviour).
+local function IsSupersededByNativeTracking()
+    if CDM_C.GetConfigValue and CDM_C.GetConfigValue("trinketsForceEnable", false) then
+        return false
+    end
+    return CDM_C.HasNativeEquipSlotTracking and CDM_C.HasNativeEquipSlotTracking()
+end
+
+CDM.IsTrinketsSupersededByNative = IsSupersededByNativeTracking
+
 local function ReconcileTrinkets()
+    if IsSupersededByNativeTracking() then
+        if trinketsTracker.IsEnabled() then DisableTrinkets() end
+        return
+    end
     if not trinketsTracker.IsInitialized() then CDM:InitializeTrinkets() end
     if not trinketsTracker.IsEnabled() then EnableTrinkets() end
     CDM:UpdateTrinkets()

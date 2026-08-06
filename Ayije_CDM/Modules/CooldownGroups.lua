@@ -239,7 +239,6 @@ local function AddToSpellMap(spellMap, spellID, mapEntry)
 end
 
 local scratchSeen = {}
-local scratchCategories = {}
 local scratchSpellToEntry = {}
 
 function CDM:RebuildAuraOverlayEnabledMap()
@@ -321,12 +320,7 @@ function CDM:RebuildAuraOverlayEnabledMap()
     if C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
         and C_CooldownViewer.GetCooldownViewerCooldownInfo
         and Enum.CooldownViewerCategory then
-        local categories = scratchCategories
-        table_wipe(categories)
-        categories[1] = Enum.CooldownViewerCategory.Essential
-        categories[2] = Enum.CooldownViewerCategory.Utility
-
-        for _, cat in ipairs(categories) do
+        for _, cat in ipairs(CDM_C.VIEWER_CATEGORIES_COOLDOWN) do
             local cooldownIDs = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
             if cooldownIDs then
                 for _, cdID in ipairs(cooldownIDs) do

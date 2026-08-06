@@ -231,10 +231,16 @@ CDM.defaults = {
     externalsCooldownFontSize = 15,
     externalsDisableBlink = true,
 
+    -- Per-spec: powerInfusionSpec[specID]; see POWER_INFUSION_DEFAULTS.
+    powerInfusionSpec = {},
+
     -- Trinket icons in the cooldown viewer: per-spec tracked slots,
     -- cooldownTrinkets[specID] = { [13] = true, [14] = true }.
     cooldownTrinkets = {},
     cooldownTrinketsHidePassive = false,
+    -- Patch 12.1 tracks trinkets natively, so the custom trinket row stands
+    -- down to avoid duplicate icons. Set true to keep using it regardless.
+    trinketsForceEnable = false,
 
     -- Custom cooldown icons in the cooldown viewer: per-spec entries,
     -- customCooldownEntries[specID] = { { id = <spell/item ID>, isItem = bool }, ... }.

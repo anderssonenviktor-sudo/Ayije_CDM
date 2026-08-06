@@ -99,6 +99,32 @@ function CDM.CONST.GetCustomItemIDFromSentinel(id)
     return nil
 end
 
+-- The stable identity for a cooldown viewer entry.
+--
+-- Patch 12.1's consumable entries (potions / healthstones) have no spellID at
+-- all -- their only identity is spellCategoryID -- so this returns nil for
+-- them and they are skipped by the pickers. Those consumables are covered by
+-- the Custom Cooldowns module instead, which tracks them by item ID.
+--
+-- Deliberately does NOT consult `linkedSpellID` (singular). Blizzard's
+-- CooldownViewerItemDataMixin:GetSpellID() checks it first, but that field is
+-- written onto the mixin's own cached cooldownInfo by RefreshLinkedSpell() to
+-- track which linked aura is currently active. It is transient state and is
+-- absent from a fresh GetCooldownViewerCooldownInfo() result, so keying a
+-- stored identity on it would make group membership change as auras come and
+-- go. The plural `linkedSpellIDs` array is the static candidate list and is
+-- handled by the existing matching passes.
+function CDM.CONST.ResolveViewerEntryIdentity(info)
+    if not info then return nil end
+    local sid = info.overrideTooltipSpellID
+        or info.overrideSpellID
+        or info.spellID
+    -- Viewer spell IDs can be secret values; they must never reach a table key
+    -- or comparison. Matches GetEffectiveCooldownSpellID in Core/Style.lua.
+    if CDM.IsSafeNumber(sid) then return sid end
+    return nil
+end
+
 local VIEWERS = CDM.CONST.VIEWERS
 CDM.CONST.COOLDOWN_VIEWER_NAMES = { VIEWERS.ESSENTIAL, VIEWERS.UTILITY }
 CDM.CONST.ALL_VIEWER_NAMES = {
@@ -112,6 +138,78 @@ CDM.CONST.VIEWERS_WITH_OVERRIDE = {
     [VIEWERS.ESSENTIAL] = true,
     [VIEWERS.UTILITY] = true,
 }
+
+-- Patch 12.1 added item-backed cooldown viewer categories: trinkets arrive as
+-- EquipSlot*, and potions / healthstones / racials as SpecAgnostic*. Every
+-- member is looked up by name and skipped when absent, so these tables stay
+-- correct on 12.0 clients that only know the original four.
+local function BuildCategoryList(...)
+    local evc = Enum and Enum.CooldownViewerCategory
+    local list = {}
+    if not evc then return list end
+    for i = 1, select("#", ...) do
+        local value = evc[select(i, ...)]
+        if value ~= nil then
+            list[#list + 1] = value
+        end
+    end
+    return list
+end
+
+-- Categories whose entries render as cooldown icons (Essential-style rows).
+CDM.CONST.VIEWER_CATEGORIES_COOLDOWN = BuildCategoryList(
+    "Essential",
+    "Utility",
+    "SpecAgnosticEssential",
+    "EquipSlotEssential"
+)
+
+-- Categories whose entries render as tracked buffs (BuffIcon / BuffBar rows).
+CDM.CONST.VIEWER_CATEGORIES_BUFF = BuildCategoryList(
+    "TrackedBuff",
+    "TrackedBar",
+    "SpecAgnosticTracked",
+    "EquipSlotTracked"
+)
+
+-- Every category the addon knows about, cooldowns first.
+CDM.CONST.VIEWER_CATEGORIES_ALL = BuildCategoryList(
+    "Essential",
+    "Utility",
+    "TrackedBuff",
+    "TrackedBar",
+    "SpecAgnosticEssential",
+    "SpecAgnosticTracked",
+    "EquipSlotEssential",
+    "EquipSlotTracked"
+)
+
+-- Item-backed categories only. Used to detect whether the client provides
+-- native trinket/consumable tracking, which supersedes the Trinkets module.
+CDM.CONST.VIEWER_CATEGORIES_EQUIP_SLOT = BuildCategoryList(
+    "EquipSlotEssential",
+    "EquipSlotTracked"
+)
+
+-- 12.1 marks some viewer entries invisible; they must never reach a picker.
+function CDM.CONST.IsViewerEntryVisible(info)
+    return info ~= nil and info.isInvisible ~= true
+end
+
+-- True when the running client exposes native equipment-slot cooldown
+-- tracking and the player's spec actually has entries in it.
+function CDM.CONST.HasNativeEquipSlotTracking()
+    if not (C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet) then
+        return false
+    end
+    for _, cat in ipairs(CDM.CONST.VIEWER_CATEGORIES_EQUIP_SLOT) do
+        local ids = C_CooldownViewer.GetCooldownViewerCategorySet(cat, true)
+        if ids and #ids > 0 then
+            return true
+        end
+    end
+    return false
+end
 
 CDM.CONST.STAGGER_TIERS = {
     { enabled = "tier1Enabled", threshold = "tier1Threshold", color = "moderateColor" },
