@@ -16,5 +16,7 @@
     <Script file="PressOverlay.lua"/>
     <Script file="Externals.lua"/>
     <Script file="PowerInfusion.lua"/>
+    <Script file="BuffBarTimers.lua"/>
+    <Script file="BuffBarDecimals.lua"/>
 </Ui>
 

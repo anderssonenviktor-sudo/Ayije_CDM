@@ -824,6 +824,13 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
 
     local fontSpellID = isCooldown and GetEffectiveCooldownSpellID(frame) or nil
 
+    -- Own version gate: a threshold change leaves geometry and spell identical,
+    -- so both needsVisualUpdate and fullUpdate skip. nil here is the detach.
+    if frame.Cooldown and frameData.cdmLastFormatterVer ~= styleVersion then
+        frameData.cdmLastFormatterVer = styleVersion
+        frame.Cooldown:SetCountdownFormatter(CDM.CooldownFormatter.Get())
+    end
+
     local needsVisualUpdate = fullUpdate
         or frameData.cdmLastStyleVersion ~= styleVersion
         or frameData.cdmLastStyledW ~= iconWidth
@@ -865,7 +872,6 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
             frame.Cooldown:SetAllPoints(frame)
 
             frame.Cooldown:SetCountdownFont(isBuff and "AyijeCDM_CDFont_Buff" or "AyijeCDM_CDFont")
-            frame.Cooldown:SetCountdownFormatter(CDM.CooldownFormatter.Get())
         end
 
         local hideAtlas = styleCache.hideIconOverlay

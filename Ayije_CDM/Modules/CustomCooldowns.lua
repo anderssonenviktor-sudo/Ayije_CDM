@@ -30,6 +30,7 @@ local customTracker
 
 local _, playerClass = UnitClass("player")
 local PACT_OF_GLUTTONY_TALENT_ID = 386689
+local hasWarlockAccess = false
 
 -- Items formerly built into the Racials tracker, offered as one-click adds
 -- in the options "Add Custom" dialog. Behaviors (combat lockout, warlock
@@ -49,7 +50,11 @@ function CDM.GetCustomCooldownBuiltinItems()
     return BUILTIN_ITEM_ORDER, BUILTIN_ITEMS
 end
 
-local function PlayerHasWarlockAccess()
+-- 12.1: UnitClass() returns a secret when unit identity is secret, so the
+-- group scan below is only valid out of combat. The result is cached and
+-- refreshed on roster changes and on leaving combat; a roster change during
+-- combat is picked up when combat ends.
+local function ScanForWarlockAccess()
     if playerClass == "WARLOCK" then
         return true
     end
@@ -76,6 +81,17 @@ local function PlayerHasWarlockAccess()
     end
 
     return false
+end
+
+local function RefreshWarlockAccess()
+    if InCombatLockdown() then
+        return
+    end
+    hasWarlockAccess = ScanForWarlockAccess()
+end
+
+local function PlayerHasWarlockAccess()
+    return hasWarlockAccess
 end
 
 local function PlayerHasPactOfGluttony()
@@ -776,12 +792,15 @@ local function OnCustomCombatStateChanged(isInCombat)
         return
     end
     ClearItemCombatLockouts()
+    -- Picks up any roster change that arrived while the scan was unavailable.
+    RefreshWarlockAccess()
     CDM:UpdateCustomCooldowns()
 end
 
 function CDM:InitializeCustomCooldowns()
     customTracker.Initialize()
 
+    RefreshWarlockAccess()
     RebuildCustomEntries()
 
     local updater = CDM.CreateTrackerUpdater({
@@ -797,6 +816,8 @@ function CDM:InitializeCustomCooldowns()
             -- Re-evaluates both spellbook knowledge and whether Blizzard's
             -- viewer took over tracking any of the custom spells.
             RebuildCustomEntries()
+        elseif event == "GROUP_ROSTER_UPDATE" then
+            RefreshWarlockAccess()
         elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
             local castSpellID = arg3
             if castSpellID then

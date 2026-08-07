@@ -380,6 +380,7 @@ local function RunProfileAppliedHooks()
     CDM.OnResourcesProfileApplied()
     CDM.OnExternalsProfileApplied()
     CDM.OnPowerInfusionProfileApplied()
+    if CDM.OnBuffBarTimersProfileApplied then CDM.OnBuffBarTimersProfileApplied() end
 end
 
 CDM.RunProfileAppliedHooks = RunProfileAppliedHooks
@@ -390,6 +391,7 @@ local function InitializeModules()
     CDM.ReconcileResources()
     CDM.ReconcileExternals()
     CDM.ReconcilePowerInfusion()
+    if CDM.ReconcileBuffBarTimers then CDM.ReconcileBuffBarTimers() end
 
     if CDM.InitializeCustomBuffs then
         CDM:InitializeCustomBuffs()

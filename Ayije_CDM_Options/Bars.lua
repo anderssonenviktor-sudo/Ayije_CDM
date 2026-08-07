@@ -13,6 +13,138 @@ local function CreateBarsTab(page, tabId)
     local layout = UI.CreateVerticalLayout(0)
     local function NextY(spacing) return layout:Next(spacing) end
 
+    -- Decimal duration timers: opt a buff in from Blizzard's tracked buff-bar
+    -- list and its bar shows decimal remaining time that ticks in combat.
+    local function CurrentSpecID()
+        local si = GetSpecialization()
+        return si and GetSpecializationInfo(si) or nil
+    end
+
+    local timerHeader = UI.CreateHeader(barsScrollChild, L["Decimal Duration Timers"])
+    timerHeader:SetPoint("TOPLEFT", 0, NextY(0))
+
+    local timerNote = barsScrollChild:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+    timerNote:SetText(L["Add a tracked buff to show decimal duration text that keeps ticking in combat."])
+    if UI.SetTextMuted then UI.SetTextMuted(timerNote) end
+    timerNote:SetPoint("TOPLEFT", 0, NextY(28))
+
+    local timerDropdown = CreateFrame("DropdownButton", nil, barsScrollChild, "WowStyle1DropdownTemplate")
+    timerDropdown:SetWidth(280)
+    timerDropdown:SetDefaultText(L["Add a tracked buff..."])
+    timerDropdown:SetPoint("TOPLEFT", 0, NextY(26))
+
+    -- Rows for the added spells; rebuilt in place. Anchored below the dropdown.
+    local timerRows = {}
+    local rowsAnchor = timerDropdown
+    local RebuildTimerList
+
+    local function SpellAdded(spellID)
+        for _, cfg in ipairs(CDM.GetBuffBarTimerBars(CurrentSpecID())) do
+            if cfg.spellID == spellID then return true end
+        end
+        return false
+    end
+
+    timerDropdown:SetupMenu(function(_, rootDescription)
+        local tracked = CDM.GetBuffBarTrackedSpells and CDM.GetBuffBarTrackedSpells() or {}
+        if #tracked == 0 then
+            rootDescription:CreateButton(L["(No tracked buffs found)"], function() end)
+            return
+        end
+        for _, entry in ipairs(tracked) do
+            local label = entry.name or ("Spell " .. entry.spellID)
+            if entry.icon then label = "|T" .. entry.icon .. ":16:16:0:0|t " .. label end
+            if SpellAdded(entry.spellID) then label = label .. " |cff888888(" .. L["added"] .. ")|r" end
+            rootDescription:CreateButton(label, function()
+                if SpellAdded(entry.spellID) then return end
+                local bars = CDM.EnsureBuffBarTimerBars(CurrentSpecID())
+                if not bars then return end
+                -- cooldownInfo only carries the override id while talented, so
+                -- capture the base or the bar goes dark once untalented.
+                local rawBase = C_Spell and C_Spell.GetBaseSpell and C_Spell.GetBaseSpell(entry.spellID)
+                local base = (rawBase and rawBase ~= entry.spellID) and rawBase or nil
+                bars[#bars + 1] = {
+                    spellID = entry.spellID,
+                    baseSpellID = base,
+                    name = entry.name,
+                    timerDecimalThreshold = 5,
+                }
+                API:Refresh("BUFF_DATA", "STYLE", "LAYOUT")
+                RebuildTimerList()
+            end)
+        end
+    end)
+
+    RebuildTimerList = function()
+        for _, row in ipairs(timerRows) do row:Hide() end
+
+        local bars = CDM.GetBuffBarTimerBars(CurrentSpecID())
+        local rowH = 30
+        for i, cfg in ipairs(bars) do
+            local row = timerRows[i]
+            if not row then
+                row = CreateFrame("Frame", nil, barsScrollChild)
+                row:SetSize(560, rowH)
+
+                row.icon = row:CreateTexture(nil, "ARTWORK")
+                row.icon:SetSize(20, 20)
+                row.icon:SetPoint("LEFT", row, "LEFT", 0, 0)
+                row.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+                row.name = row:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+                row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
+                row.name:SetWidth(180)
+                row.name:SetJustifyH("LEFT")
+                row.name:SetWordWrap(false)
+
+                -- Min 3 matches the runtime clamp; lower is silently raised.
+                row.threshold = UI.CreateModernSlider(
+                    row, L["Decimals <"], 3, 30, 5,
+                    function(v)
+                        row._cfg.timerDecimalThreshold = UI.RoundToInt(v)
+                        API:Refresh("BUFF_DATA")
+                    end,
+                    70, 120
+                )
+                row.threshold:SetPoint("LEFT", row.name, "RIGHT", 6, 8)
+
+                row.remove = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+                row.remove:SetSize(60, 22)
+                row.remove:SetPoint("LEFT", row.threshold, "RIGHT", 10, -8)
+                row.remove:SetText(REMOVE or L["Remove"])
+                row.remove:SetScript("OnClick", function()
+                    local list = CDM.GetBuffBarTimerBars(CurrentSpecID())
+                    for idx = #list, 1, -1 do
+                        if list[idx] == row._cfg then table.remove(list, idx); break end
+                    end
+                    API:Refresh("BUFF_DATA", "STYLE", "LAYOUT")
+                    RebuildTimerList()
+                end)
+
+                timerRows[i] = row
+            end
+
+            row._cfg = cfg
+            local icon = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(cfg.spellID)
+            row.icon:SetTexture(icon or 134400)
+            local name = cfg.name or (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(cfg.spellID)) or ("Spell " .. tostring(cfg.spellID))
+            row.name:SetText(name)
+            if row.threshold.UpdateUIValue then
+                row.threshold:UpdateUIValue(cfg.timerDecimalThreshold or 5)
+            end
+
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", rowsAnchor, "BOTTOMLEFT", 0, -8 - (i - 1) * (rowH + 4))
+            row:Show()
+        end
+    end
+
+    RebuildTimerList()
+
+    -- Reserve space for the rows so Dimensions below never overlaps them.
+    local MAX_TIMER_ROWS = 8
+    NextY(8 + MAX_TIMER_ROWS * 34 + 16)
+
     local dimensionsHeader = UI.CreateHeader(barsScrollChild, L["Dimensions"])
     dimensionsHeader:SetPoint("TOPLEFT", 0, NextY(0))
 

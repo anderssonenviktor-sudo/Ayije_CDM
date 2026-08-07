@@ -88,17 +88,21 @@ local function BuildBreakpoints(cache)
 end
 
 function Formatter.Rebuild(styleCache)
-    if styleCache.cooldownDecimalThreshold <= 0 and not styleCache.cooldownColorThresholdEnabled then
+    local decThreshold = styleCache.cooldownDecimalThreshold or 0
+    if decThreshold <= 0 and not styleCache.cooldownColorThresholdEnabled then
         instance = nil
         return
     end
 
     local breakpoints = BuildBreakpoints(styleCache)
 
-    if not instance then
-        instance = C_StringUtil.CreateNumericRuleFormatter()
+    -- A fresh object every rebuild: SetCountdownFormatter snapshots the rules at
+    -- attach time, so mutating the live one changes nothing on attached widgets.
+    local new = C_StringUtil.CreateNumericRuleFormatter()
+    if not pcall(new.SetBreakpoints, new, breakpoints) then
+        return  -- rejected table: keep the previous formatter
     end
-    instance:SetBreakpoints(breakpoints)
+    instance = new
 end
 
 function Formatter.Get()

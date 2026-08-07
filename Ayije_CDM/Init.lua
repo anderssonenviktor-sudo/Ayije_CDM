@@ -129,16 +129,25 @@ local function ShouldRunEntry(entry, scopeSet)
     return false
 end
 
+-- Isolated: one erroring entry would otherwise abort the loop and silently stop
+-- every later callback. The error still surfaces via geterrorhandler.
+local function RunEntry(entry)
+    local ok, err = pcall(entry.callback)
+    if not ok then
+        geterrorhandler()("Ayije_CDM refresh callback '" .. tostring(entry.id) .. "': " .. tostring(err))
+    end
+end
+
 local function DispatchRefreshCallbacks(scopeSet)
     if scopeSet then
         for _, entry in ipairs(refreshCallbackList) do
             if ShouldRunEntry(entry, scopeSet) then
-                entry.callback()
+                RunEntry(entry)
             end
         end
     else
         for _, entry in ipairs(refreshCallbackList) do
-            entry.callback()
+            RunEntry(entry)
         end
     end
 end

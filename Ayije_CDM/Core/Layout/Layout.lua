@@ -1363,10 +1363,16 @@ function CDM:PositionBuffBarFrames(viewer, vName)
     end
     effectiveWidth = Snap(effectiveWidth)
 
+    -- Frames mirrored by our own tracking bars are excluded from Blizzard's
+    -- row, or the buff would show twice.
+    local mirrored = CDM.GetBuffBarTimerMirroredFrames and CDM.GetBuffBarTimerMirroredFrames()
+
     table_wipe(tempBars)
     local bars = tempBars
     for frame in viewer.itemFramePool:EnumerateActive() do
-        if frame:IsShown() then
+        if mirrored and mirrored[frame] then
+            frame:SetAlpha(0)
+        elseif frame:IsShown() then
             bars[#bars + 1] = frame
         elseif frame.cooldownInfo then
             self:ApplyBarStyle(frame, vName)
