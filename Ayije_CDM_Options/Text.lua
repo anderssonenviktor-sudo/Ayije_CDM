@@ -224,6 +224,8 @@ local function BuildBuffBars(subPage, page)
     PositionDropdown(rc, L["Anchor"], "buffBarDurationPosition", yOff, BAR_TEXT_POSITIONS); yOff = yOff - 60
     Slider(page, rc, L["X Offset"], -50, 50, "buffBarDurationOffsetX", yOff, -2); yOff = yOff - 50
     Slider(page, rc, L["Y Offset"], -20, 20, "buffBarDurationOffsetY", yOff, 0); yOff = yOff - 50
+    -- Min 3 matches the runtime clamp in BuffBarDecimals; lower is silently raised.
+    Slider(page, rc, L["Decimals <"], 3, 30, "buffBarDecimalThreshold", yOff, 5, "BUFF_DATA"); yOff = yOff - 50
 
     SectionHeader(rc, L["Stack Count Text"], yOff); yOff = yOff - 30
     Slider(page, rc, L["Font Size"], 8, 24, "buffBarApplicationsFontSize", yOff, 15); yOff = yOff - 60

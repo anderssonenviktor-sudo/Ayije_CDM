@@ -112,6 +112,7 @@ ns.ConfigKeys = {
                 "buffBarDurationPosition",
                 "buffBarDurationOffsetX",
                 "buffBarDurationOffsetY",
+                "buffBarDecimalThreshold",
             },
         },
         bars = {

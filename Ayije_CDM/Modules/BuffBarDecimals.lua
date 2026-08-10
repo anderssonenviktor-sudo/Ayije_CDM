@@ -213,7 +213,7 @@ local function CollectDesired()
             desired[#desired + 1] = {
                 index = i,
                 include = include,
-                thr = ClampThr(cfg.timerDecimalThreshold or 5),
+                thr = ClampThr(CDM_C.GetConfigValue("buffBarDecimalThreshold", 5)),
             }
         end
     end

@@ -27,11 +27,6 @@ local MIN_BUILD = 120100
 
 -- CDM.db.buffBarTimers[specID] = { bars = { { spellID, ... }, ... } }
 
-local BAR_DEFAULTS = {
-    timerDecimalThreshold = 5,
-}
-CDM.BUFF_BAR_TIMER_BAR_DEFAULTS = BAR_DEFAULTS
-
 local EMPTY_BARS = {}
 
 local function GetSpecID()
@@ -59,12 +54,6 @@ function CDM.EnsureBuffBarTimerBars(specID)
     end
     specTbl.bars = specTbl.bars or {}
     return specTbl.bars
-end
-
-local function BarThreshold(cfg)
-    local v = cfg and cfg.timerDecimalThreshold
-    if v ~= nil then return v end
-    return BAR_DEFAULTS.timerDecimalThreshold
 end
 
 -- Secret-safe id helpers

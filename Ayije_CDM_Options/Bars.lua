@@ -20,18 +20,13 @@ local function CreateBarsTab(page, tabId)
         return si and GetSpecializationInfo(si) or nil
     end
 
-    local timerHeader = UI.CreateHeader(barsScrollChild, L["Decimal Duration Timers"])
+    local timerHeader = UI.CreateHeader(barsScrollChild, L["Bars"])
     timerHeader:SetPoint("TOPLEFT", 0, NextY(0))
-
-    local timerNote = barsScrollChild:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
-    timerNote:SetText(L["Add a tracked buff to show decimal duration text that keeps ticking in combat."])
-    if UI.SetTextMuted then UI.SetTextMuted(timerNote) end
-    timerNote:SetPoint("TOPLEFT", 0, NextY(28))
 
     local timerDropdown = CreateFrame("DropdownButton", nil, barsScrollChild, "WowStyle1DropdownTemplate")
     timerDropdown:SetWidth(280)
     timerDropdown:SetDefaultText(L["Add a tracked buff..."])
-    timerDropdown:SetPoint("TOPLEFT", 0, NextY(26))
+    timerDropdown:SetPoint("TOPLEFT", 0, NextY(30))
 
     -- Rows for the added spells; rebuilt in place. Anchored below the dropdown.
     local timerRows = {}
@@ -67,7 +62,6 @@ local function CreateBarsTab(page, tabId)
                     spellID = entry.spellID,
                     baseSpellID = base,
                     name = entry.name,
-                    timerDecimalThreshold = 5,
                 }
                 API:Refresh("BUFF_DATA", "STYLE", "LAYOUT")
                 RebuildTimerList()
@@ -97,20 +91,9 @@ local function CreateBarsTab(page, tabId)
                 row.name:SetJustifyH("LEFT")
                 row.name:SetWordWrap(false)
 
-                -- Min 3 matches the runtime clamp; lower is silently raised.
-                row.threshold = UI.CreateModernSlider(
-                    row, L["Decimals <"], 3, 30, 5,
-                    function(v)
-                        row._cfg.timerDecimalThreshold = UI.RoundToInt(v)
-                        API:Refresh("BUFF_DATA")
-                    end,
-                    70, 120
-                )
-                row.threshold:SetPoint("LEFT", row.name, "RIGHT", 6, 8)
-
                 row.remove = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
                 row.remove:SetSize(60, 22)
-                row.remove:SetPoint("LEFT", row.threshold, "RIGHT", 10, -8)
+                row.remove:SetPoint("LEFT", row.name, "RIGHT", 10, 0)
                 row.remove:SetText(REMOVE or L["Remove"])
                 row.remove:SetScript("OnClick", function()
                     local list = CDM.GetBuffBarTimerBars(CurrentSpecID())
@@ -129,9 +112,6 @@ local function CreateBarsTab(page, tabId)
             row.icon:SetTexture(icon or 134400)
             local name = cfg.name or (C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(cfg.spellID)) or ("Spell " .. tostring(cfg.spellID))
             row.name:SetText(name)
-            if row.threshold.UpdateUIValue then
-                row.threshold:UpdateUIValue(cfg.timerDecimalThreshold or 5)
-            end
 
             row:ClearAllPoints()
             row:SetPoint("TOPLEFT", rowsAnchor, "BOTTOMLEFT", 0, -8 - (i - 1) * (rowH + 4))
@@ -142,7 +122,7 @@ local function CreateBarsTab(page, tabId)
     RebuildTimerList()
 
     -- Reserve space for the rows so Dimensions below never overlaps them.
-    local MAX_TIMER_ROWS = 8
+    local MAX_TIMER_ROWS = 4
     NextY(8 + MAX_TIMER_ROWS * 34 + 16)
 
     local dimensionsHeader = UI.CreateHeader(barsScrollChild, L["Dimensions"])

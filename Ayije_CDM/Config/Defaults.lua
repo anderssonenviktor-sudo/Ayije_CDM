@@ -190,6 +190,7 @@ CDM.defaults = {
     buffBarDurationPosition = "RIGHT",
     buffBarDurationOffsetX = -2,
     buffBarDurationOffsetY = 0,
+    buffBarDecimalThreshold = 5,
     buffBarShowApplications = true,
     buffBarApplicationsFontSize = 15,
     buffBarApplicationsColor = { r = 1, g = 1, b = 1, a = 1 },

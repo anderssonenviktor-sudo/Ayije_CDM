@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 28
+local DB_SCHEMA_VERSION = 29
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1237,6 +1237,31 @@ local PROFILE_MIGRATIONS = {
                     end
                     profile.powerInfusionSpec[specID] = existing
                 end
+            end
+        end,
+    },
+    {
+        version = 29,
+        run = function(profile)
+            -- Buff-bar decimal threshold went from per-bar to one global value.
+            -- Carry the largest saved per-bar value up so the setting survives.
+            local root = profile.buffBarTimers
+            if type(root) ~= "table" then return end
+            local best = nil
+            for _, specTbl in pairs(root) do
+                local bars = type(specTbl) == "table" and specTbl.bars
+                if type(bars) == "table" then
+                    for _, cfg in ipairs(bars) do
+                        if type(cfg) == "table" then
+                            local v = tonumber(cfg.timerDecimalThreshold)
+                            if v and (not best or v > best) then best = v end
+                            cfg.timerDecimalThreshold = nil
+                        end
+                    end
+                end
+            end
+            if best and profile.buffBarDecimalThreshold == nil then
+                profile.buffBarDecimalThreshold = best
             end
         end,
     },
