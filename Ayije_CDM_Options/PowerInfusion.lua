@@ -150,9 +150,18 @@ local function CreatePowerInfusionTab(page, tabId)
     end
 
     local lblGroup = scrollChild:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
-    lblGroup:SetText(L["Anchor To"])
+    lblGroup:SetText(L["Anchor To Buff Group"])
     lblGroup:SetPoint("TOPLEFT", 0, NextY(0))
-    NextY(24)
+    NextY(22)
+
+    local groupNote = scrollChild:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+    groupNote:SetText(L["Dynamic anchoring can be buggy, so it is recommended to make a new buff group only for PI and anchor to that."])
+    groupNote:SetWidth(430)
+    groupNote:SetJustifyH("LEFT")
+    groupNote:SetWordWrap(true)
+    if UI.SetTextMuted then UI.SetTextMuted(groupNote) end
+    groupNote:SetPoint("TOPLEFT", 0, NextY(0))
+    NextY(groupNote:GetStringHeight() + 10)
 
     local ddGroup = CreateFrame("DropdownButton", nil, scrollChild, "WowStyle1DropdownTemplate")
     ddGroup:SetPoint("TOPLEFT", 0, NextY(0))
@@ -204,6 +213,10 @@ local function CreatePowerInfusionTab(page, tabId)
     )
     NextY(45)
 
+    -- Y the offset sliders take when the Relative Point row below is hidden,
+    -- captured before that row consumes any of the layout cursor.
+    local offsetYCollapsed = NextY(0)
+
     -- Only meaningful against Main; a group derives it from its grow direction.
     local lblRel = scrollChild:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
     lblRel:SetText(L["Relative Point"])
@@ -225,15 +238,7 @@ local function CreatePowerInfusionTab(page, tabId)
             API:Refresh("LAYOUT")
         end
     )
-    NextY(45)
-
-    RefreshPositionLabels = function()
-        local grouped = IsGroupAnchored()
-        lblPos:SetText(grouped and L["Side of Group"] or L["Anchor Point"])
-        lblRel:SetShown(not grouped)
-        ddRel:SetShown(not grouped)
-    end
-    RefreshPositionLabels()
+    local offsetYExpanded = NextY(45)
 
     page.controls.powerInfusionOffsetX = UI.CreateModernSlider(
         scrollChild, L["X Offset"], -200, 200, Get("powerInfusionOffsetX"),
@@ -242,9 +247,6 @@ local function CreatePowerInfusionTab(page, tabId)
             API:Refresh("LAYOUT")
         end
     )
-    page.controls.powerInfusionOffsetX:SetPoint("TOPLEFT", 0, NextY(0))
-    NextY(45)
-
     page.controls.powerInfusionOffsetY = UI.CreateModernSlider(
         scrollChild, L["Y Offset"], -200, 200, Get("powerInfusionOffsetY"),
         function(v)
@@ -252,7 +254,20 @@ local function CreatePowerInfusionTab(page, tabId)
             API:Refresh("LAYOUT")
         end
     )
-    page.controls.powerInfusionOffsetY:SetPoint("TOPLEFT", 0, NextY(0))
+    page.controls.powerInfusionOffsetY:SetPoint(
+        "TOPLEFT", page.controls.powerInfusionOffsetX, "TOPLEFT", 0, -45)
+
+    RefreshPositionLabels = function()
+        local grouped = IsGroupAnchored()
+        lblPos:SetText(grouped and L["Side of Group"] or L["Anchor Point"])
+        lblRel:SetShown(not grouped)
+        ddRel:SetShown(not grouped)
+
+        -- Reclaim the Relative Point row's space when it is hidden.
+        page.controls.powerInfusionOffsetX:SetPoint(
+            "TOPLEFT", 0, grouped and offsetYCollapsed or offsetYExpanded)
+    end
+    RefreshPositionLabels()
 end
 
 API:RegisterConfigTab("powerinfusion", L["Power Infusion"], CreatePowerInfusionTab, 11.3)
