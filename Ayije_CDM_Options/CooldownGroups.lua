@@ -1647,61 +1647,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
         end)
         addIconBtnRef = addIconBtn
 
-        local addTrinketBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
-        addTrinketBtn:SetSize(96, 22)
-        addTrinketBtn:SetPoint("LEFT", addIconBtn, "RIGHT", 6, 0)
-        addTrinketBtn:SetText(L["Add Trinket"])
-        addTrinketBtn:SetScript("OnClick", function()
-            if not currentSpecID then return end
-            MenuUtil.CreateContextMenu(addTrinketBtn, function(_, rootDescription)
-                local groupedSet = {}
-                local groups = GetSpecGroups()
-                if groups then
-                    for _, gd in ipairs(groups) do
-                        for _, sid in ipairs(gd.spells or {}) do
-                            groupedSet[sid] = true
-                        end
-                    end
-                end
-                local hidePassive = CDM.db.cooldownTrinketsHidePassive == true
-                local anyOffered = false
-                for _, slotID in ipairs(TRINKET_SLOT_IDS) do
-                    local sentinel = GetTrinketSentinelForSlot(slotID)
-                    local itemID = GetInventoryItemID("player", slotID)
-                    local isOnUse = false
-                    if itemID and C_Item.GetItemSpell then
-                        local _, useSpellID = C_Item.GetItemSpell(itemID)
-                        isOnUse = useSpellID ~= nil
-                    end
-                    if itemID
-                        and not IsTrinketTracked(currentSpecID, slotID)
-                        and not groupedSet[sentinel]
-                        and (isOnUse or not hidePassive)
-                    then
-                        anyOffered = true
-                        local name = C_Item.GetItemNameByID(itemID) or (L["Trinket"] .. " " .. (slotID - 12))
-                        local icon = C_Item.GetItemIconByID(itemID)
-                        local label = icon and ("|T" .. icon .. ":16:16:0:0:64:64:5:59:5:59|t " .. name) or name
-                        rootDescription:CreateButton(label, function()
-                            SetTrinketTracked(currentSpecID, slotID, true)
-                            SaveAndRefresh(); RefreshLeftPanelIfNeeded()
-                        end)
-                    end
-                end
-                if not anyOffered then
-                    rootDescription:CreateTitle(L["No equipped trinkets left to add"])
-                end
-                rootDescription:CreateDivider()
-                rootDescription:CreateCheckbox(
-                    L["Hide passive trinkets"],
-                    function() return CDM.db.cooldownTrinketsHidePassive == true end,
-                    function()
-                        CDM.db.cooldownTrinketsHidePassive = not CDM.db.cooldownTrinketsHidePassive
-                    end
-                )
-            end)
-        end)
-
         local customOverlay
         local function CreateCustomEntryOverlay()
             local overlay = UI.CreateModalOverlay()
@@ -1909,7 +1854,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
         local addCustomBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
         addCustomBtn:SetSize(96, 22)
-        addCustomBtn:SetPoint("LEFT", addTrinketBtn, "RIGHT", 6, 0)
+        addCustomBtn:SetPoint("LEFT", addIconBtn, "RIGHT", 6, 0)
         addCustomBtn:SetText(L["Add Custom"])
         addCustomBtn:SetScript("OnClick", function()
             if not currentSpecID then return end

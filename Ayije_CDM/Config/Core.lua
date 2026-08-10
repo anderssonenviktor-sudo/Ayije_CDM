@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 29
+local DB_SCHEMA_VERSION = 30
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1263,6 +1263,14 @@ local PROFILE_MIGRATIONS = {
             if best and profile.buffBarDecimalThreshold == nil then
                 profile.buffBarDecimalThreshold = best
             end
+        end,
+    },
+    {
+        version = 30,
+        run = function(profile)
+            -- The "Hide passive trinkets" option was retired along with the
+            -- Add Trinket button that was its only entry point.
+            profile.cooldownTrinketsHidePassive = nil
         end,
     },
 }
