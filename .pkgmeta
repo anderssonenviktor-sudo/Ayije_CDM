@@ -5,7 +5,7 @@ move-folders:
   Ayije_CDM/Ayije_CDM_Options: Ayije_CDM_Options
 
 
-manual-changelog: Ayije_CDM/CHANGELOG.md
+manual-changelog: Ayije_CDM/Ayije_CDM/CHANGELOG.md
 
 
 ignore:
