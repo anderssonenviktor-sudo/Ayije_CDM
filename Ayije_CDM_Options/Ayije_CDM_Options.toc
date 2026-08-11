@@ -2,7 +2,7 @@
 ## Title: |cFF3bb273Ayije_CDM|r Options
 ## Notes: Cooldown Manager Options UI
 ## Author: Ayije (citrongrod now)
-## Version: 1.3
+## Version: 1.2
 ## LoadOnDemand: 1
 ## Dependencies: Ayije_CDM
 ## X-Curse-Project-ID: 1619980
