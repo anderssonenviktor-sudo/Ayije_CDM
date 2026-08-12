@@ -315,6 +315,103 @@ function CDM:RestoreVisualsIfHidden(frame)
     end
 end
 
+-------------------------------------------------------------------------------
+--  Per-spell Custom Icon
+--  Swaps ONLY the icon artwork -- the tracked aura/spell, its duration, stacks
+--  and every other behaviour stay bound to the real spell. The override stores
+--  customIcon = { kind = "spell"|"item", id = <number> }.
+--
+--  RefreshSpellTexture is the only writer of a viewer item's icon texture (it
+--  runs from every RefreshData and from SPELL_UPDATE_ICON), so the stamp is
+--  re-asserted from a post-hook on it. That hook MUST be installed on the frame
+--  INSTANCE: the leaf mixins' functions are copied onto each item frame when
+--  the frame is created, so hooking the mixin table would never fire for frames
+--  that already existed -- the custom icon would revert on every cast.
+--
+--  On clear, the real icon is re-derived via C_Spell.GetSpellTexture rather
+--  than by calling the frame's own RefreshSpellTexture: running Blizzard mixin
+--  code from insecure context can write tainted values into the frame's table.
+-------------------------------------------------------------------------------
+local function ResolveCustomIconTexture(ov)
+    local ci = ov and ov.customIcon
+    if type(ci) ~= "table" then return nil end
+    local id = ci.id
+    if not IsSafeNumber(id) or id <= 0 then return nil end
+    if ci.kind == "item" then
+        local tex = C_Item.GetItemIconByID(id)
+        if not tex then
+            C_Item.RequestLoadItemDataByID(id)
+        end
+        return tex
+    end
+    return C_Spell.GetSpellTexture(id)
+end
+
+CDM.ResolveBuffCustomIconTexture = ResolveCustomIconTexture
+
+local ApplyCustomIcon
+
+-- Re-resolves the override that applies to whatever spell the frame currently
+-- shows. Frames are pooled and can be recycled onto a different spell between
+-- repaints, so this must not trust a cached entry.
+local function ResolveCustomIconOverrideForFrame(frame, frameData)
+    local sets = CDM.BuffGroupSets
+    local sid = frameData.buffCategorySpellID
+    if sid and sets and sets.grouped and sets.groups then
+        local groupIdx = sets.grouped[sid]
+        local groupData = groupIdx and sets.groups[groupIdx]
+        if groupData then
+            return GetSpellOverride(groupData, sid)
+        end
+    end
+
+    local baseSpellID = CDM.GetBaseSpellID and CDM.GetBaseSpellID(frame)
+    if IsSafeNumber(baseSpellID) then
+        local ov = CDM:GetUngroupedBuffOverride(baseSpellID)
+        if ov then return ov end
+    end
+    if sid then
+        return CDM:GetUngroupedBuffOverride(sid)
+    end
+    return nil
+end
+
+-- Re-assert entry point for the per-frame RefreshSpellTexture hook.
+local function ReassertCustomIcon(frame)
+    if not CDM.buffCustomIconsInUse then return end
+    local frameData = GetFrameData(frame)
+    if not frameData then return end
+    ApplyCustomIcon(frame, frameData, ResolveCustomIconOverrideForFrame(frame, frameData))
+end
+
+ApplyCustomIcon = function(frame, frameData, ov)
+    if not CDM.buffCustomIconsInUse then return end
+
+    local icon = frame.Icon
+    if not icon or not icon.SetTexture then return end
+
+    local texture = ResolveCustomIconTexture(ov)
+
+    if texture then
+        if not frameData.cdmCustomIconHooked and frame.RefreshSpellTexture then
+            frameData.cdmCustomIconHooked = true
+            hooksecurefunc(frame, "RefreshSpellTexture", ReassertCustomIcon)
+        end
+        icon:SetTexture(texture)
+        frameData.cdmCustomIconOn = true
+    elseif frameData.cdmCustomIconOn then
+        -- Only restore once the frame has a resolvable spell. A nil id means the
+        -- identity is transiently unavailable, not that the user cleared the
+        -- setting -- keep the flag armed so a later pass re-evaluates.
+        local sid = CDM.GetBaseSpellID and CDM.GetBaseSpellID(frame)
+        if IsSafeNumber(sid) and sid > 0 then
+            frameData.cdmCustomIconOn = nil
+            local real = C_Spell.GetSpellTexture(sid)
+            if real then icon:SetTexture(real) end
+        end
+    end
+end
+
 local function ApplyGlowForGroupedFrame(frame, specID)
     if not (frame and CDM.Glow) then return end
     local frameData = GetFrameData(frame)
@@ -611,6 +708,8 @@ function CDM:PositionBuffGroupFrames(groupIndex, frames, activeSpellSetParam, re
                 end
             end
 
+            ApplyCustomIcon(frame, frameData, spellOv)
+
             local fHideVisuals = spellOv and spellOv.hideVisuals
 
             if fHideVisuals then
@@ -733,6 +832,8 @@ function CDM:ApplyGroupStyleOverrides()
                         end
                     end
 
+                    ApplyCustomIcon(frame, fd, spellOv)
+
                     local fHideVisuals = spellOv and spellOv.hideVisuals
                     if fHideVisuals then
                         HideFrameVisuals(frame, fd)
@@ -751,8 +852,53 @@ function CDM:ApplyGroupStyleOverrides()
     end
 end
 
+-- Gate for the custom-icon work: skips the per-frame hook install and the
+-- override lookups entirely for the (common) case of no custom icons saved.
+-- Once armed it stays armed for the session so a cleared icon still gets
+-- restored on the pass that follows the clear.
+local function RescanCustomIconGate()
+    if CDM.buffCustomIconsInUse then return end
+    local db = CDM.db
+    if not db then return end
+
+    local function mapHasCustomIcon(map)
+        if type(map) ~= "table" then return false end
+        for _, entry in pairs(map) do
+            if type(entry) == "table" and type(entry.customIcon) == "table" then
+                return true
+            end
+        end
+        return false
+    end
+
+    if type(db.ungroupedBuffOverrides) == "table" then
+        for _, specOv in pairs(db.ungroupedBuffOverrides) do
+            if mapHasCustomIcon(specOv) then
+                CDM.buffCustomIconsInUse = true
+                return
+            end
+        end
+    end
+
+    if type(db.buffGroups) == "table" then
+        for _, specGroups in pairs(db.buffGroups) do
+            if type(specGroups) == "table" then
+                for _, group in pairs(specGroups) do
+                    if type(group) == "table" and mapHasCustomIcon(group.spellOverrides) then
+                        CDM.buffCustomIconsInUse = true
+                        return
+                    end
+                end
+            end
+        end
+    end
+end
+
+CDM.RescanBuffCustomIconGate = RescanCustomIconGate
+
 CDM:RegisterRefreshCallback("buffGroups", function()
     table_wipe(notificationThrottles)
+    RescanCustomIconGate()
     BGP.ReleaseAll()
     CDM:MarkSpecDataDirty()
     CDM:RefreshSpecData()
@@ -762,6 +908,8 @@ end, 29, { "BUFF_DATA" })
 CDM:RegisterRefreshCallback("buffGroups_postViewer", function()
     CDM:UpdateAllBuffGroupContainers()
 end, 45, { "LAYOUT", "BUFF_DATA" })
+
+CDM:RegisterEvent("PLAYER_LOGIN", RescanCustomIconGate)
 
 UpdatePlayerDeathState()
 CDM:RegisterEvent("PLAYER_ENTERING_WORLD", UpdatePlayerDeathState)
@@ -863,6 +1011,10 @@ function CDM:ApplyUngroupedBuffOverrides(frame)
             end
         end
     end
+
+    -- Runs even with no override so a frame whose custom icon was just cleared
+    -- (or that was recycled onto a different spell) gets its real icon back.
+    ApplyCustomIcon(frame, frameData, ov)
 
     if not ov then return end
     matchedSpellID = NormalizeToBase(matchedSpellID) or matchedSpellID

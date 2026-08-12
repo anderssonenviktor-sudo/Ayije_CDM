@@ -482,6 +482,56 @@ local function CreateBuffGroupsTab(page)
         overrideHeader:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
         yOff = yOff - 34
 
+        -- Kept above the checkbox run so the column of checkboxes reads as one
+        -- uninterrupted block.
+        do
+            local currentIcon = existingOv and existingOv.customIcon
+            local hasIcon = type(currentIcon) == "table" and tonumber(currentIcon.id)
+
+            local iconBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+            iconBtn:SetSize(110, 22)
+            iconBtn:SetPoint("TOPLEFT", 0, yOff)
+            iconBtn:SetText(L["Custom Icon"])
+            iconBtn:SetScript("OnClick", function()
+                UI.ShowCustomIconPopup(currentIcon, function(result)
+                    local ov = ensureOv()
+                    if not ov then return end
+                    ov.customIcon = result
+                    if result then API.buffCustomIconsInUse = true end
+                    SaveAndRefresh()
+                    ShowSpellSettings(spellID, groupIndex)
+                end)
+            end)
+
+            local iconPreview = rc:CreateTexture(nil, "ARTWORK")
+            iconPreview:SetSize(20, 20)
+            iconPreview:SetPoint("LEFT", iconBtn, "RIGHT", 8, 0)
+            iconPreview:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+            local iconLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font12")
+            iconLabel:SetPoint("LEFT", iconPreview, "RIGHT", 6, 0)
+
+            if hasIcon then
+                local tex
+                if currentIcon.kind == "item" then
+                    tex = C_Item.GetItemIconByID(currentIcon.id)
+                    if not tex then C_Item.RequestLoadItemDataByID(currentIcon.id) end
+                else
+                    tex = C_Spell.GetSpellTexture(currentIcon.id)
+                end
+                iconPreview:SetTexture(tex)
+                iconLabel:SetText(string.format("%s %d",
+                    currentIcon.kind == "item" and L["Item"] or L["Spell"], currentIcon.id))
+                UI.SetTextSubtle(iconLabel)
+            else
+                iconPreview:SetTexture(nil)
+                iconLabel:SetText(L["Default"])
+                UI.SetTextFaint(iconLabel)
+            end
+
+            yOff = yOff - 36
+        end
+
         local hideCdChecked = existingOv and existingOv.hideCooldown or false
         local hideVisualsChecked = existingOv and existingOv.hideVisuals or false
         local hideCdCheckbox, hideVisualsCheckbox

@@ -4,6 +4,7 @@ local API = Runtime.API
 local ns = Runtime._OptionsNS
 local CDM = Runtime
 local CDM_C = CDM and CDM.CONST or {}
+local L = Runtime.L
 local LSM = LibStub("LibSharedMedia-3.0")
 
 ns.ConfigUI = ns.ConfigUI or {}
@@ -733,6 +734,122 @@ function UI.CreateModalOverlay()
 
     overlay.window = window
     return overlay
+end
+
+-- Shared "Custom Icon" chooser. One text field plus a Spell and an Item button:
+-- the button the user presses declares how the typed ID should be read, so the
+-- same number can mean either a spell or an item. Confirms with
+-- { kind = "spell"|"item", id = <number> }, or nil when cleared.
+local customIconPopup
+
+function UI.ShowCustomIconPopup(current, onConfirm)
+    if not customIconPopup then
+        local overlay = UI.CreateModalOverlay()
+        local window = overlay.window
+        window:SetSize(340, 210)
+
+        local title = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+        title:SetText(L["Custom Icon"])
+        title:SetPoint("TOPLEFT", window, "TOPLEFT", 18, -44)
+        title:SetTextColor(GOLD.r, GOLD.g, GOLD.b, 1)
+
+        local hint = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font12")
+        hint:SetText(L["Enter a spell ID or item ID, then choose which it is."])
+        hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+        hint:SetWidth(300)
+        hint:SetJustifyH("LEFT")
+        UI.SetTextFaint(hint)
+
+        local editBox = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
+        editBox:SetSize(120, 20)
+        editBox:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 6, -14)
+        editBox:SetAutoFocus(false)
+        editBox:SetNumeric(true)
+        editBox:SetMaxLetters(10)
+
+        local preview = window:CreateTexture(nil, "ARTWORK")
+        preview:SetSize(28, 28)
+        preview:SetPoint("LEFT", editBox, "RIGHT", 14, 0)
+        preview:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+        local status = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font12")
+        status:SetPoint("TOPLEFT", editBox, "BOTTOMLEFT", -6, -10)
+        status:SetWidth(300)
+        status:SetJustifyH("LEFT")
+
+        local spellBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        spellBtn:SetSize(90, 22)
+        spellBtn:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", 18, 18)
+        spellBtn:SetText(L["Spell"])
+
+        local itemBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        itemBtn:SetSize(90, 22)
+        itemBtn:SetPoint("LEFT", spellBtn, "RIGHT", 8, 0)
+        itemBtn:SetText(L["Item"])
+
+        local clearBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        clearBtn:SetSize(90, 22)
+        clearBtn:SetPoint("LEFT", itemBtn, "RIGHT", 8, 0)
+        clearBtn:SetText(L["Clear"])
+
+        local function ResolveTexture(kind, id)
+            if kind == "item" then
+                local tex = C_Item.GetItemIconByID(id)
+                if not tex then C_Item.RequestLoadItemDataByID(id) end
+                return tex
+            end
+            return C_Spell.GetSpellTexture(id)
+        end
+
+        local function Commit(kind)
+            local id = tonumber(editBox:GetText())
+            if not id or id <= 0 then
+                status:SetText(L["Enter a valid ID"])
+                UI.SetTextError(status)
+                return
+            end
+            local tex = ResolveTexture(kind, id)
+            if not tex then
+                status:SetText(kind == "item" and L["No icon found for that item ID"]
+                    or L["No icon found for that spell ID"])
+                UI.SetTextError(status)
+                return
+            end
+            preview:SetTexture(tex)
+            if customIconPopup.onConfirm then
+                customIconPopup.onConfirm({ kind = kind, id = id })
+            end
+            overlay:Hide()
+        end
+
+        spellBtn:SetScript("OnClick", function() Commit("spell") end)
+        itemBtn:SetScript("OnClick", function() Commit("item") end)
+        clearBtn:SetScript("OnClick", function()
+            if customIconPopup.onConfirm then customIconPopup.onConfirm(nil) end
+            overlay:Hide()
+        end)
+
+        editBox:SetScript("OnEscapePressed", function() overlay:Hide() end)
+
+        customIconPopup = overlay
+        customIconPopup.editBox = editBox
+        customIconPopup.status = status
+        customIconPopup.preview = preview
+        customIconPopup.clearBtn = clearBtn
+        customIconPopup.ResolveTexture = ResolveTexture
+    end
+
+    local p = customIconPopup
+    p.onConfirm = onConfirm
+    p.status:SetText("")
+
+    local hasCurrent = type(current) == "table" and tonumber(current.id)
+    p.editBox:SetText(hasCurrent and tostring(current.id) or "")
+    p.preview:SetTexture(hasCurrent and p.ResolveTexture(current.kind, current.id) or nil)
+    p.clearBtn:SetEnabled(hasCurrent and true or false)
+
+    p:Show()
+    p.editBox:SetFocus()
 end
 
 function UI.CreateTimedStatus(fontString, duration)

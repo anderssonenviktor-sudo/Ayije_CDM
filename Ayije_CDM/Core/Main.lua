@@ -147,6 +147,9 @@ function CDM:SetupViewer(vName)
             fd.cdmInternalWrite = nil
             fd.isProcessingOverride = nil
             fd.isProcessingBuffOverride = nil
+            -- Not cdmCustomIconHooked: that tracks a hooksecurefunc on the frame
+            -- instance, which survives the frame being released and reacquired.
+            fd.cdmCustomIconOn = nil
             CDM:HideCooldownTextIfFlagged(itemFrame)
 
             if vName ~= VIEWERS.BUFF_BAR and not fd.cdmSetPointHooked then
