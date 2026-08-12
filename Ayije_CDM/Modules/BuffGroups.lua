@@ -447,12 +447,7 @@ function CDM:PositionBuffGroupFrames(groupIndex, frames, activeSpellSetParam, re
 
     -- The container is only one icon wide; publish the real icon count.
     CDM.buffGroupLayoutCounts = CDM.buffGroupLayoutCounts or {}
-    if CDM.buffGroupLayoutCounts[groupIndex] ~= layoutCount then
-        CDM.buffGroupLayoutCounts[groupIndex] = layoutCount
-        if CDM.UpdatePowerInfusionAnchor then
-            CDM.UpdatePowerInfusionAnchor()
-        end
-    end
+    CDM.buffGroupLayoutCounts[groupIndex] = layoutCount
 
     if count == 0 and not isStatic then
         ReleaseGroupPlaceholders(groupIndex)

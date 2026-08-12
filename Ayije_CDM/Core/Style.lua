@@ -20,6 +20,7 @@ local ipairs = ipairs
 local GetSpellCooldown = C_Spell.GetSpellCooldown
 local GetSpellCooldownDuration = C_Spell.GetSpellCooldownDuration
 local GetSpellChargeDuration = C_Spell.GetSpellChargeDuration
+local GetInventoryItemCooldown = GetInventoryItemCooldown
 local GetConfigValue = CDM_C.GetConfigValue
 
 local VIEWERS = CDM_C.VIEWERS
@@ -219,6 +220,7 @@ local function RefreshStyleCache()
 
     styleCache.chargeShowEdge  = CfgValue(db, defaults, "chargeShowEdge", false) == true
     styleCache.chargeHideSwipe = CfgValue(db, defaults, "chargeHideSwipe", false) == true
+    styleCache.trinketsHideAura = CfgValue(db, defaults, "trinketsHideAura", false) == true
 
     styleCache.buffBarWidth = CfgValue(db, defaults, "buffBarWidth", 0)
     styleCache.buffBarHeight = CfgValue(db, defaults, "buffBarHeight", 20)
@@ -377,6 +379,81 @@ local function WriteOverrideDesat(frame, spellID, cdInfo)
         end
     end
     frame.Icon:SetDesaturation(desatValue)
+end
+
+-- Blizzard's CacheCooldownValues runs its sources in a fixed priority order:
+-- charges, spell cooldown, aura, then equipped item. The aura pass claims the
+-- frame via AddVisualDataSource_Aura(), and the equipped-item pass is gated on
+-- `not IsUsingVisualDataSource_Any()`, so an active on-use proc suppresses the
+-- real trinket cooldown entirely -- the icon shows the 17s buff, then jumps to
+-- the 120s cooldown once the buff falls off.
+--
+-- The engine gates that aura pass on CanUseAuraForDisplay(), which tests the
+-- HideAura bit of cooldownInfo.flags. That field is read-only DB2 data with no
+-- setter in C_CooldownViewer, so we cannot ask Blizzard to skip the aura; we
+-- reproduce the equipped-item pass ourselves instead.
+local HIDE_AURA_FLAG = Enum.CooldownSetSpellFlags and Enum.CooldownSetSpellFlags.HideAura
+
+-- The equipment slot backing a native trinket entry, or nil for spell entries.
+-- `equipSlot` is a luaIndex (13/14 for trinkets) added in 12.1; on 12.0 clients
+-- no viewer entry carries it and this always returns nil.
+local function GetViewerEquipSlot(frame)
+    local info = frame and frame.cooldownInfo
+    if not info then return nil end
+    local slot = info.equipSlot
+    return IsSafeNumber(slot) and slot or nil
+end
+
+-- True when Blizzard already suppresses the aura for this entry, in which case
+-- the native equipped-item pass runs and there is nothing for us to fix.
+local function ViewerEntryHidesAura(frame)
+    if not HIDE_AURA_FLAG then return false end
+    local info = frame and frame.cooldownInfo
+    local flags = info and info.flags
+    if not IsSafeNumber(flags) then return false end
+    if not (FlagsUtil and FlagsUtil.IsSet) then return false end
+    return FlagsUtil.IsSet(flags, HIDE_AURA_FLAG)
+end
+
+-- Mirrors CheckCacheCooldownValuesFromEquippedItem: the item cooldown for an
+-- equipped trinket, as a duration object, or nil when it is off cooldown or
+-- only showing the GCD. Blizzard uses `enable == 1` and we match that.
+local function GetEquipSlotCooldownDuration(frame, slot)
+    local start, duration, enable = GetInventoryItemCooldown("player", slot)
+    if not (IsSafeNumber(start) and IsSafeNumber(duration)) then return nil end
+    if enable ~= 1 or duration <= CDM_C.ITEM_COOLDOWN_GCD_MIN then return nil end
+    if start + duration <= GetTime() then return nil end
+
+    local fd = GetFrameData(frame)
+    if not fd.cdmEquipDurationObj then
+        if not (C_DurationUtil and C_DurationUtil.CreateDuration) then return nil end
+        fd.cdmEquipDurationObj = C_DurationUtil.CreateDuration()
+    end
+    fd.cdmEquipDurationObj:SetTimeFromStart(start, duration)
+    return fd.cdmEquipDurationObj
+end
+
+-- Rewrites an aura-driven swipe on a native trinket icon to the real item
+-- cooldown. Returns true when it handled the frame.
+local function ApplyTrinketCooldownOverride(frame, cd)
+    if not styleCache.trinketsHideAura then return false end
+    if frame.cooldownUseAuraDisplayTime ~= true then return false end
+
+    local slot = GetViewerEquipSlot(frame)
+    if not slot then return false end
+    if ViewerEntryHidesAura(frame) then return false end
+
+    cd:SetUseAuraDisplayTime(false)
+    local dur = GetEquipSlotCooldownDuration(frame, slot)
+    if dur then
+        cd:SetCooldownFromDurationObject(dur)
+    else
+        cd:Clear()
+    end
+    if frame.Icon then
+        frame.Icon:SetDesaturation(dur and 1 or 0)
+    end
+    return true
 end
 
 local function ApplySwipeStyle(cd)
@@ -1244,6 +1321,17 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
                         return
                     end
 
+                    -- Native trinket entries are item-backed and frequently have
+                    -- no castable spellID, so this must precede the GetCastSpellID
+                    -- bail below or it would never be reached.
+                    fd.cdmInternalWrite = true
+                    local handledTrinket = ApplyTrinketCooldownOverride(frame, self)
+                    fd.cdmInternalWrite = false
+                    if handledTrinket then
+                        ApplySwipeStyle(self)
+                        return
+                    end
+
                     local sid = GetCastSpellID(frame)
                     if not sid then
                         ApplySwipeStyle(self)
@@ -1303,6 +1391,25 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
 
                     local entry = FindAuraOverlayEntry(frame)
                     if entry and entry.auraOverlay then return end
+
+                    -- A trinket whose proc just fell off is cleared by Blizzard
+                    -- even though the item cooldown is still ticking; restore it.
+                    local equipSlot = styleCache.trinketsHideAura
+                        and GetViewerEquipSlot(frame) or nil
+                    if equipSlot and not ViewerEntryHidesAura(frame) then
+                        local itemDur = GetEquipSlotCooldownDuration(frame, equipSlot)
+                        if itemDur then
+                            fd.cdmInternalWrite = true
+                            self:SetUseAuraDisplayTime(false)
+                            self:SetCooldownFromDurationObject(itemDur)
+                            ApplySwipeStyle(self)
+                            fd.cdmInternalWrite = false
+                            if frame.Icon then
+                                frame.Icon:SetDesaturation(1)
+                            end
+                        end
+                        return
+                    end
 
                     local sid = GetCastSpellID(frame)
                     if not sid then return end
@@ -1767,3 +1874,49 @@ CDM:RegisterRefreshCallback("pandemicCDMStyle", function()
         end
     end
 end, 30, { "STYLE" })
+
+-- Blizzard only writes a native trinket icon's swipe when its own refresh runs,
+-- and an expiring proc does not always trigger one. Watch the two trinket slots
+-- so the override is re-applied the moment the item cooldown actually starts.
+local TRINKET_AURA_WATCH_OWNER = "CDM_TrinketHideAura"
+local TRINKET_EQUIP_SLOTS = { 13, 14 }
+
+local function RefreshNativeTrinketCooldowns()
+    if not styleCache.trinketsHideAura then return end
+    for _, viewerName in ipairs(CDM_C.COOLDOWN_VIEWER_NAMES) do
+        local viewer = _G[viewerName]
+        if viewer and viewer.itemFramePool then
+            for itemFrame in viewer.itemFramePool:EnumerateActive() do
+                local slot = GetViewerEquipSlot(itemFrame)
+                if slot and not ViewerEntryHidesAura(itemFrame) and itemFrame.Cooldown then
+                    local fd = GetFrameData(itemFrame)
+                    local dur = GetEquipSlotCooldownDuration(itemFrame, slot)
+                    if dur then
+                        fd.cdmInternalWrite = true
+                        itemFrame.Cooldown:SetUseAuraDisplayTime(false)
+                        itemFrame.Cooldown:SetCooldownFromDurationObject(dur)
+                        ApplySwipeStyle(itemFrame.Cooldown)
+                        fd.cdmInternalWrite = false
+                        if itemFrame.Icon then
+                            itemFrame.Icon:SetDesaturation(1)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function RegisterTrinketAuraWatches()
+    if not (CDM.WatchInventorySlotCooldown and CDM.UnwatchAllCooldowns) then return end
+    CDM.UnwatchAllCooldowns(TRINKET_AURA_WATCH_OWNER)
+    if not styleCache.trinketsHideAura then return end
+    for _, slot in ipairs(TRINKET_EQUIP_SLOTS) do
+        CDM.WatchInventorySlotCooldown(TRINKET_AURA_WATCH_OWNER, slot, RefreshNativeTrinketCooldowns)
+    end
+end
+
+CDM:RegisterRefreshCallback("trinketHideAura", function()
+    RegisterTrinketAuraWatches()
+    RefreshNativeTrinketCooldowns()
+end, 31, { "STYLE" })

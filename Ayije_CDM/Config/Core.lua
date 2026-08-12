@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 30
+local DB_SCHEMA_VERSION = 31
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1273,6 +1273,28 @@ local PROFILE_MIGRATIONS = {
             profile.cooldownTrinketsHidePassive = nil
         end,
     },
+    {
+        version = 31,
+        run = function(profile)
+            -- Power Infusion is screen-anchored only now: the engine forbids
+            -- moving its button in combat, so it could never track a buff group
+            -- that moves mid-fight. The offsets survive, but they are now
+            -- relative to the screen centre rather than to the anchor target,
+            -- so they no longer describe the same position -- clear them and
+            -- let the icon start centred.
+            local perSpec = profile.powerInfusionSpec
+            if type(perSpec) ~= "table" then return end
+            for _, specTbl in pairs(perSpec) do
+                if type(specTbl) == "table" then
+                    specTbl.powerInfusionAnchorGroup = nil
+                    specTbl.powerInfusionAnchorPoint = nil
+                    specTbl.powerInfusionRelativePoint = nil
+                    specTbl.powerInfusionOffsetX = nil
+                    specTbl.powerInfusionOffsetY = nil
+                end
+            end
+        end,
+    },
 }
 
 local function GetCurrentSchemaVersion(globalData)
@@ -2134,11 +2156,7 @@ local function OpenConfigNow(targetTab)
         end
     end
 
-    if targetTab and CDM.RebuildConfigFrame then
-        CDM:RebuildConfigFrame(targetTab)
-    else
-        CDM:ShowConfig()
-    end
+    CDM:ShowConfig(targetTab)
     return "opened"
 end
 

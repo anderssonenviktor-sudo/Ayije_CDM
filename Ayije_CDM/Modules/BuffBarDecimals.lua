@@ -248,6 +248,9 @@ local function CollectDesired()
         G("buffBarHeight", 20),
         G("buffBarWidth", 0),
         G("buffBarIconPosition", "LEFT"),
+        -- The gap shifts the fill inside the wrap, so it moves the rect the
+        -- engine button is anchored over.
+        G("buffBarIconGap", 2),
         tostring(CDM_C.GetBaseFontPath()),
         tostring(CDM_C.GetBaseFontOutline()),
         tostring(G("buffBarShowDuration", true)),
@@ -297,26 +300,35 @@ local function BuildContainer(desired)
             local out = bar and bar._timerText
             if not out then return end
 
-            -- Cover the fill, then anchor the FontString inside it where the
+            -- Cover the bar, then anchor the FontString inside it where the
             -- config asks. Legal only here, before the button is forbidden; it
             -- stays parented to the container (re-parenting is forbidden).
+            --
+            -- Which rect to cover depends on the anchor: CENTER means the centre
+            -- of the icon+bar unit (the wrap), every edge anchor is relative to
+            -- the fill (the StatusBar). Anchoring the button is the only lever
+            -- -- the FontString's own point is resolved against it.
+            local G = CDM_C.GetConfigValue
+            local durPos = G("buffBarDurationPosition", "RIGHT")
             local sb = bar._bar or bar
+            local rect = (durPos == "CENTER") and bar or sb
             button:ClearAllPoints()
             -- Corner anchors, not SetSize from GetWidth(): the StatusBar is
             -- anchored LEFT/RIGHT, so GetWidth() is stale during a rebuild and
             -- the button came out the wrong width.
-            button:SetPoint("TOPLEFT", sb, "TOPLEFT", 0, 0)
-            button:SetPoint("BOTTOMRIGHT", sb, "BOTTOMRIGHT", 0, 0)
+            button:SetPoint("TOPLEFT", rect, "TOPLEFT", 0, 0)
+            button:SetPoint("BOTTOMRIGHT", rect, "BOTTOMRIGHT", 0, 0)
             if button.SetFrameStrata then button:SetFrameStrata("HIGH") end
 
             local fs = button:CreateFontString(nil, "OVERLAY")
             -- Style before registering, from the config directly -- this is the
             -- only window in which the engine FS can be styled at all.
-            local G = CDM_C.GetConfigValue
-            local durPos = G("buffBarDurationPosition", "RIGHT")
             local durOX  = G("buffBarDurationOffsetX", -4)
             local durOY  = G("buffBarDurationOffsetY", 0)
             local col    = G("buffBarDurationColor", { r = 1, g = 1, b = 1, a = 1 })
+            -- Pixel.FontSize pre-multiplies by the UI scale, so the size would
+            -- otherwise be applied twice and render small (see StyleBar).
+            fs:SetIgnoreParentScale(true)
             fs:SetFont(CDM_C.GetBaseFontPath(),
                 CDM.Pixel.FontSize(G("buffBarDurationFontSize", 12)),
                 CDM_C.GetBaseFontOutline())

@@ -110,10 +110,27 @@ local function SetCategoryButtonState(button, isActive)
     UI.SetTextInactive(button.Text)
 end
 
+-- Tab pages are created empty and populated the first time they are selected.
+-- Building all of them up front costs ~120 CreateFrame calls plus the widgets
+-- each builder makes, all to show one page and hide the rest.
+local function EnsureCategoryBuilt(id)
+    local page = categories[id]
+    if not page or page.acdmBuilt then return end
+
+    local tabDef = ns.ConfigTabs and ns.ConfigTabs[id]
+    if not tabDef or not tabDef.createFunc then return end
+
+    page.acdmBuilt = true
+    tabDef.createFunc(page, id)
+end
+
 local function SelectCategory(id)
     if UI and UI.CloseAllDropdownMenus then
         UI.CloseAllDropdownMenus()
     end
+    -- Must precede the SetShown pass below: builders install OnShow handlers
+    -- that have to be attached before the page is shown.
+    EnsureCategoryBuilt(id)
     currentTab = id
     for categoryId, frame in pairs(categories) do frame:SetShown(categoryId == id) end
     for buttonId, btn in pairs(buttons) do
@@ -260,11 +277,9 @@ local function CreateConfigFrame()
     end
     table.sort(sortedTabs, function(a, b) return a.navOrder < b.navOrder end)
 
+    -- Pages only; each tab's contents are built lazily by EnsureCategoryBuilt.
     for _, tabDef in ipairs(sortedTabs) do
-        local page = CreateCategoryPage(tabDef.id, tabDef.label, Content)
-        if tabDef.createFunc then
-            tabDef.createFunc(page, tabDef.id)
-        end
+        CreateCategoryPage(tabDef.id, tabDef.label, Content)
     end
 
     local headerIndex = 1
@@ -345,7 +360,7 @@ local function CreateConfigFrame()
     end
 end
 
-function API:ShowConfig()
+function API:ShowConfig(targetTab)
     if InCombatLockdown() then
         PrintConfigCombatBlocked(L["open CDM config"])
         return
@@ -353,6 +368,12 @@ function API:ShowConfig()
 
     if not ConfigFrame then CreateConfigFrame() end
     ConfigFrame:Show()
+
+    -- Jumping to a tab does not need the full teardown/rebuild that
+    -- RebuildConfigFrame does; that is only for discarding stale state.
+    if targetTab and ns.ConfigTabs and ns.ConfigTabs[targetTab] then
+        SelectCategory(targetTab)
+    end
 end
 
 function API:RebuildConfigFrame(targetTab)

@@ -108,6 +108,17 @@ local function CreateLayoutTab(page, tabId)
         UpdateScrollHeight()
     end
 
+    generalPage.trinketsHideAuraCheckbox = UI.CreateModernCheckbox(
+        content,
+        L["Hide Trinket Internal CD"],
+        CDM.db.trinketsHideAura,
+        function(checked)
+            CDM.db.trinketsHideAura = checked
+            API:Refresh("STYLE")
+        end
+    )
+    generalPage.trinketsHideAuraCheckbox:SetPoint("TOPLEFT", utilHeader, "BOTTOMLEFT", 0, -15)
+
     wrapCheckbox = UI.CreateModernCheckbox(
         content,
         L["Wrap Utility Bar"],
@@ -118,7 +129,7 @@ local function CreateLayoutTab(page, tabId)
             API:Refresh("LAYOUT")
         end
     )
-    wrapCheckbox:SetPoint("TOPLEFT", utilHeader, "BOTTOMLEFT", 0, -15)
+    wrapCheckbox:SetPoint("TOPLEFT", generalPage.trinketsHideAuraCheckbox, "BOTTOMLEFT", 0, -10)
 
     utilWrapSlider = UI.CreateModernSlider(content, L["Utility Max Icons Per Row"], 1, 20, CDM.db.maxRowUtil, function(v)
         CDM.db.maxRowUtil = v; API:Refresh("LAYOUT")

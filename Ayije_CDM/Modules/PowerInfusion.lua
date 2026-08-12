@@ -27,9 +27,8 @@ CDM.POWER_INFUSION_DEFAULTS = {
     powerInfusionIconHeight = 30,
     powerInfusionFontSize = 15,
     powerInfusionFontColor = { r = 1, g = 1, b = 1, a = 1 },
-    powerInfusionAnchorGroup = "main", -- "main" = Blizzard's buff icon viewer
-    powerInfusionAnchorPoint = "LEFT",
-    powerInfusionRelativePoint = "LEFT",
+    -- Screen-anchored only. The engine owns this button and forbids touching it
+    -- in combat, so it can never follow a container that moves during a fight.
     powerInfusionOffsetX = 0,
     powerInfusionOffsetY = 0,
 }
@@ -94,102 +93,23 @@ local function GetBuffViewer()
     return _G[VIEWERS.BUFF]
 end
 
--- Place via the group's own layout function; hand-rolled maths gets the
--- selfPoint/anchorPoint pairing wrong for non-default grow directions.
-local layoutCtx = CDM._LayoutCtx
-local PositionFrameAtSlot = layoutCtx.PositionFrameAtSlot
-local DeriveSelfPoint = layoutCtx.DeriveSelfPoint
-
-local function PositionInGroup(frame, groupIndex)
-    local sets = CDM.BuffGroupSets
-    local groupData = sets and sets.groups and sets.groups[groupIndex]
-    if not groupData then return false end
-
-    local containers = CDM.buffGroupContainers
-    local groupContainer = containers and containers[groupIndex]
-    if not groupContainer or not groupContainer:IsShown() then return false end
-
-    local grow = groupData.grow
-    if grow ~= "RIGHT" and grow ~= "LEFT" and grow ~= "UP" and grow ~= "DOWN"
-        and grow ~= "CENTER_H" and grow ~= "CENTER_V" then
-        grow = "RIGHT"
-    end
-
-    -- Live icon count, not the configured maximum.
-    local counts = CDM.buffGroupLayoutCounts
-    local count = counts and counts[groupIndex]
-    if not count then count = #(groupData.spells or {}) end
-    if count < 1 then count = 0 end
-
-    local iconW = Snap(groupData.iconWidth or 30)
-    local iconH = Snap(groupData.iconHeight or 30)
-    local spacing = Snap(groupData.spacing or 4)
-    local anchorPoint = groupData.anchorPoint or "CENTER"
-    local selfPoint = DeriveSelfPoint(anchorPoint, grow)
-
-    local w, h = GetSize()
-    frame:SetSize(w, h)
-    frame:ClearAllPoints()
-
-    -- Which end of the row to sit on. LEFT/RIGHT are screen-relative, so a
-    -- row growing leftward maps them to the opposite slot.
-    local side = GetPI("powerInfusionAnchorPoint")
-    local atStart
-    if grow == "LEFT" then
-        atStart = (side == "RIGHT")
-    else
-        atStart = (side == "LEFT")
-    end
-
-    local slot = atStart and -1 or count
-
-    -- Centred grows cannot re-centre around us, so we hang off the chosen end.
-    local layoutCount = (grow == "CENTER_H" or grow == "CENTER_V")
-        and count
-        or (count + 1)
-
-    PositionFrameAtSlot(frame, groupContainer, slot, iconW, iconH, spacing,
-        grow, layoutCount, anchorPoint, selfPoint)
-
-    local offsetX = Snap(GetPI("powerInfusionOffsetX"))
-    local offsetY = Snap(GetPI("powerInfusionOffsetY"))
-    if offsetX ~= 0 or offsetY ~= 0 then
-        local p, rel, rp, x, y = frame:GetPoint(1)
-        if p then
-            frame:ClearAllPoints()
-            frame:SetPoint(p, rel, rp, (x or 0) + offsetX, (y or 0) + offsetY)
-        end
-    end
-
-    return true
-end
-
 -- Anchor the button, not the container: a slot-only container collapses to 1px.
 local positionDirty = false
 
+-- Screen-anchored, always. Anchoring to a buff group meant re-anchoring
+-- whenever that group's icon count changed, and the engine forbids touching
+-- this button in combat -- exactly when groups move. UIParent never moves, so
+-- the position set out of combat stays correct for the whole fight.
 local function PlaceFrame(frame)
     if not frame then return end
 
-    local target = GetPI("powerInfusionAnchorGroup")
-    if target and target ~= "main" then
-        local groupIndex = tonumber(target)
-        if groupIndex and PositionInGroup(frame, groupIndex) then
-            return
-        end
-    end
-
-    local viewer = GetBuffViewer()
-    if not viewer then return end
-
-    local point = GetPI("powerInfusionAnchorPoint")
-    local relativePoint = GetPI("powerInfusionRelativePoint")
-    local offsetX = GetPI("powerInfusionOffsetX")
-    local offsetY = GetPI("powerInfusionOffsetY")
+    local offsetX = Snap(GetPI("powerInfusionOffsetX"))
+    local offsetY = Snap(GetPI("powerInfusionOffsetY"))
 
     local w, h = GetSize()
 
     frame:ClearAllPoints()
-    frame:SetPoint(point, viewer, relativePoint, Snap(offsetX), Snap(offsetY))
+    frame:SetPoint("CENTER", UIParent, "CENTER", offsetX, offsetY)
     frame:SetSize(w, h)
 end
 
@@ -489,11 +409,14 @@ local function StylePreview()
     end
 end
 
+local OVERLAY_KEY = "powerInfusion"
+
 function CDM.UpdatePowerInfusionPreview()
     local shouldShow = isEnabled and IsPreviewActive()
 
     if not shouldShow then
         if previewFrame then previewFrame:Hide() end
+        CDM:UpdateSingleFrameOverlay(OVERLAY_KEY, nil)
         return
     end
 
@@ -503,6 +426,9 @@ function CDM.UpdatePowerInfusionPreview()
     StylePreview()
     previewFrame:Show()
     PlaceFrame(previewFrame)
+
+    -- Yellow, to sit alongside the blue cooldown and orange buff-group overlays.
+    CDM:UpdateSingleFrameOverlay(OVERLAY_KEY, previewFrame, "pi")
 end
 
 local function RegisterPreviewCallbacks()
@@ -541,12 +467,6 @@ function CDM.ReconcilePowerInfusion()
     UpdatePosition()
     StyleButton()
     CDM.UpdatePowerInfusionPreview()
-end
-
--- Called by BuffGroups after a layout pass.
-function CDM.UpdatePowerInfusionAnchor()
-    if not isEnabled then return end
-    UpdatePosition()
 end
 
 function CDM.UpdatePowerInfusionStyle()

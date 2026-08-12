@@ -9,12 +9,14 @@ local OVERLAY_PADDING = 3
 local OVERLAY_COLORS = {
     cd   = { bg = { 0.05, 0.20, 0.45, 0.35 }, border = { 0.25, 0.60, 1.00, 0.90 } },
     buff = { bg = { 0.45, 0.22, 0.05, 0.35 }, border = { 1.00, 0.60, 0.15, 0.90 } },
+    pi   = { bg = { 0.45, 0.42, 0.05, 0.35 }, border = { 1.00, 0.92, 0.20, 0.90 } },
 }
 
 local overlayPool = {}
 local activeBuffOverlays = {}
 local activeCdOverlays = {}
 local activeUngroupedCdOverlays = {}
+local activeSingleOverlays = {}
 local configWindowActive = false
 
 local function CreateOverlay()
@@ -183,6 +185,26 @@ function CDM:UpdateUngroupedCooldownOverlay(viewerKey, frames)
     end
 end
 
+-- One overlay around a single standalone frame (e.g. the Power Infusion icon),
+-- keyed so the caller can update or clear just its own.
+function CDM:UpdateSingleFrameOverlay(key, frame, kind)
+    local overlay = activeSingleOverlays[key]
+    if overlay then
+        ReleaseOverlay(overlay)
+        activeSingleOverlays[key] = nil
+    end
+
+    if not ShouldShowOverlays() or not frame then return end
+
+    local l, r = frame:GetLeft(), frame:GetRight()
+    local t, b = frame:GetTop(), frame:GetBottom()
+    if not (l and r and t and b) then return end
+
+    overlay = AcquireOverlay(kind or "cd")
+    activeSingleOverlays[key] = overlay
+    ApplyRect(overlay, l, r, t, b, true)
+end
+
 function CDM:RefreshBuffGroupOverlayVisibility()
     local show = ShouldShowOverlays()
     for _, overlay in pairs(activeBuffOverlays) do
@@ -192,6 +214,9 @@ function CDM:RefreshBuffGroupOverlayVisibility()
         overlay:SetShown(show)
     end
     for _, overlay in pairs(activeUngroupedCdOverlays) do
+        overlay:SetShown(show)
+    end
+    for _, overlay in pairs(activeSingleOverlays) do
         overlay:SetShown(show)
     end
 end

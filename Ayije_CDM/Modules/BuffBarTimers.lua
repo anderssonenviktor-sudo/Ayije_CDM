@@ -552,6 +552,10 @@ local function StyleBar(bar, index, width)
     bar._bg:SetVertexColor(bgc.r, bgc.g, bgc.b, bgc.a or 0.8)
 
     local nameText = bar._nameText
+    -- Pixel.FontSize pre-multiplies by the UI scale, so the FontString must
+    -- ignore its parent's scale or the size is applied twice -- that is what
+    -- made the text render smaller than Blizzard's at the same configured size.
+    nameText:SetIgnoreParentScale(true)
     nameText:SetFont(style.fontPath, Pixel.FontSize(style.nameSize), style.fontOutline)
     nameText:SetTextColor(style.nameColor.r, style.nameColor.g, style.nameColor.b, style.nameColor.a or 1)
     nameText:SetShadowOffset(0, 0)
@@ -563,13 +567,16 @@ local function StyleBar(bar, index, width)
     nameText:SetShown(style.showName)
 
     local timerText = bar._timerText
+    timerText:SetIgnoreParentScale(true)
     timerText:SetFont(style.fontPath, Pixel.FontSize(style.durSize), style.fontOutline)
     timerText:SetTextColor(style.durColor.r, style.durColor.g, style.durColor.b, style.durColor.a or 1)
     timerText:SetShadowOffset(0, 0)
     timerText:SetJustifyH(style.durPos)
     timerText:ClearAllPoints()
+    -- CENTER means the centre of the icon+bar unit, so it anchors to the wrap
+    -- (which spans both); edge anchors stay on the fill. Matches ApplyBarStyle.
     if style.durPos == "CENTER" then
-        timerText:SetPoint("CENTER", sb, "CENTER", style.durOX, style.durOY)
+        timerText:SetPoint("CENTER", bar, "CENTER", style.durOX, style.durOY)
     else
         timerText:SetPoint(style.durPos, sb, style.durPos, style.durOX, style.durOY)
     end
