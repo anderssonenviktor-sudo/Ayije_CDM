@@ -736,17 +736,18 @@ function UI.CreateModalOverlay()
     return overlay
 end
 
--- Shared "Custom Icon" chooser. One text field plus a Spell and an Item button:
--- the button the user presses declares how the typed ID should be read, so the
--- same number can mean either a spell or an item. Confirms with
--- { kind = "spell"|"item", id = <number> }, or nil when cleared.
+-- Shared "Custom Icon" chooser. One text field plus a Spell, an Item and an
+-- Icon button: the button the user presses declares how the typed ID should be
+-- read, so the same number can mean a spell, an item, or a raw FileDataID.
+-- Confirms with { kind = "spell"|"item"|"texture", id = <number> }, or nil when
+-- cleared.
 local customIconPopup
 
 function UI.ShowCustomIconPopup(current, onConfirm)
     if not customIconPopup then
         local overlay = UI.CreateModalOverlay()
         local window = overlay.window
-        window:SetSize(340, 210)
+        window:SetSize(376, 210)
 
         local title = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
         title:SetText(L["Custom Icon"])
@@ -754,7 +755,7 @@ function UI.ShowCustomIconPopup(current, onConfirm)
         title:SetTextColor(GOLD.r, GOLD.g, GOLD.b, 1)
 
         local hint = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font12")
-        hint:SetText(L["Enter a spell ID or item ID, then choose which it is."])
+        hint:SetText(L["Enter a spell ID, item ID or icon FileDataID, then choose which it is."])
         hint:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
         hint:SetWidth(300)
         hint:SetJustifyH("LEFT")
@@ -778,25 +779,35 @@ function UI.ShowCustomIconPopup(current, onConfirm)
         status:SetJustifyH("LEFT")
 
         local spellBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
-        spellBtn:SetSize(90, 22)
+        spellBtn:SetSize(80, 22)
         spellBtn:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", 18, 18)
         spellBtn:SetText(L["Spell"])
 
         local itemBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
-        itemBtn:SetSize(90, 22)
+        itemBtn:SetSize(80, 22)
         itemBtn:SetPoint("LEFT", spellBtn, "RIGHT", 8, 0)
         itemBtn:SetText(L["Item"])
 
+        local textureBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        textureBtn:SetSize(80, 22)
+        textureBtn:SetPoint("LEFT", itemBtn, "RIGHT", 8, 0)
+        textureBtn:SetText(L["Icon ID"])
+
         local clearBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
-        clearBtn:SetSize(90, 22)
-        clearBtn:SetPoint("LEFT", itemBtn, "RIGHT", 8, 0)
+        clearBtn:SetSize(80, 22)
+        clearBtn:SetPoint("LEFT", textureBtn, "RIGHT", 8, 0)
         clearBtn:SetText(L["Clear"])
 
+        -- A FileDataID has no lookup that can confirm it exists, so unlike the
+        -- spell and item cases this returns the ID itself and validity is judged
+        -- by whether the texture object accepts it (see Commit).
         local function ResolveTexture(kind, id)
             if kind == "item" then
                 local tex = C_Item.GetItemIconByID(id)
                 if not tex then C_Item.RequestLoadItemDataByID(id) end
                 return tex
+            elseif kind == "texture" then
+                return id
             end
             return C_Spell.GetSpellTexture(id)
         end
@@ -809,13 +820,21 @@ function UI.ShowCustomIconPopup(current, onConfirm)
                 return
             end
             local tex = ResolveTexture(kind, id)
-            if not tex then
+            if tex then
+                -- SetTexture silently no-ops on a FileDataID that resolves to
+                -- nothing, leaving the previous texture in place; clearing first
+                -- makes GetTexture a truthful check on whether it took.
+                preview:SetTexture(nil)
+                preview:SetTexture(tex)
+            end
+            if not tex or not preview:GetTexture() then
+                preview:SetTexture(nil)
                 status:SetText(kind == "item" and L["No icon found for that item ID"]
+                    or kind == "texture" and L["No icon found for that icon ID"]
                     or L["No icon found for that spell ID"])
                 UI.SetTextError(status)
                 return
             end
-            preview:SetTexture(tex)
             if customIconPopup.onConfirm then
                 customIconPopup.onConfirm({ kind = kind, id = id })
             end
@@ -824,6 +843,7 @@ function UI.ShowCustomIconPopup(current, onConfirm)
 
         spellBtn:SetScript("OnClick", function() Commit("spell") end)
         itemBtn:SetScript("OnClick", function() Commit("item") end)
+        textureBtn:SetScript("OnClick", function() Commit("texture") end)
         clearBtn:SetScript("OnClick", function()
             if customIconPopup.onConfirm then customIconPopup.onConfirm(nil) end
             overlay:Hide()

@@ -206,6 +206,7 @@ end
 
 local function BuildContainer()
     if ContainerIsStale() then
+        container:SetEnabled(false)
         container:Hide()
         container = nil
         button = nil
@@ -218,6 +219,11 @@ local function BuildContainer()
     if not viewer then return false end
 
     container = CreateFrame("AuraContainer", nil, viewer, "CustomAuraContainerTemplate")
+    -- Configure while hidden and disabled, then let ReconcilePowerInfusion turn
+    -- it on once the slot exists -- the engine re-evaluates from a clean state
+    -- instead of mutating a live container.
+    container:SetEnabled(false)
+    container:Hide()
     container:SetSize(1, 1)
     container:SetPoint("CENTER", viewer, "CENTER", 0, 0)
     container:SetUnit("player")
@@ -293,14 +299,45 @@ local previewFrame
 
 local previewConfigActive = false
 
+local PREVIEW_DURATION = 20
+
+-- Cancelling clears the handle so StylePreview rebuilds a fresh ticker on the
+-- next show. Leaving a live ticker behind was what kept the preview swipe
+-- looping after the config closed, which reads in-game as a phantom PI.
+local function StopPreviewTicker()
+    local f = previewFrame
+    if f and f.cdmPreviewTicker then
+        f.cdmPreviewTicker:Cancel()
+        f.cdmPreviewTicker = nil
+    end
+end
+
+-- IsShown(), never IsVisible(): IsVisible() also reports the parent chain, so
+-- a cutscene hiding UIParent flips it false and restoring UIParent flips it
+-- back true -- showing the preview for a panel the user never opened.
 local function IsPreviewActive()
     local panel = _G.CooldownViewerSettings
-    if panel and panel:IsVisible() then
+    if panel and panel:IsShown() then
         return true
     end
+
+    -- The addon's own config frame, checked directly. previewConfigActive can
+    -- latch true when the hook above is skipped, so the frame's live IsShown()
+    -- is authoritative and the flag only counts when the frame is absent
+    -- (Options addon not loaded yet).
+    local configFrame = _G.Ayije_CDMConfigFrame
+    if configFrame then
+        return configFrame:IsShown()
+    end
+
     return previewConfigActive
 end
 
+-- SetConfigWindowActive early-returns when the state is unchanged, and
+-- hooksecurefunc only fires on a completed call -- so this hook is missed
+-- whenever the flag is already at the requested value. Treat it as a hint to
+-- re-evaluate, never as the source of truth: UpdatePowerInfusionPreview reads
+-- the live config-frame state instead.
 hooksecurefunc(CDM, "SetConfigWindowActive", function(_, active)
     previewConfigActive = active and true or false
     if CDM.UpdatePowerInfusionPreview then
@@ -398,13 +435,17 @@ local function StylePreview()
         f.cdmBorderFrame:Hide()
     end
 
-    local PREVIEW_DURATION = 20
     cd:SetCooldown(GetTime(), PREVIEW_DURATION)
     if not f.cdmPreviewTicker then
         f.cdmPreviewTicker = C_Timer.NewTicker(PREVIEW_DURATION, function()
-            if previewFrame and previewFrame:IsShown() and previewFrame.Cooldown then
-                previewFrame.Cooldown:SetCooldown(GetTime(), PREVIEW_DURATION)
+            -- Self-cancel rather than trusting an external Cancel: if the frame
+            -- is gone or hidden the preview is over, and a live ticker would
+            -- otherwise keep re-arming a swipe that reads as a real PI proc.
+            if not (previewFrame and previewFrame.Cooldown and previewFrame:IsShown()) then
+                StopPreviewTicker()
+                return
             end
+            previewFrame.Cooldown:SetCooldown(GetTime(), PREVIEW_DURATION)
         end)
     end
 end
@@ -415,6 +456,7 @@ function CDM.UpdatePowerInfusionPreview()
     local shouldShow = isEnabled and IsPreviewActive()
 
     if not shouldShow then
+        StopPreviewTicker()
         if previewFrame then previewFrame:Hide() end
         CDM:UpdateSingleFrameOverlay(OVERLAY_KEY, nil)
         return
@@ -451,9 +493,14 @@ function CDM.ReconcilePowerInfusion()
 
     if not enabled then
         if container then
+            -- SetEnabled, not just Hide: hiding only stops rendering, while the
+            -- engine keeps driving the slot. A disabled container stops
+            -- processing auras, so the slot cannot latch a stale shown state.
+            container:SetEnabled(false)
             container:Hide()
         end
         isEnabled = false
+        StopPreviewTicker()
         if previewFrame then previewFrame:Hide() end
         return
     end
@@ -462,7 +509,11 @@ function CDM.ReconcilePowerInfusion()
 
     isEnabled = true
 
-    -- The container registers/unregisters UNIT_AURA from its own visibility.
+    -- Always pair SetShown/SetEnabled. Rendering and aura processing are
+    -- independent: a container that is hidden but still enabled (e.g. while a
+    -- cutscene hides the parent chain) holds whatever its slot last latched and
+    -- shows it again on restore, with no aura update to retire it.
+    container:SetEnabled(true)
     container:Show()
     UpdatePosition()
     StyleButton()

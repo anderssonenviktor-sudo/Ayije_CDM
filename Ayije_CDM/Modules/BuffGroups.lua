@@ -319,7 +319,8 @@ end
 --  Per-spell Custom Icon
 --  Swaps ONLY the icon artwork -- the tracked aura/spell, its duration, stacks
 --  and every other behaviour stay bound to the real spell. The override stores
---  customIcon = { kind = "spell"|"item", id = <number> }.
+--  customIcon = { kind = "spell"|"item"|"texture", id = <number> }, where a
+--  "texture" id is a raw FileDataID used as the artwork directly.
 --
 --  RefreshSpellTexture is the only writer of a viewer item's icon texture (it
 --  runs from every RefreshData and from SPELL_UPDATE_ICON), so the stamp is
@@ -343,6 +344,9 @@ local function ResolveCustomIconTexture(ov)
             C_Item.RequestLoadItemDataByID(id)
         end
         return tex
+    elseif ci.kind == "texture" then
+        -- Already a FileDataID; nothing to look up.
+        return id
     end
     return C_Spell.GetSpellTexture(id)
 end

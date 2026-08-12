@@ -512,16 +512,20 @@ local function CreateBuffGroupsTab(page)
             iconLabel:SetPoint("LEFT", iconPreview, "RIGHT", 6, 0)
 
             if hasIcon then
-                local tex
+                local tex, kindLabel
                 if currentIcon.kind == "item" then
                     tex = C_Item.GetItemIconByID(currentIcon.id)
                     if not tex then C_Item.RequestLoadItemDataByID(currentIcon.id) end
+                    kindLabel = L["Item"]
+                elseif currentIcon.kind == "texture" then
+                    tex = currentIcon.id
+                    kindLabel = L["Icon ID"]
                 else
                     tex = C_Spell.GetSpellTexture(currentIcon.id)
+                    kindLabel = L["Spell"]
                 end
                 iconPreview:SetTexture(tex)
-                iconLabel:SetText(string.format("%s %d",
-                    currentIcon.kind == "item" and L["Item"] or L["Spell"], currentIcon.id))
+                iconLabel:SetText(string.format("%s %d", kindLabel, currentIcon.id))
                 UI.SetTextSubtle(iconLabel)
             else
                 iconPreview:SetTexture(nil)
