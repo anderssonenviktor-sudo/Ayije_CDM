@@ -195,17 +195,22 @@ end
 -- bar's OWN saved identity, pass 2 adds cooldownInfo enrichment but skips ids
 -- already claimed by a different bar.
 local function CollectDesired()
-    local bars = CDM.GetBuffBarTimerBars()
-    if #bars == 0 then return nil, "" end
+    -- The flat entry list covers grouped and ungrouped bars alike; bar index
+    -- here matches the index BuffBarTimers_GetBar uses.
+    local entries = CDM.GetBuffBarEntries and CDM.GetBuffBarEntries()
+    if not entries or #entries == 0 then return nil, "" end
 
-    local map = CDM.AssignBuffBarTimerFrames and CDM.AssignBuffBarTimerFrames(bars)
+    local cfgList = CDM.BuildBuffBarCfgList and CDM.BuildBuffBarCfgList()
+    local map = cfgList and CDM.AssignBuffBarTimerFrames
+        and CDM.AssignBuffBarTimerFrames(cfgList)
     local claimed = {}
     local desired = {}
 
-    -- Pass 1: saved identity.
-    for i = 1, #bars do
-        local cfg = bars[i]
-        if cfg.timerDecimals ~= false and IsUsableSID(cfg.spellID) then
+    -- Pass 1: saved identity. Stack bars never bind a duration formatter.
+    for i = 1, #entries do
+        local cfg = entries[i].bar
+        if cfg.barType ~= "stack" and cfg.timerDecimals ~= false
+            and cfg.showDuration ~= false and IsUsableSID(cfg.spellID) then
             local include = {}
             AddVariants(include, cfg.spellID)
             AddVariants(include, cfg.baseSpellID)
@@ -213,7 +218,9 @@ local function CollectDesired()
             desired[#desired + 1] = {
                 index = i,
                 include = include,
-                thr = ClampThr(CDM_C.GetConfigValue("buffBarDecimalThreshold", 5)),
+                -- Per-bar now that bars are self-contained.
+                thr = ClampThr(cfg.decimalThreshold),
+                cfg = cfg,
             }
         end
     end
@@ -222,38 +229,55 @@ local function CollectDesired()
     -- Pass 2: cooldownInfo enrichment, respecting claims.
     for k = 1, #desired do
         local want = desired[k]
-        local cfg = bars[want.index]
-        local frame = map and map[cfg]
+        local cfg = entries[want.index] and entries[want.index].bar
+        local frame = cfg and map and map[cfg]
         if frame then AddFrameIDs(want.include, frame, claimed, want.index) end
     end
 
     -- Threshold is excluded (it re-registers in place on the live button), but
     -- the text style is included: the engine FS can only be styled inside
     -- initializeFrame, so a font/position change must force a rebuild.
+    -- Bars are self-contained, so the style part is per-bar.
     local parts = {}
     for k = 1, #desired do
         local want = desired[k]
         local ids = {}
         for id in pairs(want.include) do ids[#ids + 1] = id end
         table.sort(ids)
-        parts[#parts + 1] = want.index .. "=" .. table.concat(ids, ",")
+
+        local cfg = entries[want.index].bar
+        local barSig = table.concat({
+            cfg.durationFontSize or 15,
+            cfg.durationPosition or "RIGHT",
+            cfg.durationOffsetX or -2,
+            cfg.durationOffsetY or 0,
+            cfg.height or 20,
+            cfg.width or 0,
+            cfg.iconPosition or "LEFT",
+            -- The gap shifts the fill inside the wrap, so it moves the rect the
+            -- engine button is anchored over.
+            cfg.iconGap or 1,
+            tostring(cfg.showDuration ~= false),
+        }, ",")
+
+        parts[#parts + 1] = want.index .. "=" .. table.concat(ids, ",") .. "@" .. barSig
     end
 
-    local G = CDM_C.GetConfigValue
+    -- Group placement moves the host, which moves every bar inside it, so the
+    -- containers' geometry belongs in the signature too.
+    local layoutSig = {}
+    for k = 1, #desired do
+        local entry = entries[desired[k].index]
+        local g = entry.group
+        layoutSig[#layoutSig + 1] = g
+            and table.concat({ entry.groupIndex, g.grow or "DOWN", g.spacing or 1 }, ",")
+            or "u"
+    end
+
     local styleSig = table.concat({
-        G("buffBarDurationFontSize", 12),
-        G("buffBarDurationPosition", "RIGHT"),
-        G("buffBarDurationOffsetX", -4),
-        G("buffBarDurationOffsetY", 0),
-        G("buffBarHeight", 20),
-        G("buffBarWidth", 0),
-        G("buffBarIconPosition", "LEFT"),
-        -- The gap shifts the fill inside the wrap, so it moves the rect the
-        -- engine button is anchored over.
-        G("buffBarIconGap", 2),
         tostring(CDM_C.GetBaseFontPath()),
         tostring(CDM_C.GetBaseFontOutline()),
-        tostring(G("buffBarShowDuration", true)),
+        table.concat(layoutSig, "/"),
     }, "|")
 
     return desired, table.concat(parts, ";") .. "#" .. styleSig
@@ -290,7 +314,7 @@ local function BuildContainer(desired)
 
     for k = 1, #desired do
         local want = desired[k]
-        local index, thr = want.index, want.thr
+        local index, thr, cfg = want.index, want.thr, want.cfg
 
         local function initializeFrame(button)
             if button.SetMouseMotionEnabled then button:SetMouseMotionEnabled(false) end
@@ -308,8 +332,10 @@ local function BuildContainer(desired)
             -- of the icon+bar unit (the wrap), every edge anchor is relative to
             -- the fill (the StatusBar). Anchoring the button is the only lever
             -- -- the FontString's own point is resolved against it.
-            local G = CDM_C.GetConfigValue
-            local durPos = G("buffBarDurationPosition", "RIGHT")
+            --
+            -- Every value comes off the bar's own config: bars are
+            -- self-contained, so there is no global to fall back to.
+            local durPos = cfg.durationPosition or "RIGHT"
             local sb = bar._bar or bar
             local rect = (durPos == "CENTER") and bar or sb
             button:ClearAllPoints()
@@ -323,14 +349,14 @@ local function BuildContainer(desired)
             local fs = button:CreateFontString(nil, "OVERLAY")
             -- Style before registering, from the config directly -- this is the
             -- only window in which the engine FS can be styled at all.
-            local durOX  = G("buffBarDurationOffsetX", -4)
-            local durOY  = G("buffBarDurationOffsetY", 0)
-            local col    = G("buffBarDurationColor", { r = 1, g = 1, b = 1, a = 1 })
+            local durOX  = cfg.durationOffsetX or -2
+            local durOY  = cfg.durationOffsetY or 0
+            local col    = cfg.durationColor or { r = 1, g = 1, b = 1, a = 1 }
             -- Pixel.FontSize pre-multiplies by the UI scale, so the size would
             -- otherwise be applied twice and render small (see StyleBar).
             fs:SetIgnoreParentScale(true)
             fs:SetFont(CDM_C.GetBaseFontPath(),
-                CDM.Pixel.FontSize(G("buffBarDurationFontSize", 12)),
+                CDM.Pixel.FontSize(cfg.durationFontSize or 15),
                 CDM_C.GetBaseFontOutline())
             fs:SetTextColor(col.r, col.g, col.b, col.a or 1)
             fs:SetJustifyH(durPos)

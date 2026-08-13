@@ -307,6 +307,10 @@ CDM.defaults = {
     ungroupedCustomBuffOrder = {},
     buffGroups = {},
     ungroupedBuffOverrides = {},
+    -- Custom buff bars: ungrouped bars live in buffBarTimers[specID].bars,
+    -- grouped ones in buffBarGroups[specID][i].bars. See Modules/BuffBarModel.
+    buffBarTimers = {},
+    buffBarGroups = {},
     cooldownGroups = {},
     ungroupedCooldownOverrides = {},
     ungroupedCooldownOrder = {},

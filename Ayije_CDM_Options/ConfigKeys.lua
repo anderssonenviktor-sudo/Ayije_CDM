@@ -137,6 +137,10 @@ ns.ConfigKeys = {
                 "buffBarColor",
                 "buffBarBackgroundColor",
                 "buffBarDualMode",
+                -- Custom bars: self-contained bar configs, and the groups they
+                -- can be organised into.
+                "buffBarTimers",
+                "buffBarGroups",
             },
         },
         resources = {

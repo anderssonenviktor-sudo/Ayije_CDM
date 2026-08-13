@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 31
+local DB_SCHEMA_VERSION = 33
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1291,6 +1291,116 @@ local PROFILE_MIGRATIONS = {
                     specTbl.powerInfusionRelativePoint = nil
                     specTbl.powerInfusionOffsetX = nil
                     specTbl.powerInfusionOffsetY = nil
+                end
+            end
+        end,
+    },
+    {
+        version = 32,
+        run = function(profile)
+            -- Buff bars became self-contained: every visual now lives on the
+            -- bar instead of being read from the shared buffBar* keys at draw
+            -- time. Stamp each existing bar with the globals it was rendering
+            -- with so it keeps looking exactly the same, and give it the
+            -- default "timer" type.
+            --
+            -- The globals are deliberately LEFT in place: Blizzard's own
+            -- unmirrored bar row (Layout.lua/Style.lua) still reads them.
+            --
+            -- grow/spacing are NOT stamped: they describe how a run of bars
+            -- stacks, so they belong to the group (or, for the ungrouped run,
+            -- to the shared globals). An early build of this migration did
+            -- write them onto bars, so they are cleared below.
+            local root = profile.buffBarTimers
+            if type(root) ~= "table" then return end
+
+            local function Val(key, fallback)
+                local v = rawget(profile, key)
+                if v == nil then return fallback end
+                return v
+            end
+            local function Color(key, r, g, b, a)
+                local c = rawget(profile, key)
+                if type(c) == "table" then
+                    return { r = c.r or r, g = c.g or g, b = c.b or b, a = c.a or a }
+                end
+                return { r = r, g = g, b = b, a = a }
+            end
+
+            for _, specTbl in pairs(root) do
+                local bars = type(specTbl) == "table" and specTbl.bars
+                if type(bars) == "table" then
+                    for _, cfg in ipairs(bars) do
+                        if type(cfg) == "table" then
+                            cfg.barType = "timer"
+                            cfg.width         = Val("buffBarWidth", 0)
+                            cfg.height        = Val("buffBarHeight", 20)
+                            cfg.texture       = Val("buffBarTexture", "Solid")
+                            cfg.iconPosition  = Val("buffBarIconPosition", "LEFT")
+                            cfg.iconGap       = Val("buffBarIconGap", 1)
+                            cfg.showName      = Val("buffBarShowName", true)
+                            cfg.nameMaxChars  = Val("buffBarNameMaxChars", 0)
+                            cfg.nameFontSize  = Val("buffBarNameFontSize", 15)
+                            cfg.nameOffsetX   = Val("buffBarNameOffsetX", 2)
+                            cfg.nameOffsetY   = Val("buffBarNameOffsetY", 0)
+                            cfg.showDuration  = Val("buffBarShowDuration", true)
+                            cfg.durationFontSize = Val("buffBarDurationFontSize", 15)
+                            cfg.durationPosition = Val("buffBarDurationPosition", "RIGHT")
+                            cfg.durationOffsetX  = Val("buffBarDurationOffsetX", -2)
+                            cfg.durationOffsetY  = Val("buffBarDurationOffsetY", 0)
+                            cfg.showApplications = Val("buffBarShowApplications", true)
+                            cfg.applicationsFontSize = Val("buffBarApplicationsFontSize", 15)
+                            cfg.applicationsPosition = Val("buffBarApplicationsPosition", "CENTER")
+                            cfg.applicationsOffsetX  = Val("buffBarApplicationsOffsetX", 0)
+                            cfg.applicationsOffsetY  = Val("buffBarApplicationsOffsetY", 0)
+                            cfg.decimalThreshold = Val("buffBarDecimalThreshold", 5)
+                            cfg.barColor   = Color("buffBarColor", 0.4, 0.6, 0.9, 1)
+                            cfg.bgColor    = Color("buffBarBackgroundColor", 0.1, 0.1, 0.1, 0.8)
+                            cfg.nameColor  = Color("buffBarNameColor", 1, 1, 1, 1)
+                            cfg.durationColor = Color("buffBarDurationColor", 1, 1, 1, 1)
+                            cfg.applicationsColor = Color("buffBarApplicationsColor", 1, 1, 1, 1)
+                        end
+                    end
+                end
+            end
+        end,
+    },
+    {
+        version = 33,
+        run = function(profile)
+            -- Grow direction and spacing moved off individual bars: they
+            -- describe how a run of bars stacks, which is the group's business
+            -- (or the shared globals' for the ungrouped run). Strip the keys an
+            -- earlier build of migration 32 wrote onto each bar.
+            local function StripBars(bars)
+                if type(bars) ~= "table" then return end
+                for _, cfg in ipairs(bars) do
+                    if type(cfg) == "table" then
+                        cfg.grow = nil
+                        cfg.spacing = nil
+                    end
+                end
+            end
+
+            local root = profile.buffBarTimers
+            if type(root) == "table" then
+                for _, specTbl in pairs(root) do
+                    if type(specTbl) == "table" then
+                        StripBars(specTbl.bars)
+                    end
+                end
+            end
+
+            local groupRoot = profile.buffBarGroups
+            if type(groupRoot) == "table" then
+                for _, specGroups in pairs(groupRoot) do
+                    if type(specGroups) == "table" then
+                        for _, group in ipairs(specGroups) do
+                            if type(group) == "table" then
+                                StripBars(group.bars)
+                            end
+                        end
+                    end
                 end
             end
         end,
