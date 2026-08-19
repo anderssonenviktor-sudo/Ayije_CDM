@@ -1,7 +1,7 @@
 ## Title: |cFF3bb273Ayije_CDM|r
 ## Notes: Cooldown Manager
 ## Author: Ayije (citrongrod now)
-## Version: 1.5
+## Version: 1.6
 ## Interface: 120007, 120100
 ## DefaultState: enabled
 ## SavedVariables: Ayije_CDMDB
