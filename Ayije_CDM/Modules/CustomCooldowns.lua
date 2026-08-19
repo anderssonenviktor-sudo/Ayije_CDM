@@ -47,6 +47,20 @@ local BUILTIN_ITEMS = {
 
 local BUILTIN_ITEM_ORDER = { 5512, 224464, 271884, 241304, 241308 }
 
+-- Combat-lockout state is keyed by item ID rather than stored on the entry
+-- table: RebuildCustomEntries wipes and re-creates every entry (SPELLS_CHANGED
+-- fires freely mid-combat), which would drop a flag living on the entry and
+-- let the icon re-saturate while the item is still unusable.
+local itemCombatLockouts = {}
+
+-- The flag is armed on cast and only honored while in combat, so an arm that
+-- lands just after combat ended cannot strand the icon: the next out-of-combat
+-- pass ignores it and OnCustomCombatStateChanged wipes it.
+local function IsEntryCombatLockedOut(entry)
+    return (entry and entry.combatLockout and itemCombatLockouts[entry.id]
+        and InCombatLockdown()) or false
+end
+
 function CDM.GetCustomCooldownBuiltinItems()
     return BUILTIN_ITEM_ORDER, BUILTIN_ITEMS
 end
@@ -206,7 +220,7 @@ local function EntryIsAvailable(entry)
         if entry.requiresWarlockAccess and not PlayerHasWarlockAccess() then
             return false
         end
-        if entry.combatLockout and entry.inCombatLockout then
+        if IsEntryCombatLockedOut(entry) then
             return true
         end
         if IsEquippedItem and IsEquippedItem(entry.id) then
@@ -350,7 +364,7 @@ local function UpdateIcon(frame)
             itemCount = GetItemCount(itemID, false, true)
         end
         local queryItemID = (entry and entry._activeItemID) or itemID
-        local inCombatLockout = entry and entry.inCombatLockout or false
+        local inCombatLockout = IsEntryCombatLockedOut(entry)
 
         if itemSpellID then
             local realDur = GetSpellCooldownDuration(itemSpellID)
@@ -781,10 +795,8 @@ function CDM:RemoveCustomCooldownEntry(identityID, specID)
 end
 
 local function ClearItemCombatLockouts()
-    for _, entry in ipairs(iconEntries) do
-        if entry.inCombatLockout then
-            entry.inCombatLockout = nil
-        end
+    if next(itemCombatLockouts) then
+        table.wipe(itemCombatLockouts)
     end
 end
 
@@ -823,11 +835,9 @@ function CDM:InitializeCustomCooldowns()
             local castSpellID = arg3
             if castSpellID then
                 for _, entry in ipairs(iconEntries) do
-                    if entry.isItem and entry.itemSpellID == castSpellID then
-                        if entry.combatLockout and InCombatLockdown() then
-                            entry.inCombatLockout = true
-                        end
-                        break
+                    if entry.isItem and entry.combatLockout
+                        and entry.itemSpellID == castSpellID then
+                        itemCombatLockouts[entry.id] = true
                     end
                 end
             end
