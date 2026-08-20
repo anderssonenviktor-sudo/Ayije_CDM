@@ -382,7 +382,6 @@ local function RunProfileAppliedHooks()
     CDM.OnCustomCooldownsProfileApplied()
     CDM.OnResourcesProfileApplied()
     CDM.OnExternalsProfileApplied()
-    CDM.OnPowerInfusionProfileApplied()
     if CDM.OnBuffBarTimersProfileApplied then CDM.OnBuffBarTimersProfileApplied() end
 end
 
@@ -393,7 +392,6 @@ local function InitializeModules()
     CDM.ReconcileCustomCooldowns()
     CDM.ReconcileResources()
     CDM.ReconcileExternals()
-    CDM.ReconcilePowerInfusion()
     if CDM.ReconcileBuffBarTimers then CDM.ReconcileBuffBarTimers() end
 
     if CDM.InitializeCustomBuffs then
@@ -493,14 +491,7 @@ local function RegisterRefreshCallbacks()
         CDM.ReconcileTrinkets()
         CDM.ReconcileCustomCooldowns()
         CDM.ReconcileExternals()
-        CDM.ReconcilePowerInfusion()
     end, 50, { "TRACKERS" })
-
-    -- BUFF_DATA/CD_DATA: per-spec settings must re-read on a spec change.
-    CDM:RegisterRefreshCallback("powerInfusion", function()
-        CDM.ReconcilePowerInfusion()
-        CDM.UpdatePowerInfusionStyle()
-    end, 62, { "STYLE", "LAYOUT", "BUFF_DATA", "CD_DATA" })
 
     CDM:RegisterRefreshCallback("resources", function()
         CDM.ReconcileResources()

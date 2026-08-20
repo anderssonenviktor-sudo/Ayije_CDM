@@ -232,9 +232,6 @@ CDM.defaults = {
     externalsCooldownFontSize = 15,
     externalsDisableBlink = true,
 
-    -- Per-spec: powerInfusionSpec[specID]; see POWER_INFUSION_DEFAULTS.
-    powerInfusionSpec = {},
-
     -- Trinket icons in the cooldown viewer: per-spec tracked slots,
     -- cooldownTrinkets[specID] = { [13] = true, [14] = true }.
     cooldownTrinkets = {},

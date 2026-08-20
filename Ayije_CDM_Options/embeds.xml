@@ -24,5 +24,4 @@
     <Script file="Bars.lua"/>
     <Script file="CastBar.lua"/>
     <Script file="Externals.lua"/>
-    <Script file="PowerInfusion.lua"/>
 </Ui>

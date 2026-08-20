@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 33
+local DB_SCHEMA_VERSION = 34
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1403,6 +1403,14 @@ local PROFILE_MIGRATIONS = {
                     end
                 end
             end
+        end,
+    },
+    {
+        version = 34,
+        run = function(profile)
+            -- The Power Infusion module was removed; its per-spec settings
+            -- table has no reader left.
+            profile.powerInfusionSpec = nil
         end,
     },
 }

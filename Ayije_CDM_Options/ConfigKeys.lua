@@ -12,7 +12,6 @@ ns.ConfigKeys = {
         "resources",
         "externals",
         "castbar",
-        "powerinfusion",
         "glow",
         "fading",
         "assist",
@@ -163,12 +162,6 @@ ns.ConfigKeys = {
                 "externalsIconHeight",
                 "externalsCooldownFontSize",
                 "externalsDisableBlink",
-            },
-        },
-        powerinfusion = {
-            label = "Power Infusion Settings",
-            keys = {
-                "powerInfusionSpec",
             },
         },
         castbar = {
