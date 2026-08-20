@@ -1,7 +1,4 @@
 ## Changelog
-## v.1.6
+## v.1.7
 
-- Bars overhaul
-- Make your own stackbar with custom ticks and color based on stacks
-- Custom icon override added
-- Healthstone cd should now show properly
+- bug fixes
