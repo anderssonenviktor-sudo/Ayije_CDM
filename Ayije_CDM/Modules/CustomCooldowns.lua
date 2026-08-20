@@ -27,6 +27,7 @@ local itemResolveFrame
 local itemResolvePending = {}
 
 local customTracker
+local OnCustomCooldownDone
 
 local _, playerClass = UnitClass("player")
 local PACT_OF_GLUTTONY_TALENT_ID = 386689
@@ -259,6 +260,7 @@ local function ResetCustomTrackerFrame(frame)
     frame.spellID = nil
     frame.itemID = nil
     frame.itemSpellID = nil
+    frame.cdmOnCooldownDone = nil
     frame._spellbookCached = nil
     frame.viewerFrame = nil
     if frame.Icon then
@@ -313,6 +315,7 @@ local function BindEntryFrame(entry)
     end
     frame.cdmCustomIdentityID = entry.identityID
     frame.cdmCustomEntry = entry
+    frame.cdmOnCooldownDone = entry.isItem and OnCustomCooldownDone or nil
     if entry.isItem then
         frame.spellID = nil
         frame.itemID = entry.id
@@ -340,6 +343,21 @@ end
 
 local function HasVisibleItemCooldown(startTime, duration)
     return startTime and duration and duration > CDM_C.ITEM_COOLDOWN_GCD_MIN
+end
+
+OnCustomCooldownDone = function(frame)
+    local entry = frame and frame.cdmCustomEntry
+    local itemID = entry and (entry._activeItemID or entry.id)
+    local startTime, duration = itemID and GetContainerItemCooldown(itemID)
+    local spellDuration = entry and entry.itemSpellID
+        and GetSpellCooldownDuration(entry.itemSpellID)
+    local spellCooldownActive = spellDuration and CDM.IsOnRealCooldown(entry.itemSpellID, false)
+    if IsEntryCombatLockedOut(entry) or HasVisibleItemCooldown(startTime, duration)
+        or spellCooldownActive then
+        customTracker.Queue(false)
+    elseif frame and frame.Icon then
+        frame.Icon:SetDesaturation(0)
+    end
 end
 
 local function UpdateIcon(frame)

@@ -88,7 +88,6 @@ L["Icon Sizes"] = "Tailles des icônes"
 
 --L["Cooldowns"] = "Cooldowns"
 --L["General"] = "General"
---L["Externals"] = "Externals"
 --L["Cooldown Swipe"] = "Cooldown Swipe"
 --L["Hide GCD Swipe"] = "Hide GCD Swipe"
 --L["Swipe Color"] = "Swipe Color"
@@ -237,9 +236,6 @@ L["Resources"] = "Ressources"
 --L["Color Tint"] = "Color Tint"
 --L["Tint Color"] = "Tint Color"
 --L["Highlight"] = "Highlight"
-L["Rotation Assist"] = "Aide à la rotation"
-L["Enable Rotation Assist"] = "Activer l'aide à la rotation"
-L["Highlight Size"] = "Taille de la surbrillance"
 L["Keybindings"] = "Raccourcis clavier"
 L["Enable Keybind Text"] = "Afficher le texte des raccourcis"
 L["Assist"] = "Assistance"
@@ -664,11 +660,3 @@ L["Stage 2 Color"] = "Couleur phase 2"
 L["Stage 3 Color"] = "Couleur phase 3"
 --L["Hold At Max Color"] = "Hold At Max Color"
 L["Cast Bar"] = "Barre d'incantation"
-
------------------------------------------------------------------------
--- Ayije_CDM_Options/Externals.lua
------------------------------------------------------------------------
-
---L["Enable Externals"] = "Enable Externals"
---L["Disable Blink"] = "Disable Blink"
-

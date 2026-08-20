@@ -99,12 +99,43 @@ function CDM.CONST.GetCustomItemIDFromSentinel(id)
     return nil
 end
 
+-- Spell-category cooldowns (potions / healthstones) have no spellID. Give
+-- them a stable saved identity without confusing the value for a spell ID.
+CDM.CONST.NATIVE_ITEM_CATEGORY_SENTINEL_BASE = 920000000
+CDM.CONST.NATIVE_ITEM_CATEGORY_SENTINEL_MAX = 921000000
+
+function CDM.CONST.GetNativeItemSentinelForCategory(categoryID)
+    return CDM.CONST.NATIVE_ITEM_CATEGORY_SENTINEL_BASE + categoryID
+end
+
+function CDM.CONST.GetNativeItemCategoryFromSentinel(id)
+    if type(id) == "number"
+        and id > CDM.CONST.NATIVE_ITEM_CATEGORY_SENTINEL_BASE
+        and id < CDM.CONST.NATIVE_ITEM_CATEGORY_SENTINEL_MAX then
+        return id - CDM.CONST.NATIVE_ITEM_CATEGORY_SENTINEL_BASE
+    end
+    return nil
+end
+
+local NATIVE_ITEM_CATEGORY_INFO = {
+    [4] = { titleGlobal = "COOLDOWN_VIEWER_TOOLTIP_POTION_COMBAT_TITLE", icon = "Interface/ICONS/INV_POTION_114" },
+    [30] = { titleGlobal = "COOLDOWN_VIEWER_TOOLTIP_POTION_HEALTH_TITLE", icon = "Interface/ICONS/INV_POTION_54" },
+    [1711] = { titleGlobal = "COOLDOWN_VIEWER_TOOLTIP_POTION_HEALTHSTONE_TITLE", icon = "Interface/ICONS/Warlock_ Healthstone", fallbackItemID = 5512 },
+    [2566] = { titleGlobal = "COOLDOWN_VIEWER_TOOLTIP_POTION_DEMONIC_HEALTHSTONE_TITLE", icon = "Interface/ICONS/Warlock_ Bloodstone", fallbackItemID = 224464 },
+}
+
+function CDM.CONST.GetNativeItemCategoryInfo(id)
+    local categoryID = CDM.CONST.GetNativeItemCategoryFromSentinel(id)
+    local info = categoryID and NATIVE_ITEM_CATEGORY_INFO[categoryID]
+    if not info then return nil end
+    return categoryID, _G[info.titleGlobal] or ("Item Category " .. categoryID),
+        info.icon, info.fallbackItemID
+end
+
 -- The stable identity for a cooldown viewer entry.
 --
--- Patch 12.1's consumable entries (potions / healthstones) have no spellID at
--- all -- their only identity is spellCategoryID -- so this returns nil for
--- them and they are skipped by the pickers. Those consumables are covered by
--- the Custom Cooldowns module instead, which tracks them by item ID.
+-- Patch 12.1's consumable entries (potions / healthstones) have no spellID;
+-- their spellCategoryID is encoded as an addon-only sentinel instead.
 --
 -- Deliberately does NOT consult `linkedSpellID` (singular). Blizzard's
 -- CooldownViewerItemDataMixin:GetSpellID() checks it first, but that field is
@@ -116,6 +147,9 @@ end
 -- handled by the existing matching passes.
 function CDM.CONST.ResolveViewerEntryIdentity(info)
     if not info then return nil end
+    if CDM.IsSafeNumber(info.spellCategoryID) then
+        return CDM.CONST.GetNativeItemSentinelForCategory(info.spellCategoryID)
+    end
     local sid = info.overrideTooltipSpellID
         or info.overrideSpellID
         or info.spellID

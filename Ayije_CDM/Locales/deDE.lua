@@ -88,7 +88,6 @@ L["Icon Sizes"] = "Symbolgröße"
 
 --L["Cooldowns"] = "Cooldowns"
 --L["General"] = "General"
---L["Externals"] = "Externals"
 --L["Cooldown Swipe"] = "Cooldown Swipe"
 --L["Hide GCD Swipe"] = "Hide GCD Swipe"
 --L["Swipe Color"] = "Swipe Color"
@@ -237,9 +236,6 @@ L["Resources"] = "Ressourcen"
 --L["Color Tint"] = "Color Tint"
 --L["Tint Color"] = "Tint Color"
 --L["Highlight"] = "Highlight"
-L["Rotation Assist"] = "Rotationshelfer"
-L["Enable Rotation Assist"] = "Rotationshelfer aktivieren"
-L["Highlight Size"] = "Größe der Hervorhebung"
 L["Keybindings"] = "Tastenbelegung"
 L["Enable Keybind Text"] = "Beschriftung für Tastenbelegung aktivieren"
 L["Assist"] = "Assist"
@@ -664,11 +660,3 @@ L["Stage 2 Color"] = "Phase 2 Farbe"
 L["Stage 3 Color"] = "Phase 3 Farbe"
 --L["Hold At Max Color"] = "Hold At Max Color"
 L["Cast Bar"] = "Zauberleiste"
-
------------------------------------------------------------------------
--- Ayije_CDM_Options/Externals.lua
------------------------------------------------------------------------
-
---L["Enable Externals"] = "Enable Externals"
---L["Disable Blink"] = "Disable Blink"
-

@@ -10,7 +10,6 @@ ns.ConfigKeys = {
         "text",
         "bars",
         "resources",
-        "externals",
         "castbar",
         "glow",
         "fading",
@@ -154,16 +153,6 @@ ns.ConfigKeys = {
                 "moveBuffsDownFallback",
             },
         },
-        externals = {
-            label = "Externals Tracker Settings",
-            keys = {
-                "externalsEnabled",
-                "externalsIconWidth",
-                "externalsIconHeight",
-                "externalsCooldownFontSize",
-                "externalsDisableBlink",
-            },
-        },
         castbar = {
             label = "Cast Bar Settings",
             keys = {
@@ -233,8 +222,6 @@ ns.ConfigKeys = {
         assist = {
             label = "Assist Settings",
             keys = {
-                "rotationAssistEnabled",
-                "rotationAssistGlowRatio",
                 "assistEnabled",
                 "assistFontSize",
                 "assistColor",

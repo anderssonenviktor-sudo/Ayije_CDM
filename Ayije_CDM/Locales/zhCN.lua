@@ -88,7 +88,6 @@ L["Icon Sizes"] = "图标尺寸"
 
 --L["Cooldowns"] = "Cooldowns"
 --L["General"] = "General"
---L["Externals"] = "Externals"
 --L["Cooldown Swipe"] = "Cooldown Swipe"
 --L["Hide GCD Swipe"] = "Hide GCD Swipe"
 --L["Swipe Color"] = "Swipe Color"
@@ -237,9 +236,6 @@ L["Resources"] = "资源"
 --L["Color Tint"] = "Color Tint"
 --L["Tint Color"] = "Tint Color"
 --L["Highlight"] = "Highlight"
-L["Rotation Assist"] = "输出循环辅助"
-L["Enable Rotation Assist"] = "启用输出循环辅助"
-L["Highlight Size"] = "高亮大小"
 L["Keybindings"] = "按键绑定"
 L["Enable Keybind Text"] = "启用按键文字"
 L["Assist"] = "辅助"
@@ -664,11 +660,3 @@ L["Stage 2 Color"] = "阶段2颜色"
 L["Stage 3 Color"] = "阶段3颜色"
 --L["Hold At Max Color"] = "Hold At Max Color"
 L["Cast Bar"] = "施法条"
-
------------------------------------------------------------------------
--- Ayije_CDM_Options/Externals.lua
------------------------------------------------------------------------
-
---L["Enable Externals"] = "Enable Externals"
---L["Disable Blink"] = "Disable Blink"
-

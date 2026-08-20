@@ -409,7 +409,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 34
+local DB_SCHEMA_VERSION = 35
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1413,6 +1413,19 @@ local PROFILE_MIGRATIONS = {
             profile.powerInfusionSpec = nil
         end,
     },
+    {
+        version = 35,
+        run = function(profile)
+            -- The Externals and Rotation Assist modules were removed.
+            profile.externalsEnabled = nil
+            profile.externalsIconWidth = nil
+            profile.externalsIconHeight = nil
+            profile.externalsCooldownFontSize = nil
+            profile.externalsDisableBlink = nil
+            profile.rotationAssistEnabled = nil
+            profile.rotationAssistGlowRatio = nil
+        end,
+    },
 }
 
 local function GetCurrentSchemaVersion(globalData)
@@ -2188,8 +2201,12 @@ local function RefreshGroupData(self, sets, dbKey, categories, shouldInvalidateC
                 for _, cdID in ipairs(cooldownIDs) do
                     local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cdID)
                     if info then
-                        local match
-                        if info.overrideTooltipSpellID then
+                        local identity = CDM.CONST.ResolveViewerEntryIdentity
+                            and CDM.CONST.ResolveViewerEntryIdentity(info)
+                        local nativeCategory = identity and CDM.CONST.GetNativeItemCategoryFromSentinel
+                            and CDM.CONST.GetNativeItemCategoryFromSentinel(identity)
+                        local match = nativeCategory and spellToGroup[identity] or nil
+                        if not match and info.overrideTooltipSpellID then
                             match = spellToGroup[info.overrideTooltipSpellID]
                         end
                         if not match and IsUsableSpellID(info.overrideSpellID) and info.overrideSpellID ~= info.spellID then
@@ -2205,6 +2222,9 @@ local function RefreshGroupData(self, sets, dbKey, categories, shouldInvalidateC
                                     if match then break end
                                 end
                             end
+                        end
+                        if not match and identity then
+                            match = spellToGroup[identity]
                         end
                         if match then
                             sets.cooldownIDGrouped[cdID] = match

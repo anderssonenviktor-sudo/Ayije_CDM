@@ -12,9 +12,7 @@
     <Script file="BuffGroupOverlays.lua"/>
     <Script file="CooldownGroups.lua"/>
     <Script file="PlayerCastBar.lua"/>
-    <Script file="RotationAssist.lua"/>
     <Script file="PressOverlay.lua"/>
-    <Script file="Externals.lua"/>
     <Script file="BuffBarModel.lua"/>
     <Script file="BuffBarTimers.lua"/>
     <Script file="BuffBarDecimals.lua"/>

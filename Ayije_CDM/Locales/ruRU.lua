@@ -88,7 +88,6 @@ L["Icon Sizes"] = "Размеры иконок"
 
 --L["Cooldowns"] = "Cooldowns"
 --L["General"] = "General"
---L["Externals"] = "Externals"
 --L["Cooldown Swipe"] = "Cooldown Swipe"
 --L["Hide GCD Swipe"] = "Hide GCD Swipe"
 --L["Swipe Color"] = "Swipe Color"
@@ -237,9 +236,6 @@ L["Resources"] = "Ресурсы"
 --L["Color Tint"] = "Color Tint"
 --L["Tint Color"] = "Tint Color"
 --L["Highlight"] = "Highlight"
---L["Rotation Assist"] = "Rotation Assist"
---L["Enable Rotation Assist"] = "Enable Rotation Assist"
---L["Highlight Size"] = "Highlight Size"
 --L["Keybindings"] = "Keybindings"
 --L["Enable Keybind Text"] = "Enable Keybind Text"
 L["Assist"] = "Помощник"
@@ -664,11 +660,3 @@ L["Stage 2 Color"] = "Цвет фазы 2"
 L["Stage 3 Color"] = "Цвет фазы 3"
 --L["Hold At Max Color"] = "Hold At Max Color"
 L["Cast Bar"] = "Полоса заклинания"
-
------------------------------------------------------------------------
--- Ayije_CDM_Options/Externals.lua
------------------------------------------------------------------------
-
---L["Enable Externals"] = "Enable Externals"
---L["Disable Blink"] = "Disable Blink"
-

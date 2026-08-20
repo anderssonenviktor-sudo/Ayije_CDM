@@ -16,6 +16,7 @@ local GetTrinketSlotFromSentinel = CDM_C.GetTrinketSlotFromSentinel
 local GetTrinketSentinelForSlot = CDM_C.GetTrinketSentinelForSlot
 local TRINKET_SLOT_IDS = CDM_C.TRINKET_SLOT_IDS or { 13, 14 }
 local GetCustomItemIDFromSentinel = CDM_C.GetCustomItemIDFromSentinel
+local GetNativeItemCategoryInfo = CDM_C.GetNativeItemCategoryInfo
 
 -- Trinkets participate in the Cooldowns editor per spec: the user adds them
 -- explicitly (Add Trinket / spell picker) and they are stored as tracked
@@ -220,6 +221,10 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 for frame in viewer.itemFramePool:EnumerateActive() do
                     local id = frame.GetSpellID and frame:GetSpellID()
                     if IsSafeNumber(id) then active[id] = true end
+                    if frame.cooldownInfo then
+                        local identity = CDM_C.ResolveViewerEntryIdentity(frame.cooldownInfo)
+                        if IsSafeNumber(identity) then active[identity] = true end
+                    end
                 end
             end
         end
@@ -568,8 +573,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
         local _, rc = CreateRightScrollContent(400)
         local yOff = 0
 
+        local _, nativeName, nativeIcon = GetNativeItemCategoryInfo(spellID)
         local displayID = GetDisplaySpellID(spellID)
-        local name = C_Spell.GetSpellName(displayID) or ("Spell " .. spellID)
+        local name = nativeName or C_Spell.GetSpellName(displayID) or ("Spell " .. spellID)
         local header = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
         header:SetPoint("TOPLEFT", 0, yOff)
         header:SetText(name)
@@ -581,7 +587,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
         iconContainer:SetPoint("TOPLEFT", 0, yOff)
         local iconTex = iconContainer:CreateTexture(nil, "ARTWORK")
         iconTex:SetAllPoints()
-        local tex = C_Spell.GetSpellTexture(displayID)
+        local tex = nativeIcon or C_Spell.GetSpellTexture(displayID)
         if tex then iconTex:SetTexture(tex) end
         CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
         if CDM.BORDER and CDM.BORDER.CreateBorder then
@@ -918,10 +924,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 and not seen[slot.cdID]
             then
                 seen[slot.cdID] = true
+                local _, nativeName, nativeIcon = GetNativeItemCategoryInfo(spellID)
                 local pickerDisplayID = GetDisplaySpellID(spellID)
-                local spellName = C_Spell.GetSpellName(pickerDisplayID) or ("Spell " .. spellID)
-                local icon = C_Spell.GetSpellTexture(pickerDisplayID)
-                local isKnown = IsPlayerSpell(spellID)
+                local spellName = nativeName or C_Spell.GetSpellName(pickerDisplayID) or ("Spell " .. spellID)
+                local icon = nativeIcon or C_Spell.GetSpellTexture(pickerDisplayID)
+                local isKnown = nativeName ~= nil or IsPlayerSpell(spellID)
                 result[#result + 1] = { spellID = spellID, cdID = slot.cdID, name = spellName, icon = icon, isKnown = isKnown }
             end
         end
@@ -1005,7 +1012,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
             if viewer and viewer.itemFramePool then
                 for frame in viewer.itemFramePool:EnumerateActive() do
                     if frame:IsShown() or frame.cooldownInfo then
-                        local displayID = API.GetPreferredBuffGroupSpellID and API:GetPreferredBuffGroupSpellID(frame)
+                        local displayID = frame.cooldownInfo
+                            and CDM_C.ResolveViewerEntryIdentity(frame.cooldownInfo)
+                        if not IsSafeNumber(displayID) and API.GetPreferredBuffGroupSpellID then
+                            displayID = API:GetPreferredBuffGroupSpellID(frame)
+                        end
                         if not IsSafeNumber(displayID) and API.GetBaseSpellID then
                             displayID = API:GetBaseSpellID(frame)
                         end
@@ -1199,9 +1210,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
         local trinketSlot, _, trinketName, trinketIcon = GetTrinketInfoForID(spellID)
         local customItemID, customItemName, customItemIcon = GetCustomItemInfoForID(spellID)
+        local _, nativeItemName, nativeItemIcon = GetNativeItemCategoryInfo(spellID)
         local displayID = GetDisplaySpellID(spellID)
         local tex = (trinketSlot and trinketIcon)
             or (customItemID and customItemIcon)
+            or nativeItemIcon
             or C_Spell.GetSpellTexture(displayID)
         if tex then widget.iconTex:SetTexture(tex) end
         CDM_C.ApplyIconTexCoord(widget.iconTex, CDM_C.GetEffectiveZoomAmount())
@@ -1254,6 +1267,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
         widget.nameText:SetPoint("RIGHT", widget.removeBtn:IsShown() and widget.removeBtn or row, widget.removeBtn:IsShown() and "LEFT" or "RIGHT", widget.removeBtn:IsShown() and -2 or -4, 0)
         widget.nameText:SetText((trinketSlot and trinketName)
             or (customItemID and customItemName)
+            or nativeItemName
             or C_Spell.GetSpellName(displayID) or L["Unknown"])
         if isActive == false then UI.SetTextMuted(widget.nameText)
         elseif selectedSpellID == spellID then UI.SetTextWhite(widget.nameText)
@@ -1342,11 +1356,14 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
             local trinketSlot, _, _, trinketIcon = GetTrinketInfoForID(spellID)
             local customItemID, _, customItemIcon = GetCustomItemInfoForID(spellID)
+            local _, nativeItemName, nativeItemIcon, nativeFallbackItemID = GetNativeItemCategoryInfo(spellID)
             local tex
             if trinketSlot then
                 tex = trinketIcon
             elseif customItemID then
                 tex = customItemIcon
+            elseif nativeItemIcon then
+                tex = nativeItemIcon
             else
                 tex = C_Spell.GetSpellTexture(GetDisplaySpellID(spellID))
             end
@@ -1364,6 +1381,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     GameTooltip:SetInventoryItem("player", trinketSlot)
                 elseif customItemID then
                     GameTooltip:SetItemByID(customItemID)
+                elseif nativeItemName then
+                    if nativeFallbackItemID then
+                        GameTooltip:SetItemByID(nativeFallbackItemID)
+                    else
+                        GameTooltip:SetText(nativeItemName)
+                    end
                 else
                     GameTooltip:SetSpellByID(spellID)
                 end

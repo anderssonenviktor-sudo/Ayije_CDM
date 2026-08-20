@@ -381,7 +381,6 @@ local function RunProfileAppliedHooks()
     CDM.OnTrinketsProfileApplied()
     CDM.OnCustomCooldownsProfileApplied()
     CDM.OnResourcesProfileApplied()
-    CDM.OnExternalsProfileApplied()
     if CDM.OnBuffBarTimersProfileApplied then CDM.OnBuffBarTimersProfileApplied() end
 end
 
@@ -391,7 +390,6 @@ local function InitializeModules()
     CDM.ReconcileTrinkets()
     CDM.ReconcileCustomCooldowns()
     CDM.ReconcileResources()
-    CDM.ReconcileExternals()
     if CDM.ReconcileBuffBarTimers then CDM.ReconcileBuffBarTimers() end
 
     if CDM.InitializeCustomBuffs then
@@ -404,7 +402,6 @@ local function InitializeModules()
 
     CDM.Keybinds:Initialize()
     CDM.Fading:Initialize()
-    CDM.RotationAssist:Initialize()
     CDM.PressOverlay:Initialize()
 end
 
@@ -490,7 +487,6 @@ local function RegisterRefreshCallbacks()
     CDM:RegisterRefreshCallback("trackerModules", function()
         CDM.ReconcileTrinkets()
         CDM.ReconcileCustomCooldowns()
-        CDM.ReconcileExternals()
     end, 50, { "TRACKERS" })
 
     CDM:RegisterRefreshCallback("resources", function()

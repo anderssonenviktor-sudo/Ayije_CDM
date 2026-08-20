@@ -54,6 +54,8 @@ function CDM:GetSpellIDCandidates(frame)
                 AddCandidate(spellCandidateList, spellCandidateSeen, linkedID)
             end
         end
+        AddCandidate(spellCandidateList, spellCandidateSeen,
+            CDM.CONST.ResolveViewerEntryIdentity(info))
     end
 
     if frame.isCustomBuff and IsSafeNumber(frame.spellID) then

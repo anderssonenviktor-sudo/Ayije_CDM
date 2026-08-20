@@ -122,46 +122,8 @@ local function CreateAssistTab(page, tabId)
     end
     setPOControlsEnabled(CDM.db.pressOverlayEnabled or false)
     
-    local raHeader = UI.CreateHeader(scrollChild, L["Rotation Assist"])
-    raHeader:SetPoint("TOPLEFT", page.pressOverlayBorderColorPicker, "BOTTOMLEFT", 0, -20)
-
-    local setRAControlsEnabled
-    page.controls.rotationAssistEnabled = UI.CreateModernCheckbox(
-        scrollChild,
-        L["Enable Rotation Assist"],
-        CDM.db.rotationAssistEnabled or false,
-        function(checked)
-            CDM.db.rotationAssistEnabled = checked
-            if setRAControlsEnabled then setRAControlsEnabled(checked) end
-            API:Refresh("STYLE")
-        end
-    )
-    page.controls.rotationAssistEnabled:SetPoint("TOPLEFT", raHeader, "BOTTOMLEFT", 0, -15)
-
-    page.controls.rotationAssistGlowRatio = UI.CreateModernSliderPrecise(
-        scrollChild, L["Highlight Size"], 0.2, 0.4, CDM.db.rotationAssistGlowRatio or 0.33, 0.01, 2,
-        function(v)
-            CDM.db.rotationAssistGlowRatio = v
-            API:Refresh("STYLE")
-        end
-    )
-    page.controls.rotationAssistGlowRatio:SetPoint("TOPLEFT", page.controls.rotationAssistEnabled, "BOTTOMLEFT", 0, -15)
-
-    local raOverlay = CreateFrame("Frame", nil, scrollChild)
-    raOverlay:SetPoint("TOPLEFT", page.controls.rotationAssistGlowRatio, "TOPLEFT")
-    raOverlay:SetPoint("BOTTOMRIGHT", page.controls.rotationAssistGlowRatio, "BOTTOMRIGHT")
-    raOverlay:SetFrameLevel(page.controls.rotationAssistGlowRatio:GetFrameLevel() + 10)
-    raOverlay:EnableMouse(true)
-    raOverlay:Hide()
-
-    setRAControlsEnabled = function(en)
-        page.controls.rotationAssistGlowRatio:SetAlpha(en and 1 or 0.35)
-        raOverlay:SetShown(not en)
-    end
-    setRAControlsEnabled(CDM.db.rotationAssistEnabled or false)
-
     local mainHeader = UI.CreateHeader(scrollChild, L["Keybindings"])
-    mainHeader:SetPoint("TOPLEFT", page.controls.rotationAssistGlowRatio, "BOTTOMLEFT", 0, -20)
+    mainHeader:SetPoint("TOPLEFT", page.pressOverlayBorderColorPicker, "BOTTOMLEFT", 0, -20)
 
     local setKBControlsEnabled
     page.controls.assistEnabled = UI.CreateModernCheckbox(

@@ -239,7 +239,10 @@ function CDM.CreateTrackerIcon(parent, namePrefix, id, opts)
     if not CDM._OnTrackerCooldownDone then
         CDM._OnTrackerCooldownDone = function(self)
             local parentFrame = self and self:GetParent()
-            if parentFrame and parentFrame.Icon then
+            local handler = parentFrame and parentFrame.cdmOnCooldownDone
+            if handler then
+                handler(parentFrame)
+            elseif parentFrame and parentFrame.Icon then
                 parentFrame.Icon:SetDesaturation(0)
             end
         end

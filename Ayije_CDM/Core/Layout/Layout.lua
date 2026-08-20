@@ -394,7 +394,7 @@ local function ComputeUtilityVisibleCount()
         for frame in viewer.itemFramePool:EnumerateActive() do
             if frame:IsShown() then
                 local spellID = ResolveBaseSpellID(frame)
-                if spellID then
+                if spellID or frame.cooldownInfo then
                     utilityCount = utilityCount + 1
                 end
             end
@@ -1294,7 +1294,7 @@ local function CalculateEssentialRow1Width()
         for frame in viewer.itemFramePool:EnumerateActive() do
             if frame:IsShown() then
                 local spellID = ResolveBaseSpellID(frame)
-                if spellID then
+                if spellID or frame.cooldownInfo then
                     activeCount = activeCount + 1
                 end
             end

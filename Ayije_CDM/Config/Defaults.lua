@@ -199,8 +199,6 @@ CDM.defaults = {
     buffBarApplicationsOffsetY = 0,
 
     -- Assist
-    rotationAssistEnabled = false,
-    rotationAssistGlowRatio = 0.33,
     assistEnabled = false,
     assistFontSize = 15,
     assistColor = { r = 1, g = 1, b = 1, a = 1 },
@@ -218,19 +216,12 @@ CDM.defaults = {
 
     -- Module enable/disable toggles
     resourcesEnabled = true,
-    externalsEnabled = true,
 
     -- Resources global settings (moved from per-class in schema v21)
     unifiedBorder = false,
     moveBuffsDown = false,
     moveBuffsDownOffset = 0,
     moveBuffsDownFallback = "lastResource",
-
-    -- Externals (ExternalDefensivesFrame) settings
-    externalsIconWidth = 30,
-    externalsIconHeight = 30,
-    externalsCooldownFontSize = 15,
-    externalsDisableBlink = true,
 
     -- Trinket icons in the cooldown viewer: per-spec tracked slots,
     -- cooldownTrinkets[specID] = { [13] = true, [14] = true }.

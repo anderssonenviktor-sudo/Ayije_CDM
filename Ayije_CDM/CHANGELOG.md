@@ -1,4 +1,5 @@
 ## Changelog
-## v.1.7
+## v.1.8
 
 - bug fixes
+- clean up

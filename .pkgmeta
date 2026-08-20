@@ -12,5 +12,6 @@ ignore:
  - .claude/
  - .vscode/
  - CLAUDE.md
+ - AGENTS.md
 
 
