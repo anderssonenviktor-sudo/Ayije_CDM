@@ -167,6 +167,8 @@ ns.ConfigKeys = {
                 "castBarShowTimer",
                 "castBarShowTotalDuration",
                 "castBarShowSpark",
+                "castBarShowArcaneMissilesTicks",
+                "castBarArcaneMissiles4Piece",
                 "castBarNameOffsetX",
                 "castBarNameOffsetY",
                 "castBarTimerOffsetX",

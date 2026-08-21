@@ -541,11 +541,45 @@ local function CreateCastBarTab(page, tabId)
     page.controls.castBarShowSpark:SetPoint("TOPLEFT", page.controls.castBarTimerOffsetY, "BOTTOMLEFT", 0, -10)
 
     local _, playerClass = UnitClass("player")
+    local castBarEffectsAnchor = page.controls.castBarShowSpark
+    if playerClass == "MAGE" then
+        page.controls.castBarShowArcaneMissilesTicks = UI.CreateModernCheckbox(
+            scrollChild,
+            L["Show Arcane Missiles ticks"],
+            CDM.db.castBarShowArcaneMissilesTicks == true,
+            function(checked)
+                CDM.db.castBarShowArcaneMissilesTicks = checked
+                if page.controls.castBarArcaneMissiles4Piece then
+                    page.controls.castBarArcaneMissiles4Piece:SetShown(checked)
+                end
+                API:Refresh("STYLE")
+            end
+        )
+        page.controls.castBarShowArcaneMissilesTicks:SetPoint(
+            "TOPLEFT", page.controls.castBarShowSpark, "BOTTOMLEFT", 0, -10
+        )
+
+        page.controls.castBarArcaneMissiles4Piece = UI.CreateModernCheckbox(
+            scrollChild,
+            L["4p"],
+            CDM.db.castBarArcaneMissiles4Piece == true,
+            function(checked)
+                CDM.db.castBarArcaneMissiles4Piece = checked
+                API:Refresh("STYLE")
+            end
+        )
+        page.controls.castBarArcaneMissiles4Piece:SetPoint(
+            "TOPLEFT", page.controls.castBarShowArcaneMissilesTicks, "BOTTOMLEFT", 20, -10
+        )
+        page.controls.castBarArcaneMissiles4Piece:SetShown(CDM.db.castBarShowArcaneMissilesTicks == true)
+        castBarEffectsAnchor = page.controls.castBarArcaneMissiles4Piece
+    end
+
     local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
     local hasEmpoweredCasts = (playerClass == "EVOKER") or (specID == 250) or (specID == 269)
     if hasEmpoweredCasts then
         local empHeader = UI.CreateHeader(scrollChild, L["Empowered Stages"])
-        empHeader:SetPoint("TOPLEFT", page.controls.castBarShowSpark, "BOTTOMLEFT", 0, -15)
+        empHeader:SetPoint("TOPLEFT", castBarEffectsAnchor, "BOTTOMLEFT", 0, -15)
 
         page.controls.castBarEmpowerWindUpColor = UI.CreateColorSwatch(scrollChild, L["Wind Up Color"], "castBarEmpowerWindUpColor", "STYLE")
         page.controls.castBarEmpowerWindUpColor:SetPoint("TOPLEFT", empHeader, "BOTTOMLEFT", 0, -15)
