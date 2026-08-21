@@ -43,6 +43,28 @@ local function SetTrinketTracked(specID, slotID, tracked)
     end
 end
 
+local function IsCooldownBuffTracked(specID, spellID)
+    local bySpec = CDM.db and CDM.db.cooldownBuffs
+    local selected = bySpec and specID and bySpec[specID]
+    return selected ~= nil and selected[spellID] == true
+end
+
+local function SetCooldownBuffTracked(specID, spellID, tracked)
+    if not (specID and spellID) then return end
+    if not CDM.db.cooldownBuffs then CDM.db.cooldownBuffs = {} end
+    local selected = CDM.db.cooldownBuffs[specID]
+    if tracked then
+        if not selected then
+            selected = {}
+            CDM.db.cooldownBuffs[specID] = selected
+        end
+        selected[spellID] = true
+    elseif selected then
+        selected[spellID] = nil
+        if not next(selected) then CDM.db.cooldownBuffs[specID] = nil end
+    end
+end
+
 -- Returns slotID, itemID, name, icon for a trinket sentinel ID (nil otherwise).
 local function GetTrinketInfoForID(spellID)
     local slotID = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(spellID)
@@ -107,10 +129,8 @@ local ICON_SIZE = 30
 local ROW_HEIGHT = 36
 local GROUP_HEADER_H = 28
 local ARROW_BTN_SIZE = 29
-local GRID_ICON_SIZE = 36
+local GRID_ICON_SIZE = 44
 local GRID_ICON_GAP = 4
-local GRID_DISPLAY_MAX = 14
-local MIN_GRID_ROWS = 2
 
 StaticPopupDialogs["AYIJE_CDM_CONFIRM_DELETE_CD_GROUP"] = {
     text = "",
@@ -143,6 +163,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local RefreshAll
     local ShowSpellSettings
     local BuildIconGrid
+    local SetCooldownBarView
+    local cooldownBarView = "essential"
     local renameLastClickTime = 0
     local renameLastClickGroup = nil
     local renameActiveGroupIndex = nil
@@ -201,6 +223,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
         if RefreshAll then RefreshAll() end
     end
 
+    local function GetPromotedBuffTexture(spellID)
+        if not IsCooldownBuffTracked(currentSpecID, spellID) then return nil end
+        local override = CDM.GetUngroupedBuffOverride and CDM:GetUngroupedBuffOverride(spellID)
+        return CDM.ResolveBuffCustomIconTexture and CDM.ResolveBuffCustomIconTexture(override) or nil
+    end
+
     local function IsSpellKnown(spellID)
         if not IsSafeNumber(spellID) then return false end
         if IsPlayerSpell(spellID) then return true end
@@ -228,6 +256,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 end
             end
         end
+        local selectedBuffs = CDM.db and CDM.db.cooldownBuffs and CDM.db.cooldownBuffs[currentSpecID]
+        if selectedBuffs then
+            for spellID, selected in pairs(selectedBuffs) do
+                if selected then active[spellID] = true end
+            end
+        end
         return active
     end
 
@@ -241,19 +275,31 @@ local function CreateCooldownGroupsPanel(subPage, page)
         return spellID
     end
 
-    local GetHoveredGridInsertAnchor, ApplyUngroupedGridOrder
+    local ApplyUngroupedGridOrder
+    local function GetUngroupedDropLabel(sourceGroup)
+        return sourceGroup and L["Remove from group"] or L["Reorder icons"]
+    end
 
     local RegisterDropTarget, ClearDropTargets, StartDrag, EndDrag, CancelDrag
     do
         local dragDrop = Shared.CreateDragDropController({
-            onDrop = function(spellID, sourceGroup, targetGroupIndex, hitDropTarget)
+            onDrop = function(spellID, sourceGroup, targetGroupIndex, hitDropTarget, targetInsertIndex)
                 if not spellID or not currentSpecID then return end
                 if not hitDropTarget then return end
                 if sourceGroup == targetGroupIndex then
+                    if sourceGroup and targetInsertIndex then
+                        local groups = EnsureGroups()
+                        local group = groups and groups[sourceGroup]
+                        if group and group.spells then
+                            Shared.InsertSpellInGroupList(group.spells, spellID, targetInsertIndex)
+                            SaveAndRefresh()
+                            RefreshLeftPanelIfNeeded()
+                        end
+                        return
+                    end
                     -- Grid onto grid: reorder the ungrouped viewer icons.
-                    if not sourceGroup and GetHoveredGridInsertAnchor then
-                        local anchorSpellID, insertBefore = GetHoveredGridInsertAnchor(spellID)
-                        if anchorSpellID and ApplyUngroupedGridOrder(spellID, anchorSpellID, insertBefore) then
+                    if not sourceGroup and targetInsertIndex then
+                        if ApplyUngroupedGridOrder(spellID, targetInsertIndex) then
                             SaveAndRefresh()
                             RefreshLeftPanelIfNeeded()
                         end
@@ -286,7 +332,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     local tgtGroup = groups[targetGroupIndex]
                     if tgtGroup then
                         if not tgtGroup.spells then tgtGroup.spells = {} end
-                        local storedSpellID = Shared.AddSpellToGroupList(tgtGroup.spells, spellID) or spellID
+                        local storedSpellID = Shared.InsertSpellInGroupList(
+                            tgtGroup.spells, spellID, targetInsertIndex
+                        ) or spellID
                         if srcOvData then
                             if not tgtGroup.spellOverrides then tgtGroup.spellOverrides = {} end
                             StoreMergedOverrideEntry(tgtGroup.spellOverrides, storedSpellID, srcOvData)
@@ -298,12 +346,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     if specOv then StoreMergedOverrideEntry(specOv, spellID, srcOvData) end
                 end
 
-                if not targetGroupIndex and GetHoveredGridInsertAnchor then
-                    -- Un-grouped by dropping onto a specific grid icon: keep that position.
-                    local anchorSpellID, insertBefore = GetHoveredGridInsertAnchor(spellID)
-                    if anchorSpellID then
-                        ApplyUngroupedGridOrder(spellID, anchorSpellID, insertBefore)
-                    end
+                if not targetGroupIndex and targetInsertIndex then
+                    ApplyUngroupedGridOrder(spellID, targetInsertIndex)
                 end
 
                 SaveAndRefresh()
@@ -321,31 +365,221 @@ local function CreateCooldownGroupsPanel(subPage, page)
         CancelDrag = dragDrop.CancelDrag
     end
 
-    local minGridHeight = MIN_GRID_ROWS * (GRID_ICON_SIZE + GRID_ICON_GAP) - GRID_ICON_GAP + 8
+    local minGridHeight = GRID_ICON_SIZE + 8
+    local gridScrollbarSpace = 18
 
     local iconGridFrame = CreateFrame("Frame", nil, subPage)
-    iconGridFrame:SetPoint("TOPLEFT", LEFT_INSET, -16)
-    iconGridFrame:SetPoint("TOPRIGHT", -200, -16)
+    iconGridFrame:SetPoint("TOPLEFT", LEFT_INSET, -26)
+    iconGridFrame:SetPoint("TOPRIGHT",
+        -(LEFT_INSET + GRID_ICON_SIZE * 2 + GRID_ICON_GAP * 2 + 8), -26)
     iconGridFrame:SetHeight(minGridHeight)
+
+    local iconActionFrame = CreateFrame("Frame", nil, subPage)
+    iconActionFrame:SetPoint("TOPLEFT", iconGridFrame, "TOPRIGHT", GRID_ICON_GAP, 0)
+    iconActionFrame:SetPoint("TOPRIGHT", subPage, "TOPRIGHT", -LEFT_INSET, -26)
+    iconActionFrame:SetHeight(minGridHeight)
+
+    local iconActionBackground = iconActionFrame:CreateTexture(nil, "BACKGROUND")
+    iconActionBackground:SetAllPoints()
+    iconActionBackground:SetColorTexture(0.02, 0.02, 0.02, 0.5)
+
+    local iconActionBorderTop = iconActionFrame:CreateTexture(nil, "BORDER")
+    iconActionBorderTop:SetPoint("TOPLEFT")
+    iconActionBorderTop:SetPoint("TOPRIGHT")
+    iconActionBorderTop:SetHeight(1)
+    iconActionBorderTop:SetColorTexture(0, 0, 0, 1)
+    local iconActionBorderBottom = iconActionFrame:CreateTexture(nil, "BORDER")
+    iconActionBorderBottom:SetPoint("BOTTOMLEFT")
+    iconActionBorderBottom:SetPoint("BOTTOMRIGHT")
+    iconActionBorderBottom:SetHeight(1)
+    iconActionBorderBottom:SetColorTexture(0, 0, 0, 1)
+    local iconActionBorderLeft = iconActionFrame:CreateTexture(nil, "BORDER")
+    iconActionBorderLeft:SetPoint("TOPLEFT")
+    iconActionBorderLeft:SetPoint("BOTTOMLEFT")
+    iconActionBorderLeft:SetWidth(1)
+    iconActionBorderLeft:SetColorTexture(0, 0, 0, 1)
+    local iconActionBorderRight = iconActionFrame:CreateTexture(nil, "BORDER")
+    iconActionBorderRight:SetPoint("TOPRIGHT")
+    iconActionBorderRight:SetPoint("BOTTOMRIGHT")
+    iconActionBorderRight:SetWidth(1)
+    iconActionBorderRight:SetColorTexture(0, 0, 0, 1)
+
+    local iconGridLayoutAnchor = CreateFrame("Frame", nil, subPage)
+    iconGridLayoutAnchor:SetPoint("TOPLEFT", iconGridFrame, "TOPLEFT")
+    iconGridLayoutAnchor:SetPoint("TOPRIGHT", iconGridFrame, "TOPRIGHT")
+    iconGridLayoutAnchor:SetHeight(minGridHeight + gridScrollbarSpace)
+
+    local iconGridBackground = iconGridFrame:CreateTexture(nil, "BACKGROUND")
+    iconGridBackground:SetAllPoints()
+    iconGridBackground:SetColorTexture(0.02, 0.02, 0.02, 0.5)
+
+    local iconGridBorderTop = iconGridFrame:CreateTexture(nil, "BORDER")
+    iconGridBorderTop:SetPoint("TOPLEFT")
+    iconGridBorderTop:SetPoint("TOPRIGHT")
+    iconGridBorderTop:SetHeight(1)
+    iconGridBorderTop:SetColorTexture(0, 0, 0, 1)
+    local iconGridBorderBottom = iconGridFrame:CreateTexture(nil, "BORDER")
+    iconGridBorderBottom:SetPoint("BOTTOMLEFT")
+    iconGridBorderBottom:SetPoint("BOTTOMRIGHT")
+    iconGridBorderBottom:SetHeight(1)
+    iconGridBorderBottom:SetColorTexture(0, 0, 0, 1)
+    local iconGridBorderLeft = iconGridFrame:CreateTexture(nil, "BORDER")
+    iconGridBorderLeft:SetPoint("TOPLEFT")
+    iconGridBorderLeft:SetPoint("BOTTOMLEFT")
+    iconGridBorderLeft:SetWidth(1)
+    iconGridBorderLeft:SetColorTexture(0, 0, 0, 1)
+    local iconGridBorderRight = iconGridFrame:CreateTexture(nil, "BORDER")
+    iconGridBorderRight:SetPoint("TOPRIGHT")
+    iconGridBorderRight:SetPoint("BOTTOMRIGHT")
+    iconGridBorderRight:SetWidth(1)
+    iconGridBorderRight:SetColorTexture(0, 0, 0, 1)
 
     iconGridFrame.highlight = iconGridFrame:CreateTexture(nil, "BACKGROUND")
     iconGridFrame.highlight:SetAllPoints()
-    iconGridFrame.highlight:SetColorTexture(0.2, 0.6, 0.2, 0.15)
+    iconGridFrame.highlight:SetColorTexture(1, 0.82, 0, 0.12)
     iconGridFrame.highlight:Hide()
 
-    local gridEmptyText = iconGridFrame:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-    gridEmptyText:SetPoint("LEFT", 4, 0)
-    gridEmptyText:Hide()
+    local iconScrollFrame = CreateFrame("ScrollFrame", nil, iconGridFrame)
+    iconScrollFrame:SetPoint("TOPLEFT")
+    iconScrollFrame:SetWidth(1)
+    iconScrollFrame:SetHeight(GRID_ICON_SIZE)
+    iconScrollFrame:SetClipsChildren(true)
+    iconScrollFrame:EnableMouseWheel(true)
+
+    local iconScrollChild = CreateFrame("Frame", nil, iconScrollFrame)
+    iconScrollChild:SetSize(1, GRID_ICON_SIZE)
+    iconScrollFrame:SetScrollChild(iconScrollChild)
+
+    local horizontalScrollBar = CreateFrame("Frame", nil, iconGridFrame)
+    horizontalScrollBar:SetPoint("TOPLEFT", iconScrollFrame, "BOTTOMLEFT", 0, -5)
+    horizontalScrollBar:SetPoint("TOPRIGHT", iconScrollFrame, "BOTTOMRIGHT", 0, -5)
+    horizontalScrollBar:SetHeight(14)
+
+    local ScrollIconRow
+    local horizontalScroll = CreateFrame("Slider", nil, horizontalScrollBar)
+    horizontalScroll:SetAllPoints()
+    horizontalScroll:SetOrientation("HORIZONTAL")
+    horizontalScroll:SetMinMaxValues(0, 0)
+    horizontalScroll:SetValueStep(1)
+    horizontalScroll:SetObeyStepOnDrag(false)
+    local horizontalTrack = horizontalScroll:CreateTexture(nil, "BACKGROUND")
+    horizontalTrack:SetPoint("LEFT")
+    horizontalTrack:SetPoint("RIGHT")
+    horizontalTrack:SetHeight(12)
+    horizontalTrack:SetColorTexture(0, 0, 0, 1)
+    local horizontalTrackInset = horizontalScroll:CreateTexture(nil, "BORDER")
+    horizontalTrackInset:SetPoint("LEFT", horizontalTrack, "LEFT", 1, 0)
+    horizontalTrackInset:SetPoint("RIGHT", horizontalTrack, "RIGHT", -1, 0)
+    horizontalTrackInset:SetHeight(10)
+    horizontalTrackInset:SetColorTexture(0, 0, 0, 0.55)
+    horizontalScroll:SetThumbTexture("Interface\\Buttons\\WHITE8X8")
+    local horizontalThumb = horizontalScroll:GetThumbTexture()
+    horizontalThumb:SetVertexColor(0.42, 0.42, 0.42, 1)
+    horizontalThumb:SetSize(48, 10)
+    horizontalScroll:SetScript("OnEnter", function()
+        horizontalThumb:SetVertexColor(0.56, 0.56, 0.56, 1)
+    end)
+    horizontalScroll:SetScript("OnLeave", function()
+        horizontalThumb:SetVertexColor(0.42, 0.42, 0.42, 1)
+    end)
+    horizontalScroll:SetScript("OnMouseDown", function()
+        horizontalThumb:SetVertexColor(0.66, 0.66, 0.66, 1)
+    end)
+    horizontalScroll:SetScript("OnMouseUp", function()
+        local shade = horizontalScroll:IsMouseOver() and 0.56 or 0.42
+        horizontalThumb:SetVertexColor(shade, shade, shade, 1)
+    end)
+    horizontalScroll:SetScript("OnValueChanged", function(_, value)
+        local _, maxScroll = horizontalScroll:GetMinMaxValues()
+        iconScrollFrame:SetHorizontalScroll(maxScroll - value)
+    end)
+    horizontalScrollBar:Hide()
+
+    ScrollIconRow = function(delta)
+        local _, maxScroll = horizontalScroll:GetMinMaxValues()
+        horizontalScroll:SetValue(math.max(0, math.min(maxScroll,
+            horizontalScroll:GetValue() + delta)))
+    end
+    local halfIconStep = GRID_ICON_SIZE / 2
+    iconScrollFrame:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
+    iconGridFrame:EnableMouseWheel(true)
+    iconGridFrame:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
 
     local gridIcons = {}
     local gridIconsActive = 0
+
+    local addRowIcon = CreateFrame("Button", nil, iconActionFrame)
+    addRowIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
+    addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", 4, -4)
+    addRowIcon:EnableMouseWheel(true)
+    addRowIcon:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
+    local addRowBackground = addRowIcon:CreateTexture(nil, "BACKGROUND")
+    addRowBackground:SetAllPoints()
+    addRowBackground:SetColorTexture(0.055, 0.055, 0.055, 0.65)
+
+    local addRowShadowH = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 1)
+    addRowShadowH:SetSize(18, 6)
+    addRowShadowH:SetPoint("CENTER", 1, -1)
+    addRowShadowH:SetColorTexture(0, 0, 0, 0.9)
+    local addRowShadowV = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 1)
+    addRowShadowV:SetSize(6, 18)
+    addRowShadowV:SetPoint("CENTER", 1, -1)
+    addRowShadowV:SetColorTexture(0, 0, 0, 0.9)
+
+    local addRowPlusH = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 2)
+    addRowPlusH:SetSize(18, 6)
+    addRowPlusH:SetPoint("CENTER")
+    addRowPlusH:SetColorTexture(0.15, 0.8, 0.2, 1)
+    local addRowPlusV = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 2)
+    addRowPlusV:SetSize(6, 18)
+    addRowPlusV:SetPoint("CENTER")
+    addRowPlusV:SetColorTexture(0.15, 0.8, 0.2, 1)
+    local addRowHighlight = addRowIcon:CreateTexture(nil, "HIGHLIGHT")
+    addRowHighlight:SetAllPoints()
+    addRowHighlight:SetColorTexture(1, 1, 1, 0.12)
+    if CDM.BORDER and CDM.BORDER.CreateBorder then
+        CDM.BORDER:CreateBorder(addRowIcon, { forceUpdate = true })
+        if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[addRowIcon] = nil end
+    end
+
+    local rotateBarIcon = CreateFrame("Button", nil, iconActionFrame)
+    rotateBarIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
+    rotateBarIcon:SetPoint("TOPRIGHT", iconActionFrame, "TOPRIGHT", -4, -4)
+    rotateBarIcon:EnableMouseWheel(true)
+    rotateBarIcon:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
+    local rotateBarBackground = rotateBarIcon:CreateTexture(nil, "BACKGROUND")
+    rotateBarBackground:SetAllPoints()
+    rotateBarBackground:SetColorTexture(0.055, 0.055, 0.055, 0.65)
+    local rotateBarTexture = rotateBarIcon:CreateTexture(nil, "ARTWORK")
+    rotateBarTexture:SetPoint("CENTER")
+    rotateBarTexture:SetAtlas("common-icon-rotateleft")
+    rotateBarTexture:SetDesaturated(true)
+    rotateBarTexture:SetVertexColor(0.1, 0.8, 1, 1)
+    local rotateBarHighlight = rotateBarIcon:CreateTexture(nil, "HIGHLIGHT")
+    rotateBarHighlight:SetAllPoints()
+    rotateBarHighlight:SetColorTexture(1, 1, 1, 0.12)
+    if CDM.BORDER and CDM.BORDER.CreateBorder then
+        CDM.BORDER:CreateBorder(rotateBarIcon, { forceUpdate = true })
+        if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[rotateBarIcon] = nil end
+    end
+    rotateBarIcon:SetScript("OnClick", function()
+        SetCooldownBarView(cooldownBarView == "essential" and "utility" or "essential")
+    end)
+    rotateBarIcon:SetScript("OnEnter", function(self)
+        local currentLabel = cooldownBarView == "essential" and "Essential" or "Utility"
+        local nextLabel = cooldownBarView == "essential" and "Utility" or "Essential"
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(currentLabel .. " cooldowns")
+        GameTooltip:AddLine("Click to show " .. nextLabel, 0.75, 0.75, 0.75)
+        GameTooltip:Show()
+    end)
+    rotateBarIcon:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     local function AcquireGridIcon()
         gridIconsActive = gridIconsActive + 1
         local frame = gridIcons[gridIconsActive]
         if not frame then
-            frame = CreateFrame("Frame", nil, iconGridFrame)
-            frame:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
+            frame = CreateFrame("Frame", nil, iconScrollChild)
             local icon = frame:CreateTexture(nil, "ARTWORK")
             icon:SetAllPoints()
             frame.icon = icon
@@ -358,11 +592,14 @@ local function CreateCooldownGroupsPanel(subPage, page)
             local overlay = CreateFrame("Button", nil, frame)
             overlay:SetAllPoints()
             overlay:SetFrameLevel(frame:GetFrameLevel() + 2)
-            overlay:RegisterForClicks("LeftButtonUp")
+            overlay:RegisterForClicks("LeftButtonUp", "RightButtonUp")
             overlay:RegisterForDrag("LeftButton")
+            overlay:EnableMouseWheel(true)
+            overlay:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
             frame.overlay = overlay
             gridIcons[gridIconsActive] = frame
         end
+        frame:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
         frame:Show()
         return frame
     end
@@ -375,7 +612,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     end
 
     local buttonRow = CreateFrame("Frame", nil, subPage)
-    buttonRow:SetPoint("TOPLEFT", iconGridFrame, "BOTTOMLEFT", 0, -6)
+    buttonRow:SetPoint("TOPLEFT", iconGridLayoutAnchor, "BOTTOMLEFT", 0, -6)
     buttonRow:SetPoint("TOPRIGHT", subPage, "TOPRIGHT", -10, 0)
     buttonRow:SetHeight(26)
 
@@ -383,10 +620,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
         buttonRow:ClearAllPoints()
         if currentSpecID == playerSpecID then
             iconGridFrame:Show()
-            buttonRow:SetPoint("TOPLEFT", iconGridFrame, "BOTTOMLEFT", 0, -6)
+            iconActionFrame:Show()
+            buttonRow:SetPoint("TOPLEFT", iconGridLayoutAnchor, "BOTTOMLEFT", 0, -6)
             buttonRow:SetPoint("TOPRIGHT", subPage, "TOPRIGHT", -10, 0)
         else
             iconGridFrame:Hide()
+            iconActionFrame:Hide()
             buttonRow:SetPoint("TOPLEFT", subPage, "TOPLEFT", LEFT_INSET, -16)
             buttonRow:SetPoint("TOPRIGHT", subPage, "TOPRIGHT", -10, 0)
         end
@@ -506,7 +745,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     selectedSpellID = nil
                     selectedSpellGroupIndex = nil
                     ClearRightPanel()
-                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
+                    SaveAndRefresh()
+                    API:Refresh("TRACKERS")
+                    RefreshLeftPanelIfNeeded()
                 end)
 
                 rc:SetHeight(200)
@@ -570,6 +811,126 @@ local function CreateCooldownGroupsPanel(subPage, page)
             end
         end
 
+        if IsCooldownBuffTracked(currentSpecID, spellID) and ns.BuildBuffOverrideSection then
+            local _, rc = CreateRightScrollContent(700)
+            local yOff = 0
+            local existingOverride = CDM.GetUngroupedBuffOverride and CDM:GetUngroupedBuffOverride(spellID)
+
+            local function EnsurePromotedBuffOverride()
+                if not CDM.db.ungroupedBuffOverrides then CDM.db.ungroupedBuffOverrides = {} end
+                local specOverrides = CDM.db.ungroupedBuffOverrides[currentSpecID]
+                if not specOverrides then
+                    specOverrides = {}
+                    CDM.db.ungroupedBuffOverrides[currentSpecID] = specOverrides
+                end
+                return CDM:EnsureBuffOverrideEntry(specOverrides, spellID)
+            end
+
+            local function SavePromotedBuffSettings()
+                API:Refresh("BUFF_DATA")
+                SaveAndRefresh()
+                RefreshLeftPanelIfNeeded()
+            end
+
+            local iconContainer = CreateFrame("Frame", nil, rc)
+            iconContainer:SetSize(28, 28)
+            iconContainer:SetPoint("TOPLEFT", 0, yOff)
+            local iconTex = iconContainer:CreateTexture(nil, "ARTWORK")
+            iconTex:SetAllPoints()
+            iconTex:SetTexture(GetPromotedBuffTexture(spellID) or C_Spell.GetSpellTexture(spellID))
+            CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
+            if CDM.BORDER and CDM.BORDER.CreateBorder then
+                CDM.BORDER:CreateBorder(iconContainer)
+                if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[iconContainer] = nil end
+            end
+
+            local borderColor = CDM:GetSpellBorderColor(currentSpecID, spellID)
+            local configuredBorder = CDM_C.GetConfigValue("borderColor", CDM_C.WHITE)
+            local displayedBorder = borderColor or configuredBorder
+            if iconContainer.border then
+                iconContainer.border:SetBackdropBorderColor(
+                    displayedBorder.r, displayedBorder.g, displayedBorder.b, displayedBorder.a or 1
+                )
+            end
+
+            local spellName = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
+            spellName:SetPoint("LEFT", iconContainer, "RIGHT", 8, 0)
+            spellName:SetText(C_Spell.GetSpellName(spellID) or ("Spell " .. spellID))
+            spellName:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
+            yOff = yOff - 40
+
+            local borderLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            borderLabel:SetText(L["Border:"])
+            borderLabel:SetPoint("TOPLEFT", 0, yOff)
+            local borderPicker = UI.CreateSimpleColorPicker(rc, displayedBorder, function(r, g, b)
+                API:SaveSpell(currentSpecID, spellID, { r = r, g = g, b = b, a = 1 })
+                API:Refresh("BUFF_DATA")
+                if iconContainer.border then iconContainer.border:SetBackdropBorderColor(r, g, b, 1) end
+                RefreshLeftPanelIfNeeded()
+            end)
+            borderPicker:SetPoint("LEFT", borderLabel, "RIGHT", 6, 0)
+            yOff = yOff - 30
+
+            local resetHint = rc:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            resetHint:SetPoint("TOPLEFT", 0, yOff)
+            resetHint:SetText(L["Right-click icon to reset border color"])
+            UI.SetTextFaint(resetHint)
+            yOff = yOff - 24
+
+            iconContainer:EnableMouse(true)
+            iconContainer:SetScript("OnMouseUp", function(_, button)
+                if button ~= "RightButton" then return end
+                API:ClearSpellBorderColor(currentSpecID, spellID)
+                API:Refresh("BUFF_DATA")
+                ShowSpellSettings(spellID, groupIndex)
+                RefreshLeftPanelIfNeeded()
+            end)
+
+            local glowEnabled = API:GetSpellGlowEnabled(currentSpecID, spellID)
+            local glowCheckbox = UI.CreateModernCheckbox(rc, L["Enable Glow"], glowEnabled, function(checked)
+                API:SetSpellGlowEnabled(currentSpecID, spellID, checked or nil)
+            end)
+            glowCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 36
+
+            local glowColorLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            glowColorLabel:SetText(L["Glow Color:"])
+            glowColorLabel:SetPoint("TOPLEFT", 0, yOff)
+            local glowColor = API:GetSpellGlowColor(currentSpecID, spellID) or CDM_C.WHITE
+            local glowPicker = UI.CreateSimpleColorPicker(rc, glowColor, function(r, g, b)
+                API:SetSpellGlowColor(currentSpecID, spellID, { r = r, g = g, b = b })
+            end)
+            glowPicker:SetPoint("LEFT", glowColorLabel, "RIGHT", 6, 0)
+            yOff = yOff - 30
+
+            yOff = ns.BuildBuffOverrideSection(
+                rc,
+                yOff,
+                spellID,
+                nil,
+                existingOverride,
+                EnsurePromotedBuffOverride,
+                {
+                    cooldownFontSize = CDM.db.buffCooldownFontSize or 12,
+                    cooldownColor = CDM.db.buffCooldownColor,
+                    countFontSize = CDM.db.countFontSize or 15,
+                    countColor = CDM.db.countColor,
+                    countPosition = CDM.db.countPositionMain or "TOP",
+                    countOffsetX = CDM.db.countOffsetXMain or 0,
+                    countOffsetY = CDM.db.countOffsetYMain or 0,
+                },
+                { isStatic = true, forced = true },
+                false,
+                {
+                    save = SavePromotedBuffSettings,
+                    refresh = function() ShowSpellSettings(spellID, groupIndex) end,
+                    registerDropdown = RegisterRightPanelDropdown,
+                }
+            )
+            rc:SetHeight(math.abs(yOff) + 20)
+            return
+        end
+
         local _, rc = CreateRightScrollContent(400)
         local yOff = 0
 
@@ -587,12 +948,19 @@ local function CreateCooldownGroupsPanel(subPage, page)
         iconContainer:SetPoint("TOPLEFT", 0, yOff)
         local iconTex = iconContainer:CreateTexture(nil, "ARTWORK")
         iconTex:SetAllPoints()
-        local tex = nativeIcon or C_Spell.GetSpellTexture(displayID)
+        local tex = nativeIcon or GetPromotedBuffTexture(spellID) or C_Spell.GetSpellTexture(displayID)
         if tex then iconTex:SetTexture(tex) end
         CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
         if CDM.BORDER and CDM.BORDER.CreateBorder then
             CDM.BORDER:CreateBorder(iconContainer)
             if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[iconContainer] = nil end
+        end
+        local promotedBorderColor = IsCooldownBuffTracked(currentSpecID, spellID)
+            and CDM.GetSpellBorderColor and CDM:GetSpellBorderColor(currentSpecID, spellID)
+        if promotedBorderColor and iconContainer.border then
+            iconContainer.border:SetBackdropBorderColor(
+                promotedBorderColor.r, promotedBorderColor.g, promotedBorderColor.b, promotedBorderColor.a or 1
+            )
         end
         yOff = yOff - 54
 
@@ -775,6 +1143,55 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     SaveAndRefresh()
                 end)
                 rgcPicker:SetPoint("LEFT", rgcLabel, "RIGHT", 6, 0)
+                yOff = yOff - 30
+            end
+
+            local glowColorOverride = auraOv and auraOv.glowColorOverride or false
+            local glowHeader = UI.CreateSubHeader(rc, L["Glow Overrides"])
+            glowHeader:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 32
+
+            local glowOverrideCheckbox = UI.CreateModernCheckbox(
+                rc,
+                L["Override Glow Color"],
+                glowColorOverride,
+                function(checked)
+                    local ov
+                    if groupIndex then
+                        ov = EnsureSpellOverride(groupIndex, spellID)
+                    else
+                        ov = EnsureUngroupedOverrideEntry(spellID)
+                    end
+                    if not ov then return end
+                    ov.glowColorOverride = checked or nil
+                    if checked and not ov.glowColor then
+                        local color = CDM.db.glowColor or { r = 1, g = 1, b = 1 }
+                        ov.glowColor = { r = color.r, g = color.g, b = color.b }
+                    end
+                    SaveAndRefresh()
+                    ShowSpellSettings(spellID, groupIndex)
+                end
+            )
+            glowOverrideCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 36
+
+            if glowColorOverride then
+                local glowColorLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+                glowColorLabel:SetText(L["Glow Color:"])
+                glowColorLabel:SetPoint("TOPLEFT", 20, yOff)
+                local color = auraOv.glowColor or CDM.db.glowColor or { r = 1, g = 1, b = 1 }
+                local glowColorPicker = UI.CreateSimpleColorPicker(rc, color, function(r, g, b)
+                    local ov
+                    if groupIndex then
+                        ov = EnsureSpellOverride(groupIndex, spellID)
+                    else
+                        ov = EnsureUngroupedOverrideEntry(spellID)
+                    end
+                    if not ov then return end
+                    ov.glowColor = { r = r, g = g, b = b }
+                    SaveAndRefresh()
+                end)
+                glowColorPicker:SetPoint("LEFT", glowColorLabel, "RIGHT", 6, 0)
                 yOff = yOff - 30
             end
         end
@@ -962,7 +1379,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
         return result
     end
 
-    local function GetUngroupedSpellsFromViewers()
+    local function GetUngroupedSpellsFromViewers(viewFilter)
+        viewFilter = viewFilter or cooldownBarView
         local groupedSet = {}
         local specGroups = GetSpecGroups()
         if type(specGroups) == "table" then
@@ -1006,12 +1424,21 @@ local function CreateCooldownGroupsPanel(subPage, page)
         end
         local seen = {}
         local icons = {}
-        local viewerOffset = 0
-        for _, vName in ipairs({ CDM_C.VIEWERS.ESSENTIAL, CDM_C.VIEWERS.UTILITY }) do
+        local viewerNames
+        if viewFilter == "essential" then
+            viewerNames = { CDM_C.VIEWERS.ESSENTIAL }
+        elseif viewFilter == "utility" then
+            viewerNames = { CDM_C.VIEWERS.UTILITY }
+        else
+            viewerNames = { CDM_C.VIEWERS.ESSENTIAL, CDM_C.VIEWERS.UTILITY }
+        end
+        for _, vName in ipairs(viewerNames) do
+            local viewerOffset = vName == CDM_C.VIEWERS.UTILITY and 10000 or 0
             local viewer = _G[vName]
             if viewer and viewer.itemFramePool then
                 for frame in viewer.itemFramePool:EnumerateActive() do
                     if frame:IsShown() or frame.cooldownInfo then
+                        local equipSlot = frame.cooldownInfo and frame.cooldownInfo.equipSlot
                         local displayID = frame.cooldownInfo
                             and CDM_C.ResolveViewerEntryIdentity(frame.cooldownInfo)
                         if not IsSafeNumber(displayID) and API.GetPreferredBuffGroupSpellID then
@@ -1022,6 +1449,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                         end
                         local slotKey = frame.cooldownID or displayID
                         if IsSafeNumber(displayID)
+                            and not (equipSlot and IsTrinketTracked(currentSpecID, equipSlot))
                             and not Shared.HasEquivalentSpellID(groupedSet, displayID)
                             and not seen[slotKey]
                         then
@@ -1033,32 +1461,55 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     end
                 end
             end
-            viewerOffset = viewerOffset + 10000
         end
-        for _, slotID in ipairs(TRINKET_SLOT_IDS) do
-            if IsTrinketTracked(currentSpecID, slotID) then
-                local sentinel = GetTrinketSentinelForSlot(slotID)
-                if not Shared.HasEquivalentSpellID(groupedSet, sentinel) then
-                    icons[#icons + 1] = {
-                        spellID = sentinel,
-                        layoutIndex = 99000 + slotID,
-                        viewerOrder = 0,
-                        rank = GetSavedRank(sentinel),
-                    }
+        if viewFilter ~= "utility" then
+            for _, slotID in ipairs(TRINKET_SLOT_IDS) do
+                if IsTrinketTracked(currentSpecID, slotID) then
+                    local sentinel = GetTrinketSentinelForSlot(slotID)
+                    if not Shared.HasEquivalentSpellID(groupedSet, sentinel) then
+                        icons[#icons + 1] = {
+                            spellID = sentinel,
+                            layoutIndex = 99000 + slotID,
+                            viewerOrder = 0,
+                            rank = GetSavedRank(sentinel),
+                        }
+                    end
                 end
             end
-        end
-        local customList = GetCustomEntriesForViewedSpec()
-        if customList then
-            for i, stored in ipairs(customList) do
-                local identity = API.GetCustomCooldownIdentityForEntry(stored)
-                if not Shared.HasEquivalentSpellID(groupedSet, identity) then
-                    icons[#icons + 1] = {
-                        spellID = identity,
-                        layoutIndex = 99100 + i,
-                        viewerOrder = 0,
-                        rank = GetSavedRank(identity),
-                    }
+            local customList = GetCustomEntriesForViewedSpec()
+            if customList then
+                for i, stored in ipairs(customList) do
+                    local identity = API.GetCustomCooldownIdentityForEntry(stored)
+                    if not Shared.HasEquivalentSpellID(groupedSet, identity) then
+                        icons[#icons + 1] = {
+                            spellID = identity,
+                            layoutIndex = 99100 + i,
+                            viewerOrder = 0,
+                            rank = GetSavedRank(identity),
+                        }
+                    end
+                end
+            end
+            local selectedBuffs = CDM.db.cooldownBuffs and CDM.db.cooldownBuffs[currentSpecID]
+            if selectedBuffs then
+                for spellID, selected in pairs(selectedBuffs) do
+                    if selected and not Shared.HasEquivalentSpellID(groupedSet, spellID) then
+                        local duplicate = false
+                        for _, data in ipairs(icons) do
+                            if data.spellID == spellID then
+                                duplicate = true
+                                break
+                            end
+                        end
+                        if not duplicate then
+                            icons[#icons + 1] = {
+                                spellID = spellID,
+                                layoutIndex = 99200,
+                                viewerOrder = 0,
+                                rank = GetSavedRank(spellID),
+                            }
+                        end
+                    end
                 end
             end
         end
@@ -1097,26 +1548,238 @@ local function CreateCooldownGroupsPanel(subPage, page)
         return result
     end
 
-    -- Which ungrouped grid icon is the cursor over? Returns that icon's spellID
-    -- and whether the drop lands on its left half (insert before) or right half.
-    GetHoveredGridInsertAnchor = function(spellID)
-        if currentSpecID ~= playerSpecID then return nil end
-        for i = 1, gridIconsActive do
-            local frame = gridIcons[i]
-            if frame:IsShown() and frame.cdmSpellID and frame.cdmSpellID ~= spellID and frame:IsMouseOver() then
-                local left, right = frame:GetLeft(), frame:GetRight()
-                if left and right then
-                    local x = GetCursorPosition()
-                    x = x / frame:GetEffectiveScale()
-                    return frame.cdmSpellID, x < (left + right) / 2
+    local function AppendUngroupedOrder(spellID)
+        if not (currentSpecID and spellID) then return end
+        if not CDM.db.ungroupedCooldownOrder then CDM.db.ungroupedCooldownOrder = {} end
+        local order = CDM.db.ungroupedCooldownOrder[currentSpecID]
+        if not order then
+            order = GetUngroupedSpellsFromViewers("all")
+            CDM.db.ungroupedCooldownOrder[currentSpecID] = order
+        end
+        for _, existingID in ipairs(order) do
+            if existingID == spellID then return end
+        end
+        order[#order + 1] = spellID
+    end
+
+    local function RemoveUngroupedOrderEntry(spellID)
+        local bySpec = CDM.db.ungroupedCooldownOrder
+        local order = bySpec and bySpec[currentSpecID]
+        if not order then return end
+        for i = #order, 1, -1 do
+            if order[i] == spellID then table.remove(order, i) end
+        end
+    end
+
+    local itemIDOverlay
+    local function ShowItemIDPopup()
+        if not itemIDOverlay then
+            local overlay = UI.CreateModalOverlay()
+            overlay:ClearAllPoints()
+            overlay:SetAllPoints(UIParent)
+
+            local window = overlay.window
+            window:ClearAllPoints()
+            window:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+            window:SetSize(290, 120)
+
+            local inputLabel = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+            inputLabel:SetPoint("TOPLEFT", window, "TOPLEFT", 24, -42)
+            inputLabel:SetText("ItemID:")
+
+            local editBox = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
+            editBox:SetSize(150, 24)
+            editBox:SetPoint("LEFT", inputLabel, "RIGHT", 12, 0)
+            editBox:SetAutoFocus(false)
+            editBox:SetNumeric(true)
+            editBox:SetMaxLetters(7)
+            editBox:SetJustifyH("CENTER")
+
+            local okayButton = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+            okayButton:SetSize(92, 22)
+            okayButton:SetPoint("BOTTOMRIGHT", window, "BOTTOM", -4, 14)
+            okayButton:SetText("Accept")
+
+            local cancelButton = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+            cancelButton:SetSize(92, 22)
+            cancelButton:SetPoint("BOTTOMLEFT", window, "BOTTOM", 4, 14)
+            cancelButton:SetText(CANCEL)
+
+            local function SetError(message)
+                if UIErrorsFrame then
+                    UIErrorsFrame:AddMessage(message, 1, 0.2, 0.2, 1)
+                end
+            end
+
+            local function AddItem()
+                local itemID = tonumber(editBox:GetText())
+                if not itemID or itemID <= 0 then
+                    SetError("Enter a valid ItemID")
+                    return
+                end
+
+                local identity = CDM_C.GetCustomItemSentinelForItem(itemID)
+                if not GetCustomItemIDFromSentinel(identity) then
+                    SetError("ItemID is out of range")
+                    return
+                end
+                if C_Item.DoesItemExistByID and not C_Item.DoesItemExistByID(itemID) then
+                    SetError("Unknown ItemID")
+                    return
+                end
+
+                local ok = API:AddCustomCooldownEntry(itemID, true, currentSpecID)
+                if not ok then
+                    SetError("Item is already tracked")
+                    return
+                end
+
+                AppendUngroupedOrder(identity)
+                SaveAndRefresh()
+                RefreshLeftPanelIfNeeded()
+                overlay:Hide()
+            end
+
+            okayButton:SetScript("OnClick", AddItem)
+            cancelButton:SetScript("OnClick", function() overlay:Hide() end)
+            editBox:SetScript("OnEnterPressed", AddItem)
+            editBox:SetScript("OnEscapePressed", function() overlay:Hide() end)
+
+            overlay:HookScript("OnShow", function()
+                editBox:SetText("")
+                editBox:SetFocus()
+            end)
+
+            itemIDOverlay = overlay
+        end
+
+        itemIDOverlay:Show()
+    end
+
+    local function AddMenuLabel(name, icon)
+        if icon then return string.format("|T%s:16:16|t %s", tostring(icon), name) end
+        return name
+    end
+
+    local function PreserveBuffOverridesForCooldownRow(spellID)
+        local buffGroups = CDM.db.buffGroups and CDM.db.buffGroups[currentSpecID]
+        local incoming
+        for _, groupData in ipairs(buffGroups or {}) do
+            if groupData.spells then
+                Shared.RemoveSpellFromGroupList(groupData.spells, spellID)
+            end
+            if groupData.spellOverrides and CDM.ExtractMergedBuffOverrideEntry then
+                local extracted = CDM:ExtractMergedBuffOverrideEntry(groupData.spellOverrides, spellID)
+                if extracted then
+                    if incoming and CDM.MergeMissingBuffOverrideFields then
+                        CDM:MergeMissingBuffOverrideFields(incoming, extracted)
+                    else
+                        incoming = extracted
+                    end
                 end
             end
         end
-        return nil
+
+        if incoming then
+            if not CDM.db.ungroupedBuffOverrides then CDM.db.ungroupedBuffOverrides = {} end
+            local overrides = CDM.db.ungroupedBuffOverrides[currentSpecID]
+            if not overrides then
+                overrides = {}
+                CDM.db.ungroupedBuffOverrides[currentSpecID] = overrides
+            end
+            local existing = CDM.GetMergedBuffOverrideEntry and CDM:GetMergedBuffOverrideEntry(overrides, spellID)
+            if existing and CDM.MergeMissingBuffOverrideFields then
+                CDM:MergeMissingBuffOverrideFields(incoming, existing)
+            end
+            if CDM.StoreMergedBuffOverrideEntry then
+                CDM:StoreMergedBuffOverrideEntry(overrides, spellID, incoming)
+            end
+        end
     end
 
-    ApplyUngroupedGridOrder = function(spellID, anchorSpellID, insertBefore)
-        if not currentSpecID or not anchorSpellID or anchorSpellID == spellID then return false end
+    local function ShowAddRowMenu()
+        MenuUtil.CreateContextMenu(addRowIcon, function(_, rootDescription)
+            rootDescription:CreateTitle("Add Icon")
+
+            local buffsMenu = rootDescription:CreateButton("Buffs")
+            local buffEntries = {}
+            local seenBuffs = {}
+            local buffViewer = _G[CDM_C.VIEWERS.BUFF]
+            if buffViewer and buffViewer.itemFramePool then
+                for frame in buffViewer.itemFramePool:EnumerateActive() do
+                    local info = frame.GetCooldownInfo and frame:GetCooldownInfo() or frame.cooldownInfo
+                    local spellID = info and CDM_C.ResolveViewerEntryIdentity(info)
+                    if not IsSafeNumber(spellID) and API.GetPreferredBuffGroupSpellID then
+                        spellID = API:GetPreferredBuffGroupSpellID(frame)
+                    end
+                    if info and CDM_C.IsViewerEntryVisible(info)
+                        and IsSafeNumber(spellID)
+                        and not seenBuffs[spellID]
+                        and not IsCooldownBuffTracked(currentSpecID, spellID)
+                    then
+                        seenBuffs[spellID] = true
+                        buffEntries[#buffEntries + 1] = {
+                            spellID = spellID,
+                            name = C_Spell.GetSpellName(spellID) or ("Spell " .. spellID),
+                            icon = C_Spell.GetSpellTexture(spellID),
+                        }
+                    end
+                end
+            end
+            table.sort(buffEntries, function(a, b) return a.name < b.name end)
+            for _, entry in ipairs(buffEntries) do
+                local buffSpellID = entry.spellID
+                buffsMenu:CreateButton(AddMenuLabel(entry.name, entry.icon), function()
+                    PreserveBuffOverridesForCooldownRow(buffSpellID)
+                    SetCooldownBuffTracked(currentSpecID, buffSpellID, true)
+                    AppendUngroupedOrder(buffSpellID)
+                    API:Refresh("BUFF_DATA")
+                    SaveAndRefresh()
+                    RefreshLeftPanelIfNeeded()
+                end)
+            end
+            if #buffEntries == 0 then buffsMenu:CreateTitle("No buffs available") end
+
+            local potionsMenu = rootDescription:CreateButton("Potions")
+            local potionCount = 0
+            local order, items = API.GetCustomCooldownBuiltinItems()
+            local customEntries = GetCustomEntriesForViewedSpec() or {}
+            local existingItems = {}
+            for _, stored in ipairs(customEntries) do
+                if stored.isItem then existingItems[stored.id] = true end
+            end
+            local _, playerClassTag = UnitClass("player")
+            for _, itemID in ipairs(order or {}) do
+                local info = items and items[itemID]
+                if info and (not info.class or info.class == playerClassTag) and not existingItems[itemID] then
+                    potionCount = potionCount + 1
+                    local potionItemID = itemID
+                    local name = C_Item.GetItemNameByID(itemID) or ("Item " .. itemID)
+                    local icon = C_Item.GetItemIconByID(itemID)
+                    potionsMenu:CreateButton(AddMenuLabel(name, icon), function()
+                        local ok = API:AddCustomCooldownEntry(potionItemID, true, currentSpecID)
+                        if ok then
+                            local identity = CDM_C.GetCustomItemSentinelForItem(potionItemID)
+                            AppendUngroupedOrder(identity)
+                            SaveAndRefresh()
+                            RefreshLeftPanelIfNeeded()
+                        end
+                    end)
+                end
+            end
+            if potionCount == 0 then potionsMenu:CreateTitle("No potions available") end
+
+            rootDescription:CreateButton("ItemID", function()
+                if not currentSpecID then return end
+                ShowItemIDPopup()
+            end)
+        end)
+    end
+
+    addRowIcon:SetScript("OnClick", ShowAddRowMenu)
+
+    ApplyUngroupedGridOrder = function(spellID, insertIndex)
+        if not currentSpecID or not insertIndex then return false end
 
         local dragSet = {}
         Shared.MarkEquivalentSpellIDs(dragSet, spellID)
@@ -1125,26 +1788,44 @@ local function CreateCooldownGroupsPanel(subPage, page)
             Shared.MarkEquivalentSpellIDs(dragSet, overrideID)
         end
 
+        local currentOrder = GetUngroupedSpellsFromViewers()
+        local sourceIndex
         local newOrder = {}
-        for _, sid in ipairs(GetUngroupedSpellsFromViewers()) do
-            if not Shared.HasEquivalentSpellID(dragSet, sid) then
+        for i, sid in ipairs(currentOrder) do
+            if Shared.HasEquivalentSpellID(dragSet, sid) then
+                sourceIndex = sourceIndex or i
+            else
                 newOrder[#newOrder + 1] = sid
             end
         end
 
-        local insertAt = #newOrder + 1
-        for i, sid in ipairs(newOrder) do
-            if sid == anchorSpellID then
-                insertAt = insertBefore and i or (i + 1)
-                break
+        local insertAt = insertIndex
+        if sourceIndex and sourceIndex < insertAt then insertAt = insertAt - 1 end
+        insertAt = math.max(1, math.min(insertAt, #newOrder + 1))
+        table.insert(newOrder, insertAt, spellID)
+
+        local mergedOrder = {}
+        local mergedSet = {}
+        local function AppendOrder(source)
+            for _, sid in ipairs(source) do
+                if not Shared.HasEquivalentSpellID(mergedSet, sid) then
+                    mergedOrder[#mergedOrder + 1] = sid
+                    Shared.MarkEquivalentSpellIDs(mergedSet, sid)
+                end
             end
         end
-        table.insert(newOrder, insertAt, spellID)
+        if cooldownBarView == "essential" then
+            AppendOrder(newOrder)
+            AppendOrder(GetUngroupedSpellsFromViewers("utility"))
+        else
+            AppendOrder(GetUngroupedSpellsFromViewers("essential"))
+            AppendOrder(newOrder)
+        end
 
         if not CDM.db.ungroupedCooldownOrder then
             CDM.db.ungroupedCooldownOrder = {}
         end
-        CDM.db.ungroupedCooldownOrder[currentSpecID] = newOrder
+        CDM.db.ungroupedCooldownOrder[currentSpecID] = mergedOrder
         return true
     end
 
@@ -1175,6 +1856,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     if info and info.spellID then sid = info.spellID end
                 elseif pickedTrinketSlot then
                     SetTrinketTracked(currentSpecID, pickedTrinketSlot, true)
+                    API:Refresh("TRACKERS")
                 else
                     sid = ResolveCooldownStableBase(sid)
                 end
@@ -1215,13 +1897,17 @@ local function CreateCooldownGroupsPanel(subPage, page)
         local tex = (trinketSlot and trinketIcon)
             or (customItemID and customItemIcon)
             or nativeItemIcon
+            or GetPromotedBuffTexture(spellID)
             or C_Spell.GetSpellTexture(displayID)
         if tex then widget.iconTex:SetTexture(tex) end
         CDM_C.ApplyIconTexCoord(widget.iconTex, CDM_C.GetEffectiveZoomAmount())
 
         local cfgColor = CDM_C.GetConfigValue("borderColor", { r = 0, g = 0, b = 0, a = 1 })
         if widget.iconContainer.border then
-            widget.iconContainer.border:SetBackdropBorderColor(cfgColor.r, cfgColor.g, cfgColor.b, cfgColor.a or 1)
+            local promotedColor = IsCooldownBuffTracked(currentSpecID, spellID)
+                and CDM.GetSpellBorderColor and CDM:GetSpellBorderColor(currentSpecID, spellID)
+            local color = promotedColor or cfgColor
+            widget.iconContainer.border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
         end
 
         if isActive == false then
@@ -1309,7 +1995,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
             ShowSpellSettings(spellID, sourceGroup)
             RefreshLeftPanelIfNeeded()
         end)
-        widget.clickBtn:SetScript("OnDragStart", function() StartDrag(spellID, sourceGroup) end)
+        widget.clickBtn:SetScript("OnDragStart", function() StartDrag(spellID, sourceGroup, row) end)
         widget.clickBtn:SetScript("OnDragStop", function() EndDrag() end)
 
         return widget
@@ -1317,28 +2003,54 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
     BuildIconGrid = function()
         ReleaseAllGridIcons()
-        gridEmptyText:Hide()
 
         local iconGap = CDM.db and CDM.db.spacing or GRID_ICON_GAP
-        minGridHeight = MIN_GRID_ROWS * (GRID_ICON_SIZE + iconGap) - iconGap + 8
+        minGridHeight = GRID_ICON_SIZE + 8
 
         UpdateGridVisibility()
+        local showAddIcon = currentSpecID == playerSpecID and cooldownBarView == "essential"
+        local showRotateIcon = currentSpecID == playerSpecID
+        addRowIcon:SetShown(showAddIcon)
+        rotateBarIcon:SetShown(showRotateIcon)
         if currentSpecID ~= playerSpecID then return end
 
         local spells = GetUngroupedSpellsFromViewers()
-
-        if #spells == 0 then
-            iconGridFrame:SetHeight(minGridHeight)
-            gridEmptyText:SetText(L["All spells are in groups"])
-            gridEmptyText:Show()
-            UI.SetTextFaint(gridEmptyText)
-            return
-        end
-
         local totalSpells = #spells
-        local effectiveMax = GRID_DISPLAY_MAX
+        local availableWidth = (iconGridFrame:GetWidth() or 0) - 8
+        if availableWidth <= 0 then availableWidth = 456 end
+        local totalSlots = totalSpells
+        local rowWidth = totalSlots * GRID_ICON_SIZE + math.max(0, totalSlots - 1) * iconGap
+        local maxScroll = math.max(0, rowWidth - availableWidth)
+        local previousScroll = iconScrollFrame:GetHorizontalScroll() or 0
+        local startX = maxScroll > 0 and 0 or math.floor((availableWidth - rowWidth) / 2)
         local cfgColor = CDM_C.GetConfigValue("borderColor", { r = 0, g = 0, b = 0, a = 1 })
-        local totalRows = math.ceil(totalSpells / effectiveMax)
+
+        iconScrollFrame:ClearAllPoints()
+        iconScrollFrame:SetPoint("TOPLEFT", iconGridFrame, "TOPLEFT", 4, -4)
+        iconScrollFrame:SetWidth(availableWidth)
+        iconScrollChild:SetSize(math.max(availableWidth, rowWidth), GRID_ICON_SIZE)
+        horizontalScroll:SetMinMaxValues(0, maxScroll)
+        horizontalScrollBar:SetShown(maxScroll > 0)
+        if maxScroll > 0 then
+            horizontalThumb:SetWidth(math.min(availableWidth,
+                math.max(23, math.floor(availableWidth * availableWidth / rowWidth))))
+        end
+        horizontalScroll:SetValue(maxScroll - math.min(previousScroll, maxScroll))
+
+        addRowIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
+        local plusLength = math.floor(GRID_ICON_SIZE * 0.5)
+        local plusThickness = math.floor(GRID_ICON_SIZE * 0.14)
+        addRowShadowH:SetSize(plusLength, plusThickness)
+        addRowShadowV:SetSize(plusThickness, plusLength)
+        addRowPlusH:SetSize(plusLength, plusThickness)
+        addRowPlusV:SetSize(plusThickness, plusLength)
+        rotateBarIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
+        local rotateTextureSize = math.floor(GRID_ICON_SIZE * 0.62)
+        rotateBarTexture:SetSize(rotateTextureSize, rotateTextureSize)
+
+        local function GetSlotPosition(slotIndex)
+            return startX + (slotIndex - 1) * (GRID_ICON_SIZE + iconGap), 0
+        end
 
         for i, spellID in ipairs(spells) do
             local frame = AcquireGridIcon()
@@ -1349,10 +2061,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[frame] = nil end
             end
 
-            local row = math.floor((i - 1) / effectiveMax)
-            local col = (i - 1) % effectiveMax
+            local x, y = GetSlotPosition(i)
             frame:ClearAllPoints()
-            frame:SetPoint("TOPLEFT", col * (GRID_ICON_SIZE + iconGap), -row * (GRID_ICON_SIZE + iconGap))
+            frame:SetPoint("TOPLEFT", x, y)
 
             local trinketSlot, _, _, trinketIcon = GetTrinketInfoForID(spellID)
             local customItemID, _, customItemIcon = GetCustomItemInfoForID(spellID)
@@ -1365,14 +2076,17 @@ local function CreateCooldownGroupsPanel(subPage, page)
             elseif nativeItemIcon then
                 tex = nativeItemIcon
             else
-                tex = C_Spell.GetSpellTexture(GetDisplaySpellID(spellID))
+                tex = GetPromotedBuffTexture(spellID) or C_Spell.GetSpellTexture(GetDisplaySpellID(spellID))
             end
             if tex then frame.icon:SetTexture(tex) end
             frame.icon:SetDesaturated(false)
             frame.icon:SetAlpha(1)
 
             if frame.border then
-                frame.border:SetBackdropBorderColor(cfgColor.r, cfgColor.g, cfgColor.b, cfgColor.a or 1)
+                local promotedColor = IsCooldownBuffTracked(currentSpecID, spellID)
+                    and CDM.GetSpellBorderColor and CDM:GetSpellBorderColor(currentSpecID, spellID)
+                local color = promotedColor or cfgColor
+                frame.border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
             end
 
             frame.overlay:SetScript("OnEnter", function(self)
@@ -1393,19 +2107,49 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 GameTooltip:Show()
             end)
             frame.overlay:SetScript("OnLeave", function() GameTooltip:Hide() end)
-            frame.overlay:SetScript("OnClick", function()
+            frame.overlay:SetScript("OnClick", function(_, button)
+                if button == "RightButton" and IsCooldownBuffTracked(currentSpecID, spellID) then
+                    MenuUtil.CreateContextMenu(frame.overlay, function(_, rootDescription)
+                        rootDescription:CreateButton("Remove", function()
+                            SetCooldownBuffTracked(currentSpecID, spellID, false)
+                            RemoveUngroupedOrderEntry(spellID)
+                            selectedSpellID = nil
+                            selectedSpellGroupIndex = nil
+                            ClearRightPanel()
+                            API:Refresh("BUFF_DATA")
+                            SaveAndRefresh()
+                            RefreshLeftPanelIfNeeded()
+                        end)
+                    end)
+                    return
+                end
                 selectedSpellID = spellID
                 selectedGroupIndex = nil
                 selectedSpellGroupIndex = nil
                 ShowSpellSettings(spellID, nil)
                 RefreshLeftPanelIfNeeded()
             end)
-            frame.overlay:SetScript("OnDragStart", function() StartDrag(spellID, nil) end)
+            frame.overlay:SetScript("OnDragStart", function() StartDrag(spellID, nil, frame) end)
             frame.overlay:SetScript("OnDragStop", function() EndDrag() end)
         end
 
-        local gridHeight = totalRows * (GRID_ICON_SIZE + iconGap) - iconGap + 8
-        iconGridFrame:SetHeight(math.max(gridHeight, minGridHeight))
+        rotateBarIcon:Show()
+
+        if showAddIcon then
+            addRowIcon:Show()
+        end
+
+        iconGridFrame:SetHeight(minGridHeight + (maxScroll > 0 and gridScrollbarSpace or 0))
+    end
+
+    SetCooldownBarView = function(view)
+        if view == cooldownBarView then return end
+        cooldownBarView = view
+        if selectedSpellID and not selectedSpellGroupIndex then
+            selectedSpellID = nil
+            ClearRightPanel()
+        end
+        RefreshAll()
     end
 
     local function BuildGroupsPanel()
@@ -1424,9 +2168,18 @@ local function CreateCooldownGroupsPanel(subPage, page)
         spellRowPool:ReleaseAll()
         emptyRowPool:ReleaseAll()
         ClearDropTargets()
-        RegisterDropTarget(iconGridFrame, nil)
+        RegisterDropTarget(iconGridFrame, nil, {
+            label = GetUngroupedDropLabel,
+            insertIndex = gridIconsActive + 1,
+        })
         for i = 1, gridIconsActive do
-            RegisterDropTarget(gridIcons[i], nil)
+            RegisterDropTarget(gridIcons[i], nil, {
+                label = GetUngroupedDropLabel,
+                highlightFrame = iconGridFrame,
+                insertIndex = i,
+                showInsertion = true,
+                horizontalInsertion = true,
+            })
         end
 
         local isViewingPlayer = currentSpecID == playerSpecID
@@ -1578,9 +2331,13 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     local groupContainer = groupContainerWidget.root
                     groupContainer:ClearAllPoints()
                     groupContainer:SetPoint("TOPLEFT", SCROLL_LEFT_PAD, yOff)
-                    RegisterDropTarget(groupContainer, groupIndex)
-
                     local spells = groupData.spells
+                    local targetLabel = string.format(L["Move to %s"], groupData.name or L["Group"])
+                    RegisterDropTarget(groupContainer, groupIndex, {
+                        label = targetLabel,
+                        insertIndex = spells and (#spells + 1) or 1,
+                        showInsertion = not spells or #spells == 0,
+                    })
                     local groupY = 0
                     if spells and #spells > 0 then
                         for spellIndex, spellID in ipairs(spells) do
@@ -1598,8 +2355,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
                                     or Shared.HasEquivalentSpellID(activeSpellSet, spellID)
                                     or Shared.HasEquivalentSpellID(activeSpellSet, ResolveCooldownOverrideID(spellID))
                             end
+                            local spellWidget = spellRowPool:Acquire(groupContainer)
                             ConfigureSpellRow(
-                                spellRowPool:Acquire(groupContainer),
+                                spellWidget,
                                 groupContainer,
                                 spellID,
                                 groupIndex,
@@ -1608,6 +2366,13 @@ local function CreateCooldownGroupsPanel(subPage, page)
                                 spellIndex,
                                 #spells
                             )
+                            RegisterDropTarget(spellWidget.root, groupIndex, {
+                                label = targetLabel,
+                                insertIndex = spellIndex,
+                                showInsertion = true,
+                                splitInsertion = true,
+                                highlightFrame = groupContainer,
+                            })
                             groupY = groupY - ROW_HEIGHT
                         end
                     else
@@ -1669,223 +2434,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
             if selectedGroupIndex then ShowSpellPickerPanel(selectedGroupIndex) end
         end)
         addIconBtnRef = addIconBtn
-
-        local customOverlay
-        local function CreateCustomEntryOverlay()
-            local overlay = UI.CreateModalOverlay()
-            local window = overlay.window
-
-            local paddingX = 18
-            window:SetSize(430, 170)
-
-            local title = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
-            title:SetText(L["Add Custom Spell or Item"])
-            title:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
-            title:SetPoint("TOPLEFT", window, "TOPLEFT", paddingX, -34)
-
-            local desc = window:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-            desc:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-            desc:SetPoint("RIGHT", window, "RIGHT", -paddingX, 0)
-            desc:SetJustifyH("LEFT")
-            desc:SetWordWrap(true)
-            desc:SetText(L["Track any spell or item by ID. New icons appear with the ungrouped cooldowns and can be dragged into groups."])
-            UI.SetTextMuted(desc)
-
-            local addRow = CreateFrame("Frame", nil, window)
-            addRow:SetSize(400, 26)
-            addRow:SetPoint("TOPLEFT", desc, "BOTTOMLEFT", 0, -14)
-
-            local editBox = CreateFrame("EditBox", nil, addRow, "InputBoxTemplate")
-            editBox:SetSize(120, 22)
-            editBox:SetPoint("LEFT", addRow, "LEFT", 6, 0)
-            editBox:SetAutoFocus(false)
-            editBox:SetNumeric(true)
-            editBox:SetMaxLetters(7)
-
-            UI.AttachPlaceholder(editBox, "ID")
-
-            local addSpellBtn = CreateFrame("Button", nil, addRow, "UIPanelButtonTemplate")
-            addSpellBtn:SetSize(60, 22)
-            addSpellBtn:SetPoint("LEFT", editBox, "RIGHT", 6, 0)
-            addSpellBtn:SetText(L["Spell"])
-
-            local addItemBtn = CreateFrame("Button", nil, addRow, "UIPanelButtonTemplate")
-            addItemBtn:SetSize(60, 22)
-            addItemBtn:SetPoint("LEFT", addSpellBtn, "RIGHT", 4, 0)
-            addItemBtn:SetText(L["Item"])
-
-            local statusText = window:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-            statusText:SetPoint("TOPLEFT", addRow, "BOTTOMLEFT", 6, -8)
-            statusText:SetPoint("RIGHT", window, "RIGHT", -paddingX, 0)
-            statusText:SetJustifyH("LEFT")
-            statusText:SetWordWrap(false)
-            statusText:SetText("")
-
-            local SetStatus = UI.CreateTimedStatus(statusText, 3)
-            local RebuildQuickAdd
-
-            -- Items that used to be built into the Racials tracker
-            -- (Healthstone, combat potions), offered as one-click adds.
-            local quickHeader = window:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
-            quickHeader:SetText(L["Suggested Items"])
-            quickHeader:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
-            quickHeader:SetPoint("TOPLEFT", statusText, "BOTTOMLEFT", -6, -10)
-
-            local quickRows = {}
-            local quickRowHeight = 26
-            local quickRetryPending = false
-
-            RebuildQuickAdd = function()
-                for _, row in ipairs(quickRows) do
-                    row:Hide()
-                end
-
-                local shownCount = 0
-                local order, items = API.GetCustomCooldownBuiltinItems()
-                if order and items then
-                    local _, playerClassTag = UnitClass("player")
-                    local existing = {}
-                    local list = CDM.db.customCooldownEntries and CDM.db.customCooldownEntries[currentSpecID]
-                    if list then
-                        for _, stored in ipairs(list) do
-                            if stored.isItem then existing[stored.id] = true end
-                        end
-                    end
-
-                    for _, itemID in ipairs(order) do
-                        local info = items[itemID]
-                        if (not info.class or info.class == playerClassTag) and not existing[itemID] then
-                            shownCount = shownCount + 1
-                            local row = quickRows[shownCount]
-                            if not row then
-                                row = CreateFrame("Frame", nil, window)
-                                row:SetHeight(quickRowHeight)
-                                row:SetPoint("RIGHT", window, "RIGHT", -paddingX, 0)
-
-                                local iconTex = row:CreateTexture(nil, "ARTWORK")
-                                iconTex:SetSize(20, 20)
-                                iconTex:SetPoint("LEFT", row, "LEFT", 0, 0)
-                                row.iconTex = iconTex
-
-                                local addBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-                                addBtn:SetSize(50, 20)
-                                addBtn:SetPoint("RIGHT", row, "RIGHT", 0, 0)
-                                addBtn:SetText(L["Add"])
-                                row.addBtn = addBtn
-
-                                local nameText = row:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-                                nameText:SetPoint("LEFT", iconTex, "RIGHT", 6, 0)
-                                nameText:SetPoint("RIGHT", addBtn, "LEFT", -6, 0)
-                                nameText:SetJustifyH("LEFT")
-                                nameText:SetWordWrap(false)
-                                row.nameText = nameText
-
-                                quickRows[shownCount] = row
-                            end
-
-                            local name = C_Item.GetItemNameByID(itemID)
-                            local icon = C_Item.GetItemIconByID(itemID)
-                            if not name or not icon then
-                                C_Item.RequestLoadItemDataByID(itemID)
-                                if not quickRetryPending then
-                                    quickRetryPending = true
-                                    C_Timer.After(0.3, function()
-                                        quickRetryPending = false
-                                        if overlay:IsShown() then
-                                            RebuildQuickAdd()
-                                        end
-                                    end)
-                                end
-                            end
-
-                            row.iconTex:SetTexture(icon or "Interface\\Icons\\INV_Misc_QuestionMark")
-                            CDM_C.ApplyIconTexCoord(row.iconTex, CDM_C.GetEffectiveZoomAmount())
-                            row.nameText:SetText(name or (L["Item"] .. " " .. itemID))
-                            row.addBtn:SetScript("OnClick", function()
-                                local ok = API:AddCustomCooldownEntry(itemID, true, currentSpecID)
-                                if ok then
-                                    SetStatus("|cff44ff44" .. string.format(L["Added: %s"], name or tostring(itemID)) .. "|r")
-                                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
-                                else
-                                    SetStatus("|cffff4444" .. L["Already tracked"] .. "|r")
-                                end
-                                RebuildQuickAdd()
-                            end)
-
-                            row:ClearAllPoints()
-                            row:SetPoint("TOPLEFT", quickHeader, "BOTTOMLEFT", 0, -6 - (shownCount - 1) * quickRowHeight)
-                            row:SetPoint("RIGHT", window, "RIGHT", -paddingX, 0)
-                            row:Show()
-                        end
-                    end
-                end
-
-                quickHeader:SetShown(shownCount > 0)
-                local extraHeight = shownCount > 0 and (24 + shownCount * quickRowHeight) or 0
-                window:SetSize(430, 170 + extraHeight)
-            end
-
-            local function DoAddEntry(isItem)
-                local id = tonumber(editBox:GetText())
-                if not id or id <= 0 then
-                    SetStatus("|cffff4444" .. L["Enter a valid ID"] .. "|r")
-                    return
-                end
-
-                local displayName
-                if isItem then
-                    displayName = C_Item.GetItemNameByID(id)
-                    if not displayName then
-                        SetStatus("|cffff4444" .. L["Loading item data, try again"] .. "|r")
-                        C_Item.RequestLoadItemDataByID(id)
-                        return
-                    end
-                else
-                    displayName = C_Spell.GetSpellName(id)
-                    if not displayName then
-                        SetStatus("|cffff4444" .. L["Unknown spell ID"] .. "|r")
-                        return
-                    end
-                end
-
-                local ok, reason = API:AddCustomCooldownEntry(id, isItem, currentSpecID)
-                if ok then
-                    editBox:SetText("")
-                    SetStatus("|cff44ff44" .. string.format(L["Added: %s"], displayName or tostring(id)) .. "|r")
-                    SaveAndRefresh(); RefreshLeftPanelIfNeeded()
-                    RebuildQuickAdd()
-                elseif reason == "viewer" then
-                    SetStatus("|cffff4444" .. L["Already shown by the Cooldown Manager"] .. "|r")
-                else
-                    SetStatus("|cffff4444" .. L["Already tracked"] .. "|r")
-                end
-            end
-
-            addSpellBtn:SetScript("OnClick", function() DoAddEntry(false) end)
-            addItemBtn:SetScript("OnClick", function() DoAddEntry(true) end)
-            editBox:SetScript("OnEnterPressed", function(self) DoAddEntry(false); self:ClearFocus() end)
-            editBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-
-            overlay:HookScript("OnShow", function()
-                SetStatus("")
-                editBox:SetText("")
-                RebuildQuickAdd()
-            end)
-
-            return overlay
-        end
-
-        local addCustomBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
-        addCustomBtn:SetSize(96, 22)
-        addCustomBtn:SetPoint("LEFT", addIconBtn, "RIGHT", 6, 0)
-        addCustomBtn:SetText(L["Add Custom"])
-        addCustomBtn:SetScript("OnClick", function()
-            if not currentSpecID then return end
-            if not customOverlay then
-                customOverlay = CreateCustomEntryOverlay()
-            end
-            customOverlay:Show()
-        end)
     end
 
     RefreshAll = function()

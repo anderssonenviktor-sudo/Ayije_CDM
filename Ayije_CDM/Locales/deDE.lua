@@ -246,6 +246,8 @@ L["Assist"] = "Assist"
 
 --L["Text Overrides"] = "Text Overrides"
 --L["Override Text Settings"] = "Override Text Settings"
+--L["Glow Overrides"] = "Glow Overrides"
+--L["Override Glow Color"] = "Override Glow Color"
 --L["Cooldown Size"] = "Cooldown Size"
 --L["Cooldown Color"] = "Cooldown Color"
 --L["Charge Size"] = "Charge Size"

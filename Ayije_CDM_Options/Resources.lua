@@ -43,6 +43,7 @@ local SECONDARY_COLOR_FIELDS = {
     SoulShards = { { key = "rechargingColor", label = L["Partial Fill"] } },
     Flurry = { { key = "rechargingColor", label = L["Recharging"] } },
     FireBlast = { { key = "rechargingColor", label = L["Recharging"] } },
+    Prescience = { { key = "rechargingColor", label = L["Recharging"] } },
     ComboPoints = {
         ROGUE = {
             { key = "chargedColor", label = L["Charged"] },
@@ -58,7 +59,7 @@ local SECONDARY_COLOR_FIELDS = {
 -- Bars that show a per-pip recharge countdown instead of a value tag. These
 -- also skip the Conditions tab, which doesn't apply to them.
 local USES_RECHARGE_TEXT = {
-    Flurry = true, FireBlast = true,
+    Flurry = true, FireBlast = true, Prescience = true,
 }
 
 local LEFT_INSET = Shared.LEFT_INSET or 35

@@ -395,6 +395,18 @@ local function IsSupersededByNativeTracking()
     if CDM_C.GetConfigValue and CDM_C.GetConfigValue("trinketsForceEnable", false) then
         return false
     end
+    local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
+    local bySpec = CDM.db and CDM.db.cooldownTrinkets
+    local tracked = specID and bySpec and bySpec[specID]
+    if tracked and next(tracked) then
+        return false
+    end
+    local grouped = CDM.CooldownGroupSets and CDM.CooldownGroupSets.grouped
+    local getSentinel = CDM_C.GetTrinketSentinelForSlot
+    if grouped and getSentinel
+        and (grouped[getSentinel(TRINKET_SLOT_1)] or grouped[getSentinel(TRINKET_SLOT_2)]) then
+        return false
+    end
     return CDM_C.HasNativeEquipSlotTracking and CDM_C.HasNativeEquipSlotTracking()
 end
 

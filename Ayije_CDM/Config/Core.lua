@@ -448,7 +448,7 @@ local RESOURCE_BAR_NAME_LOOKUP = {
     Maelstrom=true, Chi=true, Insanity=true, ArcaneCharges=true, Fury=true,
     Essence=true, SoulFragments=true, DevourerSoulFragments=true, Ironfur=true,
     IgnorePain=true, TipOfTheSpear=true, Stagger=true, MaelstromWeapon=true,
-    Flurry=true, FireBlast=true,
+    Flurry=true, FireBlast=true, Prescience=true,
 }
 
 local SECOND_BAR_PARENT = {

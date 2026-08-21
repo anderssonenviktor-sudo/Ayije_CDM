@@ -122,6 +122,17 @@ local RESOURCE_BAR_PER_KEY = {
         rechargeTextColor = { r = 1, g = 1, b = 1, a = 1 },
         chargeTickWidth = 1,
     },
+    Prescience      = {
+        color = { r = 0.85, g = 0.55, b = 0.25, a = 1 },
+        rechargingColor = { r = 0.75, g = 0.75, b = 0.75, a = 1 },
+        bgColor = { r = 0, g = 0, b = 0, a = 0.6 },
+        loadMode = "never",
+        tagEnabled = false,
+        rechargeTextEnabled = true,
+        rechargeTextFontSize = 12,
+        rechargeTextColor = { r = 1, g = 1, b = 1, a = 1 },
+        chargeTickWidth = 1,
+    },
 }
 
 local function BuildResourceBarDefaults()
@@ -226,6 +237,8 @@ CDM.defaults = {
     -- Trinket icons in the cooldown viewer: per-spec tracked slots,
     -- cooldownTrinkets[specID] = { [13] = true, [14] = true }.
     cooldownTrinkets = {},
+    -- Native tracked buffs explicitly promoted into the cooldown icon row.
+    cooldownBuffs = {},
     -- Patch 12.1 tracks trinkets natively, so the custom trinket row stands
     -- down to avoid duplicate icons. Set true to keep using it regardless.
     trinketsForceEnable = false,

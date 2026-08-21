@@ -16,6 +16,9 @@ local table_wipe = table.wipe
 local table_sort = table.sort
 
 local cdContainers = {}
+local cooldownBuffInjectionScratch = {}
+local cooldownBuffIdentityByCooldownID = {}
+local cooldownBuffSelectionSpecID
 
 CDM.cooldownGroupContainers = cdContainers
 
@@ -95,6 +98,96 @@ end
 
 CDM.GetCooldownGroupSpellOverride = GetSpellOverride
 
+local function RefreshCooldownBuffSelection()
+    table_wipe(cooldownBuffIdentityByCooldownID)
+
+    local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
+    cooldownBuffSelectionSpecID = specID
+    local bySpec = CDM.db and CDM.db.cooldownBuffs
+    local selected = specID and bySpec and bySpec[specID]
+    if type(selected) ~= "table" or not next(selected) then return end
+
+    if not (C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCategorySet
+        and C_CooldownViewer.GetCooldownViewerCooldownInfo) then
+        return
+    end
+
+    for _, category in ipairs(CDM_C.VIEWER_CATEGORIES_BUFF or {}) do
+        local cooldownIDs = C_CooldownViewer.GetCooldownViewerCategorySet(category, true)
+        if cooldownIDs then
+            for _, cooldownID in ipairs(cooldownIDs) do
+                local info = C_CooldownViewer.GetCooldownViewerCooldownInfo(cooldownID)
+                local identity = info and CDM_C.ResolveViewerEntryIdentity(info)
+                if info and CDM_C.IsViewerEntryVisible(info)
+                    and identity and selected[identity] == true
+                then
+                    cooldownBuffIdentityByCooldownID[cooldownID] = identity
+                end
+            end
+        end
+    end
+end
+
+function CDM.IsCooldownBuffFrame(frame)
+    local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
+    if cooldownBuffSelectionSpecID ~= specID then
+        RefreshCooldownBuffSelection()
+    end
+    local cooldownID = frame and frame.cooldownID
+    local identity = cooldownID and cooldownBuffIdentityByCooldownID[cooldownID]
+    if identity then
+        GetFrameData(frame).cdmCooldownBuffSpellID = identity
+        return true, identity
+    end
+    if frame then
+        GetFrameData(frame).cdmCooldownBuffSpellID = nil
+        if CDM.ReleasePromotedBuffPlaceholder then
+            CDM:ReleasePromotedBuffPlaceholder(frame)
+        end
+    end
+    return false, nil
+end
+
+function CDM.GetCooldownBuffInjectionFrames()
+    local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
+    if cooldownBuffSelectionSpecID ~= specID then
+        RefreshCooldownBuffSelection()
+    end
+    local viewer = _G[VIEWERS.BUFF]
+    if not (viewer and viewer.itemFramePool) then return nil end
+
+    local count = 0
+    for frame in viewer.itemFramePool:EnumerateActive() do
+        local selected = CDM.IsCooldownBuffFrame(frame)
+        if selected and not CDM.CheckCdGroupMatch(frame) then
+            count = count + 1
+            cooldownBuffInjectionScratch[count] = frame
+        end
+    end
+    for i = count + 1, #cooldownBuffInjectionScratch do
+        cooldownBuffInjectionScratch[i] = nil
+    end
+    return count > 0 and cooldownBuffInjectionScratch or nil
+end
+
+function CDM.CollectGroupedCooldownBuffFrames(buckets)
+    local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
+    if cooldownBuffSelectionSpecID ~= specID then
+        RefreshCooldownBuffSelection()
+    end
+    local viewer = _G[VIEWERS.BUFF]
+    if not (viewer and viewer.itemFramePool) then return end
+
+    for frame in viewer.itemFramePool:EnumerateActive() do
+        local selected = CDM.IsCooldownBuffFrame(frame)
+        local groupIndex = selected and CDM.CheckCdGroupMatch(frame)
+        if groupIndex then
+            if not buckets[groupIndex] then buckets[groupIndex] = {} end
+            buckets[groupIndex][#buckets[groupIndex] + 1] = frame
+        end
+    end
+end
+
 function CDM:PositionCooldownGroupFrames(groupIndex, frames)
     local layout = GetCooldownLayoutCtx()
     if not layout then return end
@@ -168,46 +261,56 @@ function CDM:PositionCooldownGroupFrames(groupIndex, frames)
         end
 
         local frameViewer = frame.viewerFrame
-        local frameVName = (frameViewer == _G[VIEWERS.ESSENTIAL]) and VIEWERS.ESSENTIAL or VIEWERS.UTILITY
+        local frameVName = GetFrameData(frame).cdmCooldownBuffSpellID and VIEWERS.ESSENTIAL
+            or ((frameViewer == _G[VIEWERS.ESSENTIAL]) and VIEWERS.ESSENTIAL or VIEWERS.UTILITY)
         self:ApplyStyle(frame, frameVName)
-
-        frame:ClearAllPoints()
-
-        if row and col then
-            local xPx, yPx
-            if grow == "RIGHT" then
-                xPx = col * stepW
-                yPx = -row * stepH
-            elseif grow == "LEFT" then
-                xPx = -col * stepW
-                yPx = -row * stepH
-            elseif grow == "DOWN" then
-                local dcol = math_floor(idx / maxPerRow)
-                local drow = idx - dcol * maxPerRow
-                xPx = dcol * stepW
-                yPx = -drow * stepH
-            elseif grow == "UP" then
-                local ucol = math_floor(idx / maxPerRow)
-                local urow = idx - ucol * maxPerRow
-                xPx = ucol * stepW
-                yPx = urow * stepH
-            elseif grow == "CENTER_H" then
-                local countInRow = (row < totalWraps - 1) and maxPerRow or (count - row * maxPerRow)
-                xPx = -HalfFloor((countInRow - 1) * stepW) + col * stepW
-                yPx = HalfFloor((totalWraps - 1) * stepH) - row * stepH
-            elseif grow == "CENTER_V" then
-                local vcol = math_floor(idx / maxPerRow)
-                local vrow = idx - vcol * maxPerRow
-                local countInCol = (vcol < totalWraps - 1) and maxPerRow or (count - vcol * maxPerRow)
-                xPx = -HalfFloor((totalWraps - 1) * stepW) + vcol * stepW
-                yPx = HalfFloor((countInCol - 1) * stepH) - vrow * stepH
-            end
-            layout.PlaceFrame(frame, container, selfPoint, anchorPoint, xPx or 0, yPx or 0)
-        else
-            layout.PositionFrameAtSlot(frame, container, idx, iconWSnapped, iconHSnapped, spacingSnapped, grow, count, anchorPoint, selfPoint)
+        if GetFrameData(frame).cdmCooldownBuffSpellID and self.ApplyPromotedBuffOverrides then
+            self:ApplyPromotedBuffOverrides(frame)
         end
 
-        frame:Show()
+        if GetFrameData(frame).cdmCooldownBuffSpellID and InCombatLockdown() then
+            CDM.combatDirtyViewers[VIEWERS.ESSENTIAL] = true
+        else
+            frame:ClearAllPoints()
+
+            if row and col then
+                local xPx, yPx
+                if grow == "RIGHT" then
+                    xPx = col * stepW
+                    yPx = -row * stepH
+                elseif grow == "LEFT" then
+                    xPx = -col * stepW
+                    yPx = -row * stepH
+                elseif grow == "DOWN" then
+                    local dcol = math_floor(idx / maxPerRow)
+                    local drow = idx - dcol * maxPerRow
+                    xPx = dcol * stepW
+                    yPx = -drow * stepH
+                elseif grow == "UP" then
+                    local ucol = math_floor(idx / maxPerRow)
+                    local urow = idx - ucol * maxPerRow
+                    xPx = ucol * stepW
+                    yPx = urow * stepH
+                elseif grow == "CENTER_H" then
+                    local countInRow = (row < totalWraps - 1) and maxPerRow or (count - row * maxPerRow)
+                    xPx = -HalfFloor((countInRow - 1) * stepW) + col * stepW
+                    yPx = HalfFloor((totalWraps - 1) * stepH) - row * stepH
+                elseif grow == "CENTER_V" then
+                    local vcol = math_floor(idx / maxPerRow)
+                    local vrow = idx - vcol * maxPerRow
+                    local countInCol = (vcol < totalWraps - 1) and maxPerRow or (count - vcol * maxPerRow)
+                    xPx = -HalfFloor((totalWraps - 1) * stepW) + vcol * stepW
+                    yPx = HalfFloor((countInCol - 1) * stepH) - vrow * stepH
+                end
+                layout.PlaceFrame(frame, container, selfPoint, anchorPoint, xPx or 0, yPx or 0)
+            else
+                layout.PositionFrameAtSlot(frame, container, idx, iconWSnapped, iconHSnapped, spacingSnapped, grow, count, anchorPoint, selfPoint)
+            end
+
+            if not GetFrameData(frame).cdmCooldownBuffSpellID then
+                frame:Show()
+            end
+        end
     end
 end
 
@@ -404,6 +507,33 @@ function CDM:GetUngroupedCooldownOverride(spellID, specID)
     return specOv[spellID]
 end
 
+function CDM:GetCooldownGlowColorOverride(frame)
+    if not frame then return nil end
+
+    local frameData = GetFrameData(frame)
+    local groupIdx = self.CheckCdGroupMatch and self.CheckCdGroupMatch(frame)
+    local entry
+
+    if groupIdx then
+        local sets = self.CooldownGroupSets
+        local group = sets and sets.groups and sets.groups[groupIdx]
+        entry = GetSpellOverride(group, frameData.cdGroupSpellID)
+    else
+        local candidates = self.GetSpellIDCandidates and self:GetSpellIDCandidates(frame)
+        if candidates then
+            for _, spellID in ipairs(candidates) do
+                entry = self:GetUngroupedCooldownOverride(spellID)
+                if entry then break end
+            end
+        end
+    end
+
+    if entry and entry.glowColorOverride then
+        return entry.glowColor
+    end
+    return nil
+end
+
 function CDM:EnsureUngroupedCooldownOverrideEntry(spellID, specID)
     if not spellID then return nil end
     specID = specID or (self.GetCurrentSpecID and self:GetCurrentSpecID())
@@ -423,6 +553,7 @@ end
 CDM:RegisterRefreshCallback("cooldownGroups", function()
     CDM:MarkSpecDataDirty()
     CDM:RefreshSpecData()
+    RefreshCooldownBuffSelection()
     CDM:RebuildAuraOverlayEnabledMap()
     CDM:UpdateAllCooldownGroupContainers()
 end, 29, { "CD_DATA" })

@@ -422,8 +422,13 @@ local function ForceRestyleAll()
             local viewer = _G[vName]
             if viewer and viewer.itemFramePool then
                 for frame in viewer.itemFramePool:EnumerateActive() do
-                    CDM:ApplyStyle(frame, vName, true)
-                    if vName == VIEWERS.BUFF then
+                    local isCooldownBuff = vName == VIEWERS.BUFF
+                        and CDM.IsCooldownBuffFrame and CDM.IsCooldownBuffFrame(frame)
+                    CDM:ApplyStyle(frame, isCooldownBuff and VIEWERS.ESSENTIAL or vName, true)
+                    if isCooldownBuff and CDM.ApplyPromotedBuffOverrides then
+                        CDM:ApplyPromotedBuffOverrides(frame)
+                    end
+                    if vName == VIEWERS.BUFF and not isCooldownBuff then
                         CDM:RestoreCooldownTextIfHidden(frame)
                         CDM:RestoreVisualsIfHidden(frame)
                         CDM:ApplyUngroupedBuffOverrides(frame)

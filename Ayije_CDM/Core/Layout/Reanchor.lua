@@ -138,6 +138,16 @@ local function IsBuffFrameIncluded(frame)
     return false
 end
 
+local function IsTrackedCustomTrinketFrame(frame)
+    local info = frame and frame.cooldownInfo
+    local slotID = info and info.equipSlot
+    if not slotID then return false end
+    local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
+    local bySpec = CDM.db and CDM.db.cooldownTrinkets
+    local tracked = specID and bySpec and bySpec[specID]
+    return tracked and tracked[slotID] == true or false
+end
+
 local function ResetReanchorTempTables()
     table_wipe(tempBuff)
     for _, t in pairs(tempBuffGroups) do table_wipe(t) end
@@ -160,29 +170,39 @@ local function CollectFramesForReanchor(activeViewer, activeVName, inEditMode)
                     frame:ClearAllPoints()
                     frame:Hide()
                 else
-                    local matchType, matchID, groupIdx = CheckBuffRegistryMatch(frame)
-
-                    if matchType == "buffgroup" and groupIdx then
-                        if not tempBuffGroups[groupIdx] then
-                            tempBuffGroups[groupIdx] = {}
+                    local isCooldownBuff = CDM.IsCooldownBuffFrame and CDM.IsCooldownBuffFrame(frame)
+                    if not isCooldownBuff then
+                        local matchType, _, groupIdx = CheckBuffRegistryMatch(frame)
+                        if matchType == "buffgroup" and groupIdx then
+                            if not tempBuffGroups[groupIdx] then
+                                tempBuffGroups[groupIdx] = {}
+                            end
+                            tempBuffGroups[groupIdx][#tempBuffGroups[groupIdx] + 1] = frame
+                        else
+                            tempBuff[#tempBuff + 1] = frame
                         end
-                        tempBuffGroups[groupIdx][#tempBuffGroups[groupIdx] + 1] = frame
-                    else
-                        tempBuff[#tempBuff + 1] = frame
                     end
                 end
             end
         elseif frame:IsShown() or inEditMode or frame.cooldownInfo then
-            local cdGroupIdx = CheckCdGroupMatch and CheckCdGroupMatch(frame)
-            if cdGroupIdx then
-                if not tempCdGroups[cdGroupIdx] then
-                    tempCdGroups[cdGroupIdx] = {}
+            if IsTrackedCustomTrinketFrame(frame) then
+                if InCombatLockdown() then
+                    CDM.combatDirtyViewers[activeVName] = true
+                else
+                    frame:Hide()
                 end
-                tempCdGroups[cdGroupIdx][#tempCdGroups[cdGroupIdx] + 1] = frame
-            elseif activeVName == VIEWERS.ESSENTIAL then
-                tempEssential[#tempEssential + 1] = frame
-            elseif activeVName == VIEWERS.UTILITY then
-                tempUtility[#tempUtility + 1] = frame
+            else
+                local cdGroupIdx = CheckCdGroupMatch and CheckCdGroupMatch(frame)
+                if cdGroupIdx then
+                    if not tempCdGroups[cdGroupIdx] then
+                        tempCdGroups[cdGroupIdx] = {}
+                    end
+                    tempCdGroups[cdGroupIdx][#tempCdGroups[cdGroupIdx] + 1] = frame
+                elseif activeVName == VIEWERS.ESSENTIAL then
+                    tempEssential[#tempEssential + 1] = frame
+                elseif activeVName == VIEWERS.UTILITY then
+                    tempUtility[#tempUtility + 1] = frame
+                end
             end
         end
     end
@@ -332,6 +352,9 @@ local function DispatchCooldownGroupFrames(activeSelf)
     if CDM.CollectGroupedCustomCooldownFrames then
         CDM.CollectGroupedCustomCooldownFrames(tempCdGroups)
     end
+    if CDM.CollectGroupedCooldownBuffFrames then
+        CDM.CollectGroupedCooldownBuffFrames(tempCdGroups)
+    end
     for groupIdx, groupFrames in pairs(tempCdGroups) do
         if #groupFrames > 0 and activeSelf.PositionCooldownGroupFrames then
             activeSelf:PositionCooldownGroupFrames(groupIdx, groupFrames)
@@ -364,7 +387,8 @@ local function RepositionBuffFrames(viewer)
     for _, t in pairs(tempRepositionGroups) do table_wipe(t) end
 
     for frame in viewer.itemFramePool:EnumerateActive() do
-        if IsBuffFrameIncluded(frame) then
+        local isCooldownBuff = CDM.IsCooldownBuffFrame and CDM.IsCooldownBuffFrame(frame)
+        if IsBuffFrameIncluded(frame) and not isCooldownBuff then
             local spellID = ResolveBaseSpellID(frame)
             if spellID and hiddenBuffSet and hiddenBuffSet[spellID] then
                 -- resource-hidden: skip
@@ -523,6 +547,14 @@ local function RunReanchor()
         PositionBuffFramesForReanchor(activeSelf, activeViewer, activeVName)
         if activeSelf.UpdateBuffGroupOverlays then
             activeSelf:UpdateBuffGroupOverlays(tempBuffGroups, tempBuff)
+        end
+        local essentialViewer = _G[VIEWERS.ESSENTIAL]
+        if essentialViewer then
+            if InCombatLockdown() then
+                CDM.combatDirtyViewers[VIEWERS.ESSENTIAL] = true
+            else
+                activeSelf:ForceReanchor(essentialViewer)
+            end
         end
 
     elseif activeVName == VIEWERS.BUFF_BAR then

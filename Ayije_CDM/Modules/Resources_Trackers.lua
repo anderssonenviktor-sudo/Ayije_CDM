@@ -52,8 +52,8 @@ local feralOverflowingStacks = 0
 local tipOfTheSpearStacks = 0
 local tipOfTheSpearExpirationTime
 
--- Mage charge bars (Frost: Flurry, Fire: Fire Blast). Both are charge spells
--- whose max charges depend on talents, so the counts are re-read rather than
+-- Charge-spell bars use the live spell charge API. Their max charges can depend
+-- on talents, so the counts are re-read rather than
 -- assumed. Values are cached from SPELL_UPDATE_CHARGES and the filling pip
 -- interpolates between events off the charge duration object. State is keyed
 -- by bar key so each spell's bar is fully independent.
@@ -100,10 +100,14 @@ local cachedEssenceBurstGlow = true
 local cachedBar2TagEnabled = false
 local cachedBar2OffsetX = 0
 local cachedBar2OffsetY = 0
--- Per-bar recharge-text style for the Mage charge bars, keyed by bar key.
+-- Per-bar recharge-text style for charge-spell bars, keyed by bar key.
 -- Listed here (rather than derived from MAGE_CHARGE_BARS) because the font
 -- cache refresh below runs before that table is defined.
-local MAGE_CHARGE_BAR_KEYS = { CUSTOM_POWER_TYPES.Flurry, CUSTOM_POWER_TYPES.FireBlast }
+local MAGE_CHARGE_BAR_KEYS = {
+    CUSTOM_POWER_TYPES.Flurry,
+    CUSTOM_POWER_TYPES.FireBlast,
+    CUSTOM_POWER_TYPES.Prescience,
+}
 local cachedMageChargeText = {}
 local cachedMageChargeTickWidth = {}
 
@@ -570,17 +574,23 @@ function CDM:GetTipOfTheSpearExpirationTime()
     return tipOfTheSpearExpirationTime
 end
 
--- Flurry (Frost) and Fire Blast (Fire) are independent bars. Each owns its own
--- charge state, keyed by bar key, so they can be configured and shown
--- separately.
+-- Each charge spell owns charge state keyed by bar key, so the bars can be
+-- configured and shown separately.
 local MAGE_CHARGE_BARS = {
     [CUSTOM_POWER_TYPES.Flurry] = {
         spellID = CDM_C.FLURRY_SPELL_ID,
         specID = 64,
+        fallbackMax = MAGE_CHARGE_FALLBACK_MAX,
     },
     [CUSTOM_POWER_TYPES.FireBlast] = {
         spellID = CDM_C.FIRE_BLAST_SPELL_ID,
         specID = 63,
+        fallbackMax = MAGE_CHARGE_FALLBACK_MAX,
+    },
+    [CUSTOM_POWER_TYPES.Prescience] = {
+        spellID = CDM_C.PRESCIENCE_SPELL_ID,
+        specID = 1473,
+        fallbackMax = 2,
     },
 }
 
@@ -617,7 +627,7 @@ local function SeedMageChargeMax(barKey)
     elseif state.max <= 0 then
         -- Secret before we ever cached a real value: fall back so the bar can
         -- still be laid out rather than vanishing.
-        state.max = MAGE_CHARGE_FALLBACK_MAX
+        state.max = def.fallbackMax
     end
 
     return state.max

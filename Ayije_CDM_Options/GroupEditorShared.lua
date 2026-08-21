@@ -157,6 +157,27 @@ function Shared.AddSpellToGroupList(spellList, spellID)
     return spellID
 end
 
+function Shared.InsertSpellInGroupList(spellList, spellID, insertIndex)
+    if type(spellList) ~= "table" or not Shared.IsUsableSpellID(spellID) then
+        return nil
+    end
+    local previousIndex
+    for i = #spellList, 1, -1 do
+        if AreEquivalentSpellIDs(spellList[i], spellID) then
+            previousIndex = i
+            table.remove(spellList, i)
+            break
+        end
+    end
+    insertIndex = tonumber(insertIndex) or (#spellList + 1)
+    if previousIndex and previousIndex < insertIndex then
+        insertIndex = insertIndex - 1
+    end
+    insertIndex = math.max(1, math.min(insertIndex, #spellList + 1))
+    table.insert(spellList, insertIndex, spellID)
+    return spellID
+end
+
 local function GetOverrideStorageKey(spellID, normalizeToBase)
     if API.GetBuffOverrideStorageKey then
         return API:GetBuffOverrideStorageKey(spellID)
@@ -284,6 +305,11 @@ function Shared.CreateDragDropController(config)
     }
     local dropTargets = {}
     local dragFrameCache = nil
+    local insertMarker = nil
+
+    local function HideInsertMarker()
+        if insertMarker then insertMarker:Hide() end
+    end
 
     local function HideHighlights()
         for _, target in ipairs(dropTargets) do
@@ -291,6 +317,137 @@ function Shared.CreateDragDropController(config)
                 target.frame.highlight:Hide()
             end
         end
+        HideInsertMarker()
+    end
+
+    local function GetOrCreateInsertMarker()
+        if insertMarker then return insertMarker end
+        insertMarker = CreateFrame("Frame", nil, UIParent)
+        insertMarker:SetHeight(2)
+        insertMarker:SetFrameStrata("TOOLTIP")
+        local line = insertMarker:CreateTexture(nil, "OVERLAY")
+        line:SetAllPoints()
+        line:SetColorTexture(1, 0.82, 0, 1)
+        insertMarker.line = line
+        local left = insertMarker:CreateTexture(nil, "OVERLAY")
+        left:SetSize(6, 6)
+        left:SetPoint("CENTER", insertMarker, "LEFT")
+        left:SetColorTexture(1, 0.82, 0, 1)
+        insertMarker.firstCap = left
+        local right = insertMarker:CreateTexture(nil, "OVERLAY")
+        right:SetSize(6, 6)
+        right:SetPoint("CENTER", insertMarker, "RIGHT")
+        right:SetColorTexture(1, 0.82, 0, 1)
+        insertMarker.secondCap = right
+        return insertMarker
+    end
+
+    local function FindHoveredTarget()
+        local fallback
+        local insertionFallback
+        local hasHorizontalTargets = false
+        for _, target in ipairs(dropTargets) do
+            local isValid = not target.canDrop
+                or target.canDrop(dragState.spellID, dragState.sourceGroup)
+            if isValid and target.frame:IsMouseOver() then
+                if (target.splitInsertion or target.horizontalInsertion) and target.insertIndex then
+                    local cursorX, cursorY = GetCursorPosition()
+                    local centerX, centerY = target.frame:GetCenter()
+                    local before
+                    if target.horizontalInsertion then
+                        before = (cursorX / UIParent:GetEffectiveScale()) < (centerX or 0)
+                    else
+                        before = (cursorY / UIParent:GetEffectiveScale()) >= (centerY or 0)
+                    end
+                    target.resolvedInsertIndex = target.insertIndex + (before and 0 or 1)
+                    target.markerAfter = not before
+                    return target
+                end
+                if target.showInsertion and target.insertIndex then
+                    insertionFallback = insertionFallback or target
+                end
+                fallback = fallback or target
+            end
+            if isValid and target.horizontalInsertion then
+                hasHorizontalTargets = true
+            end
+        end
+
+        -- Icon spacing is part of the horizontal drop lane. Resolve gaps to the
+        -- nearest icon instead of treating them as an append-to-end drop.
+        if fallback and hasHorizontalTargets then
+            local cursorX, cursorY = GetCursorPosition()
+            local scale = UIParent:GetEffectiveScale()
+            cursorX, cursorY = cursorX / scale, cursorY / scale
+            local nearest, nearestDistance
+            for _, target in ipairs(dropTargets) do
+                local isValid = not target.canDrop
+                    or target.canDrop(dragState.spellID, dragState.sourceGroup)
+                if isValid and target.highlightFrame == fallback.frame then
+                    local centerX, centerY = target.frame:GetCenter()
+                    local height = target.frame:GetHeight() or 0
+                    if centerX and centerY and math.abs(cursorY - centerY) <= (height / 2 + 8) then
+                        local distance = math.abs(cursorX - centerX)
+                        if not nearestDistance or distance < nearestDistance then
+                            nearest, nearestDistance = target, distance
+                        end
+                    end
+                end
+            end
+            if nearest then
+                local centerX = nearest.frame:GetCenter()
+                local before = cursorX < (centerX or 0)
+                nearest.resolvedInsertIndex = nearest.insertIndex + (before and 0 or 1)
+                nearest.markerAfter = not before
+                return nearest
+            end
+        end
+        return insertionFallback or fallback
+    end
+
+    local function UpdateTargetVisuals(target)
+        local highlightFrame = target and (target.highlightFrame or target.frame)
+        for _, candidate in ipairs(dropTargets) do
+            if candidate.frame.highlight then
+                candidate.frame.highlight:SetShown(candidate.frame == highlightFrame)
+            end
+        end
+
+        local label = target and target.label
+        if type(label) == "function" then
+            label = label(dragState.sourceGroup, dragState.spellID)
+        end
+        if dragFrameCache and dragFrameCache.destination then
+            dragFrameCache.destination:SetText(label or "")
+            dragFrameCache.destination:SetShown(label ~= nil)
+        end
+
+        if not target or not target.showInsertion then
+            HideInsertMarker()
+            return
+        end
+
+        local marker = GetOrCreateInsertMarker()
+        marker:ClearAllPoints()
+        marker.firstCap:ClearAllPoints()
+        marker.secondCap:ClearAllPoints()
+        if target.horizontalInsertion then
+            marker:ClearAllPoints()
+            marker:SetWidth(2)
+            local point = target.markerAfter and "RIGHT" or "LEFT"
+            marker:SetPoint("TOP", target.frame, "TOP" .. point, 0, 0)
+            marker:SetPoint("BOTTOM", target.frame, "BOTTOM" .. point, 0, 0)
+            marker.firstCap:SetPoint("CENTER", marker, "TOP")
+            marker.secondCap:SetPoint("CENTER", marker, "BOTTOM")
+        else
+            marker:SetHeight(2)
+            local point = target.markerAfter and "BOTTOM" or "TOP"
+            marker:SetPoint("TOPLEFT", target.frame, point .. "LEFT", 0, 1)
+            marker:SetPoint("TOPRIGHT", target.frame, point .. "RIGHT", 0, 1)
+            marker.firstCap:SetPoint("CENTER", marker, "LEFT")
+            marker.secondCap:SetPoint("CENTER", marker, "RIGHT")
+        end
+        marker:Show()
     end
 
     local function GetOrCreateDragFrame(spellID)
@@ -301,6 +458,13 @@ function Shared.CreateDragDropController(config)
             local icon = dragFrameCache:CreateTexture(nil, "ARTWORK")
             icon:SetAllPoints()
             dragFrameCache.icon = icon
+            local destination = dragFrameCache:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font12")
+            destination:SetPoint("TOPLEFT", dragFrameCache, "BOTTOMRIGHT", 6, -3)
+            destination:SetJustifyH("LEFT")
+            destination:SetTextColor(1, 0.82, 0)
+            destination:SetShadowColor(0, 0, 0, 1)
+            destination:SetShadowOffset(1, -1)
+            dragFrameCache.destination = destination
             dragFrameCache:SetAlpha(0.8)
         end
         local tex
@@ -321,17 +485,33 @@ function Shared.CreateDragDropController(config)
     end
 
     return {
-        RegisterDropTarget = function(frame, groupIndex)
-            dropTargets[#dropTargets + 1] = { frame = frame, groupIndex = groupIndex }
+        RegisterDropTarget = function(frame, groupIndex, options)
+            options = options or {}
+            dropTargets[#dropTargets + 1] = {
+                frame = frame,
+                groupIndex = groupIndex,
+                label = options.label,
+                insertIndex = options.insertIndex,
+                showInsertion = options.showInsertion,
+                splitInsertion = options.splitInsertion,
+                horizontalInsertion = options.horizontalInsertion,
+                highlightFrame = options.highlightFrame,
+                canDrop = options.canDrop,
+            }
         end,
         ClearDropTargets = function()
             table.wipe(dropTargets)
         end,
-        StartDrag = function(spellID, sourceGroup)
+        StartDrag = function(spellID, sourceGroup, sourceFrame)
             if dragState.active then return end
             dragState.active = true
             dragState.spellID = spellID
             dragState.sourceGroup = sourceGroup
+            dragState.sourceFrame = sourceFrame
+            if sourceFrame then
+                dragState.sourceAlpha = sourceFrame:GetAlpha()
+                sourceFrame:SetAlpha(0.35)
+            end
 
             local df = GetOrCreateDragFrame(spellID)
             dragState.dragFrame = df
@@ -341,11 +521,7 @@ function Shared.CreateDragDropController(config)
                 local x, y = GetCursorPosition()
                 df:ClearAllPoints()
                 df:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x / cachedScale, y / cachedScale)
-                for _, target in ipairs(dropTargets) do
-                    if target.frame.highlight then
-                        target.frame.highlight:SetShown(target.frame:IsMouseOver())
-                    end
-                end
+                UpdateTargetVisuals(FindHoveredTarget())
             end)
         end,
         EndDrag = function()
@@ -360,24 +536,24 @@ function Shared.CreateDragDropController(config)
                 dragState.dragFrame = nil
             end
 
-            local targetGroupIndex = nil
-            local hitDropTarget = false
-            for _, target in ipairs(dropTargets) do
-                if target.frame:IsMouseOver() then
-                    targetGroupIndex = target.groupIndex
-                    hitDropTarget = true
-                    break
-                end
-            end
+            local target = FindHoveredTarget()
+            local targetGroupIndex = target and target.groupIndex or nil
+            local targetInsertIndex = target and (target.resolvedInsertIndex or target.insertIndex) or nil
+            local hitDropTarget = target ~= nil
 
             HideHighlights()
 
             dragState.active = false
             dragState.spellID = nil
             dragState.sourceGroup = nil
+            if dragState.sourceFrame then
+                dragState.sourceFrame:SetAlpha(dragState.sourceAlpha or 1)
+            end
+            dragState.sourceFrame = nil
+            dragState.sourceAlpha = nil
 
             if config and config.onDrop then
-                config.onDrop(spellID, sourceGroup, targetGroupIndex, hitDropTarget)
+                config.onDrop(spellID, sourceGroup, targetGroupIndex, hitDropTarget, targetInsertIndex)
             end
         end,
         CancelDrag = function()
@@ -388,9 +564,14 @@ function Shared.CreateDragDropController(config)
                 dragState.dragFrame = nil
             end
             HideHighlights()
+            if dragState.sourceFrame then
+                dragState.sourceFrame:SetAlpha(dragState.sourceAlpha or 1)
+            end
             dragState.active = false
             dragState.spellID = nil
             dragState.sourceGroup = nil
+            dragState.sourceFrame = nil
+            dragState.sourceAlpha = nil
         end,
     }
 end
@@ -937,9 +1118,11 @@ function Shared.CreateGroupEditorPools(parent, config)
     local groupContainerPool = Shared.CreateWidgetPool(function(p)
         local gc = CreateFrame("Frame", nil, p)
         gc:SetSize(leftWidth, 10)
-        local hl = gc:CreateTexture(nil, "BACKGROUND")
+        local hl = CreateFrame("Frame", nil, gc, "BackdropTemplate")
         hl:SetAllPoints()
-        hl:SetColorTexture(0.2, 0.4, 0.8, highlightAlpha)
+        hl:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
+        hl:SetBackdropBorderColor(1, 0.82, 0, math.max(0.65, highlightAlpha))
+        hl:SetFrameLevel(gc:GetFrameLevel() + 3)
         hl:Hide()
         gc.highlight = hl
         return { root = gc, highlight = hl }

@@ -1111,14 +1111,28 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
 
             if isCooldown then
                 local chargeText = frame.ChargeCount and frame.ChargeCount.Current
-                if chargeText then
-                    chargeText:ClearAllPoints()
-                    Pixel.SetPoint(chargeText, effectiveChargePos, frame, effectiveChargePos, effectiveChargeOX, effectiveChargeOY)
-                    chargeText:SetFont(fontPath, Pixel.FontSize(effectiveChargeFS), textFontOutline)
-                    chargeText:SetTextColor(effectiveChargeColor.r, effectiveChargeColor.g, effectiveChargeColor.b, effectiveChargeColor.a or 1)
+                local function StyleChargeText(text)
+                    if not text then return end
+                    text:ClearAllPoints()
+                    Pixel.SetPoint(text, effectiveChargePos, frame, effectiveChargePos, effectiveChargeOX, effectiveChargeOY)
+                    text:SetIgnoreParentScale(true)
+                    text:SetFont(fontPath, Pixel.FontSize(effectiveChargeFS), textFontOutline)
+                    text:SetTextColor(effectiveChargeColor.r, effectiveChargeColor.g, effectiveChargeColor.b, effectiveChargeColor.a or 1)
                     if fullUpdate then
-                        chargeText:SetDrawLayer("OVERLAY", 7)
-                        chargeText:SetShadowOffset(0, 0)
+                        text:SetDrawLayer("OVERLAY", 7)
+                        text:SetShadowOffset(0, 0)
+                    end
+                end
+                StyleChargeText(chargeText)
+
+                if frameData.cdmCooldownBuffSpellID then
+                    if frame.Applications then
+                        frame.Applications:SetFrameStrata("MEDIUM")
+                        frame.Applications:SetFrameLevel(frame:GetFrameLevel() + 7)
+                    end
+                    local applicationsText = frame.Applications and frame.Applications.Applications
+                    if applicationsText ~= chargeText then
+                        StyleChargeText(applicationsText)
                     end
                 end
             end

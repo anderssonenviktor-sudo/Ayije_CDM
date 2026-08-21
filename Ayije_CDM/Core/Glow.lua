@@ -299,6 +299,7 @@ HideCustomGlow = function(frame)
     frameData.cdmGlowActive = false
     frameData.cdmGlowType = nil
     frameData.cdmGlowOverrideColor = nil
+    frameData.cdmSpellAlertGlow = nil
     activeGlowFrames[frame] = nil
 end
 
@@ -489,6 +490,9 @@ function Glow:RefreshActiveGlows()
         activeGlowSnapshot[i] = nil
         local frameData = GetFrameData(frame)
         if frameData.cdmGlowActive then
+            if frameData.cdmSpellAlertGlow and CDM.GetCooldownGlowColorOverride then
+                frameData.cdmGlowOverrideColor = CDM:GetCooldownGlowColorOverride(frame)
+            end
             local stopFn = glowStopFunctions[frameData.cdmGlowType]
             if stopFn then stopFn(frame) end
             frameData.cdmGlowActive = false
@@ -513,10 +517,14 @@ function Glow:HookAlertManager()
 
         HideBlizzardGlow(frame)
         local frameData = GetFrameData(frame)
-        if frameData.cdmGlowActive and frameData.cdmGlowType == glowCache.type then
+        local overrideColor = CDM.GetCooldownGlowColorOverride
+            and CDM:GetCooldownGlowColorOverride(frame) or nil
+        if frameData.cdmGlowActive and frameData.cdmGlowType == glowCache.type
+            and ColorsMatch(frameData.cdmGlowOverrideColor, overrideColor) then
             return
         end
-        ShowCustomGlow(frame)
+        frameData.cdmSpellAlertGlow = true
+        ShowCustomGlow(frame, overrideColor)
         if frameData.cdmReadyGlowActive then
             Glow:RequestBuffGlow(frame, false)
             frameData.cdmReadyGlowActive = false
@@ -586,4 +594,8 @@ end
 CDM:RegisterRefreshCallback("glow", function()
     Glow:RefreshCache()
 end, 50, { "STYLE" })
+
+CDM:RegisterRefreshCallback("cooldownGlowOverrides", function()
+    Glow:RefreshActiveGlows()
+end, 50, { "CD_DATA" })
 

@@ -1020,6 +1020,14 @@ function CDM:ApplyUngroupedBuffOverrides(frame)
     -- (or that was recycled onto a different spell) gets its real icon back.
     ApplyCustomIcon(frame, frameData, ov)
 
+    if frameData.cdmCooldownBuffSpellID then
+        local textOverrideActive = ov and ov.textOverride == true or false
+        if frameData.cdmPromotedTextOverrideActive and not textOverrideActive and self.ApplyStyle then
+            self:ApplyStyle(frame, CDM_C.VIEWERS.ESSENTIAL, true)
+        end
+        frameData.cdmPromotedTextOverrideActive = textOverrideActive
+    end
+
     if not ov then return end
     matchedSpellID = NormalizeToBase(matchedSpellID) or matchedSpellID
 
@@ -1036,8 +1044,9 @@ function CDM:ApplyUngroupedBuffOverrides(frame)
     end
 
     local useTextOv = ov.textOverride
+    local isPromotedCooldown = frameData.cdmCooldownBuffSpellID ~= nil
 
-    if not ov.hideCooldown then
+    if not ov.hideCooldown and (not isPromotedCooldown or useTextOv) then
         local cdFS = (useTextOv and ov.cooldownFontSize) or (db and db.buffCooldownFontSize or 12)
         local cdColor = (useTextOv and ov.cooldownColor) or (db and db.buffCooldownColor)
         local cdPixelSize = cdFS and Pixel.FontSize(cdFS)
@@ -1051,7 +1060,7 @@ function CDM:ApplyUngroupedBuffOverrides(frame)
     end
 
     local countText = frame.Applications and frame.Applications.Applications
-    if countText then
+    if countText and (not isPromotedCooldown or useTextOv) then
         local countFS = (useTextOv and ov.countFontSize) or (db and db.countFontSize or 15)
         local countColor = (useTextOv and ov.countColor) or (db and db.countColor)
         local countPos = (useTextOv and ov.countPosition) or (db and db.countPositionMain or "TOP")
@@ -1068,5 +1077,185 @@ function CDM:ApplyUngroupedBuffOverrides(frame)
         end
         countText:ClearAllPoints()
         Pixel.SetPoint(countText, countPos, frame, countPos, countOX, countOY)
+    end
+end
+
+local promotedBuffPlaceholders = setmetatable({}, { __mode = "k" })
+
+local function SyncPromotedDebuffBorder(frame, frameData)
+    if not (frame and frame.DebuffBorder) then return end
+
+    if CDM.ApplyBuffVisualState then
+        CDM:ApplyBuffVisualState(frame)
+    end
+
+    if frameData.cdmPromotedDebuffBorderHooked then return end
+    frameData.cdmPromotedDebuffBorderHooked = true
+    hooksecurefunc(frame.DebuffBorder, "Show", function()
+        local currentData = GetFrameData(frame)
+        if currentData.cdmCooldownBuffSpellID and CDM.ApplyBuffVisualState then
+            CDM:ApplyBuffVisualState(frame)
+        end
+    end)
+end
+
+local function IsPromotedBuffActive(frame)
+    local active = frame.isActive
+    if active ~= nil and (not issecretvalue or not issecretvalue(active)) then
+        return active == true
+    end
+    if frame.auraInstanceID ~= nil then return true end
+    return frame:IsShown() and frame.Cooldown and frame.Cooldown:IsVisible() or false
+end
+
+local function SyncPromotedBuffPlaceholder(frame)
+    local placeholder = promotedBuffPlaceholders[frame]
+    if not placeholder then return end
+
+    local frameData = GetFrameData(frame)
+    SyncPromotedDebuffBorder(frame, frameData)
+    local spellID = frameData.cdmCooldownBuffSpellID
+    local override = spellID and CDM:GetUngroupedBuffOverride(spellID)
+    local texture = ResolveCustomIconTexture(override) or (spellID and C_Spell.GetSpellTexture(spellID))
+    if texture then placeholder.Icon:SetTexture(texture) end
+    CDM_C.ApplyIconTexCoord(placeholder.Icon, CDM_C.GetEffectiveZoomAmount())
+
+    local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
+    local color = specID and spellID and CDM:GetSpellBorderColor(specID, spellID)
+        or CDM_C.GetConfigValue("borderColor", CDM_C.WHITE)
+    if placeholder.border and color then
+        placeholder.border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
+    end
+
+    local active = IsPromotedBuffActive(frame)
+    local visualsHidden = frameData.cdmVisualsHidden
+    placeholder.Icon:SetDesaturation(active and 0 or 1)
+    local actualVisible = frame.IsVisible and frame:IsVisible()
+    placeholder:SetAlpha((not visualsHidden and (not active or not actualVisible)) and 1 or 0)
+    if frame.Icon then
+        if active then
+            frame.Icon:SetDesaturation(0)
+            if not visualsHidden then frame.Icon:SetAlpha(1) end
+        else
+            frame.Icon:SetAlpha(0)
+        end
+    end
+    placeholder:Show()
+
+    if CDM.Glow then
+        if active and not visualsHidden then
+            local specID = CDM.GetCurrentSpecID and CDM:GetCurrentSpecID()
+            if specID and CDM.ResolveBuffGlowState then
+                local enabled, glowColor, sourceID = CDM:ResolveBuffGlowState(frame, specID, false)
+                CDM.Glow:RequestBuffGlow(frame, enabled, glowColor, sourceID)
+            else
+                CDM.Glow:RequestBuffGlow(frame, false, nil, nil)
+            end
+        else
+            CDM.Glow:RequestBuffGlow(frame, false, nil, nil)
+        end
+    end
+end
+
+local function EnsurePromotedBuffPlaceholder(frame)
+    local placeholder = promotedBuffPlaceholders[frame]
+    if not placeholder and InCombatLockdown() then
+        CDM.combatDirtyViewers[CDM_C.VIEWERS.ESSENTIAL] = true
+        return
+    end
+    if not placeholder then
+        placeholder = CreateFrame("Frame", nil, UIParent)
+        placeholder:SetAllPoints(frame)
+        placeholder:SetFrameStrata(frame:GetFrameStrata())
+        placeholder:SetFrameLevel(math.max(0, (frame:GetFrameLevel() or 1) - 1))
+        local icon = placeholder:CreateTexture(nil, "ARTWORK")
+        icon:SetAllPoints()
+        Pixel.DisableTextureSnap(icon)
+        placeholder.Icon = icon
+        if CDM.BORDER and CDM.BORDER.CreateBorder then
+            CDM.BORDER:CreateBorder(placeholder)
+            if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[placeholder] = nil end
+        end
+        promotedBuffPlaceholders[frame] = placeholder
+
+        local function QueueSync()
+            C_Timer.After(0, function() SyncPromotedBuffPlaceholder(frame) end)
+        end
+        frame:HookScript("OnShow", QueueSync)
+        frame:HookScript("OnHide", QueueSync)
+        if frame.TriggerAuraAppliedAlert then
+            hooksecurefunc(frame, "TriggerAuraAppliedAlert", QueueSync)
+        end
+        if frame.TriggerAuraRemovedAlert then
+            hooksecurefunc(frame, "TriggerAuraRemovedAlert", QueueSync)
+        end
+        if frame.Cooldown and frame.Cooldown.SetCooldown then
+            hooksecurefunc(frame.Cooldown, "SetCooldown", QueueSync)
+        end
+    end
+
+    if not InCombatLockdown() then
+        placeholder:ClearAllPoints()
+        placeholder:SetAllPoints(frame)
+        placeholder:SetFrameStrata(frame:GetFrameStrata())
+        placeholder:SetFrameLevel(math.max(0, (frame:GetFrameLevel() or 1) - 1))
+    end
+    SyncPromotedBuffPlaceholder(frame)
+end
+
+function CDM:ReleasePromotedBuffPlaceholder(frame)
+    local placeholder = frame and promotedBuffPlaceholders[frame]
+    if not placeholder then return end
+    local frameData = GetFrameData(frame)
+    placeholder:Hide()
+    if not InCombatLockdown() then placeholder:ClearAllPoints() end
+    promotedBuffPlaceholders[frame] = nil
+    if frame.Icon and not frameData.cdmVisualsHidden then
+        frame.Icon:SetAlpha(1)
+    end
+end
+
+CDM:RegisterEvent("UNIT_AURA", function(_, unit)
+    if unit ~= "player" then return end
+    for frame in pairs(promotedBuffPlaceholders) do
+        SyncPromotedBuffPlaceholder(frame)
+    end
+end)
+
+function CDM:ApplyPromotedBuffOverrides(frame)
+    if not frame then return end
+    local frameData = GetFrameData(frame)
+    if frame.Cooldown then frame.Cooldown:SetReverse(true) end
+    self:RestoreCooldownTextIfHidden(frame)
+    self:RestoreVisualsIfHidden(frame)
+    self:ApplyUngroupedBuffOverrides(frame)
+    EnsurePromotedBuffPlaceholder(frame)
+
+    SyncPromotedDebuffBorder(frame, frameData)
+    local specID = self.GetCurrentSpecID and self:GetCurrentSpecID()
+    if specID and CDM.BORDER and CDM.BORDER.CommitResolvedBorderColor then
+        local color
+        local candidates = self.GetSpellIDCandidates and self:GetSpellIDCandidates(frame)
+        if candidates then
+            for _, spellID in ipairs(candidates) do
+                color = self:GetSpellBorderColor(specID, spellID)
+                if color then break end
+            end
+        end
+        color = color or CDM_C.GetConfigValue("borderColor", CDM_C.WHITE)
+        CDM.BORDER:CommitResolvedBorderColor(frame, frameData, color.r, color.g, color.b)
+    end
+
+    if not CDM.Glow then return end
+    if frameData.cdmVisualsHidden or not IsPromotedBuffActive(frame) then
+        CDM.Glow:RequestBuffGlow(frame, false, nil, nil)
+        return
+    end
+
+    if specID and self.ResolveBuffGlowState then
+        local enabled, color, sourceID = self:ResolveBuffGlowState(frame, specID, false)
+        CDM.Glow:RequestBuffGlow(frame, enabled, color, sourceID)
+    else
+        CDM.Glow:RequestBuffGlow(frame, false, nil, nil)
     end
 end

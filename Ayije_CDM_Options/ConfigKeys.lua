@@ -25,6 +25,7 @@ ns.ConfigKeys = {
                 "ungroupedCooldownOverrides",
                 "ungroupedCooldownOrder",
                 "cooldownTrinkets",
+                "cooldownBuffs",
                 "trinketsForceEnable",
                 "customCooldownEntries",
                 "sizeEssRow1",

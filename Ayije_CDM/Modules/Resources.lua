@@ -60,6 +60,7 @@ local CUSTOM_POWER_TYPES = {
     TipOfTheSpear = "TipOfTheSpear",
     Flurry = "Flurry",
     FireBlast = "FireBlast",
+    Prescience = "Prescience",
 }
 CDM.CUSTOM_POWER_TYPES = CUSTOM_POWER_TYPES
 
@@ -108,7 +109,7 @@ local CLASS_BARS = {
     MONK        = { "Energy", "Chi", "Stagger" },
     DRUID       = { "Rage", "Energy", "ComboPoints", "LunarPower", "Ironfur" },
     DEMONHUNTER = { "Fury", "SoulFragments", "DevourerSoulFragments" },
-    EVOKER      = { "Essence" },
+    EVOKER      = { "Essence", "Prescience" },
 }
 
 CDM.POWER_TYPE_TO_BAR_KEY = POWER_TYPE_TO_BAR_KEY
@@ -434,7 +435,7 @@ local SPEC_POWER_MAP = {
     [1480] = {POWER_TYPES.Fury, CUSTOM_POWER_TYPES.DevourerSoulFragments}, -- Devourer Demon Hunter
     [1467] = POWER_TYPES.Essence,                               -- Devastation Evoker
     [1468] = POWER_TYPES.Essence,                               -- Preservation Evoker
-    [1473] = POWER_TYPES.Essence,                               -- Augmentation Evoker
+    [1473] = {POWER_TYPES.Essence, CUSTOM_POWER_TYPES.Prescience}, -- Augmentation Evoker
 }
 CDM.SPEC_POWER_MAP = SPEC_POWER_MAP
 
@@ -635,8 +636,9 @@ local function GetActiveBarKeys()
         for _, pt in ipairs(powers) do
             local barKey = GetBarKey(pt)
             local available = true
-            if pt == CUSTOM_POWER_TYPES.Flurry or pt == CUSTOM_POWER_TYPES.FireBlast then
-                -- Untalented Flurry / unlearned Fire Blast: suppress the bar.
+            if pt == CUSTOM_POWER_TYPES.Flurry or pt == CUSTOM_POWER_TYPES.FireBlast
+                or pt == CUSTOM_POWER_TYPES.Prescience then
+                -- Suppress charge bars when their spell is not learned.
                 available = CDM._Res.IsMageChargeSpellAvailable(pt, specID)
             end
             if available and EvalLoadConditions(barKey, specID) then
@@ -753,12 +755,13 @@ local function UsesPips(powerType)
     )
 end
 
--- Flurry/Fire Blast are segmented bars, not pip bars: a single continuous fill
+-- Charge spells are segmented bars, not pip bars: a single continuous fill
 -- scaled 0..maxCharges, with a recharge sub-bar riding the fill texture's right
 -- edge and tick textures dividing the charges.
 local function IsMageChargeBar(powerType)
     return powerType == CUSTOM_POWER_TYPES.Flurry
         or powerType == CUSTOM_POWER_TYPES.FireBlast
+        or powerType == CUSTOM_POWER_TYPES.Prescience
 end
 
 local function CreatePipBar(powerType)
@@ -1863,11 +1866,9 @@ local SPEC_TRACKER_TOGGLES = {
     [1480] = { "EnableDevourerTracking",         "DisableDevourerTracking" },
 }
 
--- Fire and Frost each own a separate charge bar, but they share one tracker
--- (one event registration covering both spells). Handled outside
--- SPEC_TRACKER_TOGGLES so a Fire<->Frost swap re-enables rather than disables,
--- which pairs() ordering makes unsafe to express as two entries.
-local MAGE_CHARGE_SPECS = { [63] = true, [64] = true }
+-- Charge-spell specs share one event registration. Handle them outside
+-- SPEC_TRACKER_TOGGLES so swaps between two such specs re-enable the tracker.
+local MAGE_CHARGE_SPECS = { [63] = true, [64] = true, [1473] = true }
 
 local function OnSpecChanged()
     if CDM.InvalidateSpecIDCache then
@@ -1901,8 +1902,7 @@ local function OnSpecChanged()
     end
 
     if MAGE_CHARGE_SPECS[newSpecID] then
-        -- Re-enable on every entry, including Fire<->Frost, since the tracked
-        -- spell differs per spec.
+        -- Re-enable on every entry because the tracked spell differs per spec.
         if currentSpecID ~= newSpecID then
             CDM._Res.DisableMageChargeTracking()
             CDM._Res.EnableMageChargeTracking()

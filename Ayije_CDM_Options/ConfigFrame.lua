@@ -128,6 +128,11 @@ local function SelectCategory(id)
     if UI and UI.CloseAllDropdownMenus then
         UI.CloseAllDropdownMenus()
     end
+    -- The Cooldowns editor reuses the Buff per-spell override renderer for
+    -- tracked Buff icons placed in cooldown rows.
+    if id == "layout" then
+        EnsureCategoryBuilt("buffgroups")
+    end
     -- Must precede the SetShown pass below: builders install OnShow handlers
     -- that have to be attached before the page is shown.
     EnsureCategoryBuilt(id)

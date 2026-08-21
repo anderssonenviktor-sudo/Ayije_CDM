@@ -16,7 +16,7 @@ local BAR_DISPLAY_NAMES = {
     SoulFragments = L["Soul Fragments"], Stagger = L["Stagger"],
     MaelstromWeapon = L["Maelstrom Weapon"], DevourerSoulFragments = L["Devourer Souls"],
     Ironfur = L["Ironfur"], IgnorePain = L["Ignore Pain"], TipOfTheSpear = L["Tip of the Spear"],
-    Flurry = L["Flurry"], FireBlast = L["Fire Blast"],
+    Flurry = L["Flurry"], FireBlast = L["Fire Blast"], Prescience = L["Prescience"],
 }
 ns.BAR_DISPLAY_NAMES = BAR_DISPLAY_NAMES
 

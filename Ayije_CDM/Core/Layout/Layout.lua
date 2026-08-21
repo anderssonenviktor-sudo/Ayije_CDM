@@ -866,10 +866,14 @@ local function PlaceIconTopLeft(frame, container, x, y, viewer)
         return
     end
 
-    if viewer and frame:GetParent() ~= viewer then
+    local fd = GetFrameData(frame)
+    if fd.cdmCooldownBuffSpellID and InCombatLockdown() then
+        CDM.combatDirtyViewers[VIEWERS.ESSENTIAL] = true
+        return
+    end
+    if viewer and frame:GetParent() ~= viewer and not fd.cdmCooldownBuffSpellID then
         frame:SetParent(UIParent)
     end
-    local fd = GetFrameData(frame)
     SetCdmAnchor(fd, "TOPLEFT", container, "TOPLEFT", x, y)
     frame:ClearAllPoints()
     Pixel.SetPoint(frame, "TOPLEFT", container, "TOPLEFT", x or 0, y or 0)
@@ -953,8 +957,9 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
     local injectedTrinketCount = 0
     local injFrames = isEssential and CDM.GetTrinketInjectionFrames and CDM.GetTrinketInjectionFrames() or nil
     local customInjFrames = isEssential and CDM.GetCustomCooldownInjectionFrames and CDM.GetCustomCooldownInjectionFrames() or nil
+    local buffInjFrames = isEssential and CDM.GetCooldownBuffInjectionFrames and CDM.GetCooldownBuffInjectionFrames() or nil
 
-    if #icons == 0 and not injFrames and not customInjFrames then
+    if #icons == 0 and not injFrames and not customInjFrames and not buffInjFrames then
         return
     end
 
@@ -994,7 +999,7 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
         end
     end
 
-    if injFrames or customInjFrames then
+    if injFrames or customInjFrames or buffInjFrames then
         -- Injected tracker icons (trinkets, custom cooldowns) with a
         -- user-assigned rank sort in place among the other icons; only
         -- unranked ones cluster at the end of the row.
@@ -1031,6 +1036,21 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
                     record.layoutIndex = 99000 + edgeCount
                 end
                 record.sortID = 95000 + i
+            end
+        end
+        if buffInjFrames then
+            for i, buffFrame in ipairs(buffInjFrames) do
+                local record = AcquireTempIconPositionRecord()
+                record.frame = buffFrame
+                local identity = GetFrameData(buffFrame).cdmCooldownBuffSpellID
+                local rank = rankMap and identity and rankMap[identity]
+                if rank then
+                    record.layoutIndex = -500 + rank
+                else
+                    edgeCount = edgeCount + 1
+                    record.layoutIndex = 99000 + edgeCount
+                end
+                record.sortID = 97000 + i
             end
         end
         injectedTrinketCount = edgeCount
@@ -1091,6 +1111,9 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
             local row = GetRowForIndex(index, totalIcons, isEssential, maxRowEss, maxRowUtil, utilityVertical)
             GetFrameData(frame).cdmRow = row
             self:ApplyStyle(frame, vName)
+            if GetFrameData(frame).cdmCooldownBuffSpellID and self.ApplyPromotedBuffOverrides then
+                self:ApplyPromotedBuffOverrides(frame)
+            end
             local placement = AcquireScratchPlacement()
             placement.frame = frame
             placement.row = row
@@ -1116,6 +1139,9 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
             )
             GetFrameData(frame).cdmRow = row
             self:ApplyStyle(frame, vName)
+            if GetFrameData(frame).cdmCooldownBuffSpellID and self.ApplyPromotedBuffOverrides then
+                self:ApplyPromotedBuffOverrides(frame)
+            end
             local placement = AcquireScratchPlacement()
             placement.frame = frame
             placement.row = row
