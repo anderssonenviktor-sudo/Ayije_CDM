@@ -20,8 +20,8 @@ local CAST_STATE_NONBREAKABLE = 3
 
 local ARCANE_MISSILES_SPELL_ID = 5143
 local ARCANE_MISSILES_BASE_DURATION = 2.5
-local ARCANE_MISSILES_BASE_WAVE_COUNT = 7
-local ARCANE_MISSILES_4P_WAVE_COUNT = 8
+local ARCANE_MISSILES_BASE_MISSILE_COUNT = 7
+local ARCANE_MISSILES_4P_MISSILE_COUNT = 8
 local ARCANE_MISSILES_TICK_EPSILON = 0.01
 
 local GetTime = _G.GetTime
@@ -447,11 +447,11 @@ local function AddArcaneMissilesTickTime(schedule, tickTime, duration)
     schedule[#schedule + 1] = math.min(tickTime, duration)
 end
 
-local function GetArcaneMissilesWaveCount()
+local function GetArcaneMissilesMissileCount()
     if CfgVal("castBarArcaneMissiles4Piece", false) == true then
-        return ARCANE_MISSILES_4P_WAVE_COUNT
+        return ARCANE_MISSILES_4P_MISSILE_COUNT
     end
-    return ARCANE_MISSILES_BASE_WAVE_COUNT
+    return ARCANE_MISSILES_BASE_MISSILE_COUNT
 end
 
 local function BuildArcaneMissilesSchedule(frame, duration, interval, firstTick)
@@ -529,7 +529,7 @@ StopArcaneMissilesTracking = function(frame, preserveSchedule)
     frame.arcaneMissilesPrevStart = nil
     frame.arcaneMissilesPrevTicks = nil
     frame.arcaneMissilesPrevInterval = nil
-    frame.arcaneMissilesPrevWaveCount = nil
+    frame.arcaneMissilesPrevMissileCount = nil
     frame.arcaneMissilesDuration = nil
 end
 
@@ -558,15 +558,16 @@ local function StartArcaneMissilesTracking(frame)
         return
     end
 
-    local waveCount = GetArcaneMissilesWaveCount()
-    local baseTickInterval = ARCANE_MISSILES_BASE_DURATION / waveCount
+    local missileCount = GetArcaneMissilesMissileCount()
+    local intervalCount = missileCount - 1
+    local baseTickInterval = ARCANE_MISSILES_BASE_DURATION / intervalCount
     local interval = baseTickInterval / (ARCANE_MISSILES_BASE_DURATION / duration)
     local firstTick = interval
     if frame.arcaneMissilesActive
         and frame.arcaneMissilesPrevStart
         and frame.arcaneMissilesPrevTicks
         and frame.arcaneMissilesPrevInterval
-        and frame.arcaneMissilesPrevWaveCount == waveCount then
+        and frame.arcaneMissilesPrevMissileCount == missileCount then
         local now = GetTime()
         for _, previousTick in ipairs(frame.arcaneMissilesPrevTicks) do
             local absoluteTick = frame.arcaneMissilesPrevStart + previousTick
@@ -586,7 +587,7 @@ local function StartArcaneMissilesTracking(frame)
     frame.arcaneMissilesFirstTick = firstTick
     frame.arcaneMissilesPrevStart = startTime
     frame.arcaneMissilesPrevInterval = interval
-    frame.arcaneMissilesPrevWaveCount = waveCount
+    frame.arcaneMissilesPrevMissileCount = missileCount
     frame.arcaneMissilesDuration = duration
     BuildArcaneMissilesSchedule(frame, duration, interval, firstTick)
     UpdateArcaneMissilesTicks(frame)
@@ -610,17 +611,18 @@ local function RefreshArcaneMissilesTracking(frame)
     end
 
     local duration = endTimeMS / 1000 - startTimeMS / 1000
-    local waveCount = GetArcaneMissilesWaveCount()
-    if frame.arcaneMissilesPrevWaveCount ~= waveCount then
-        frame.arcaneMissilesFirstTick = duration / waveCount
-        frame.arcaneMissilesPrevInterval = duration / waveCount
-        frame.arcaneMissilesPrevWaveCount = waveCount
+    local missileCount = GetArcaneMissilesMissileCount()
+    local intervalCount = missileCount - 1
+    if frame.arcaneMissilesPrevMissileCount ~= missileCount then
+        frame.arcaneMissilesFirstTick = duration / intervalCount
+        frame.arcaneMissilesPrevInterval = duration / intervalCount
+        frame.arcaneMissilesPrevMissileCount = missileCount
     end
     frame.arcaneMissilesDuration = duration
     BuildArcaneMissilesSchedule(
         frame,
         duration,
-        frame.arcaneMissilesPrevInterval or (duration / waveCount),
+        frame.arcaneMissilesPrevInterval or (duration / intervalCount),
         frame.arcaneMissilesFirstTick
     )
     UpdateArcaneMissilesTicks(frame)
@@ -1229,7 +1231,7 @@ function CDM:CreatePlayerCastBar()
     f.arcaneMissilesPrevStart = nil
     f.arcaneMissilesPrevTicks = nil
     f.arcaneMissilesPrevInterval = nil
-    f.arcaneMissilesPrevWaveCount = nil
+    f.arcaneMissilesPrevMissileCount = nil
     f.arcaneMissilesDuration = nil
 
     f.stageFrame = CreateFrame("Frame", nil, f)
