@@ -402,6 +402,14 @@ local function CreateCastBarTab(page, tabId)
     )
     page.controls.castBarOffsetYSlider:SetPoint("TOPLEFT", page.controls.castBarOffsetXSlider, "BOTTOMLEFT", 0, -10)
 
+    if ns.RegisterAnchorPositionUpdater then
+        ns.RegisterAnchorPositionUpdater("cast_bar", function(x, y)
+            if not page:IsShown() then return end
+            page.controls.castBarOffsetXSlider:UpdateUIValue(x)
+            page.controls.castBarOffsetYSlider:UpdateUIValue(y)
+        end)
+    end
+
     local previewEnabled = CDM.db.castBarPreviewEnabled == true
     page.controls.castBarPreviewEnabled = UI.CreateModernCheckbox(
         scrollChild,

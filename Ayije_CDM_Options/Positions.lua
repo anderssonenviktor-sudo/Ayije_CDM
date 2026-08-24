@@ -135,6 +135,11 @@ local function CreatePositionsTab(page, tabId)
         CDM.db.utilityYOffset = v; API:Refresh("LAYOUT")
     end)
     utilYOffsetSlider:SetPoint("TOPLEFT", essYSlider, "BOTTOMLEFT", 0, -10)
+    if ns.RegisterAnchorPositionUpdater then
+        ns.RegisterAnchorPositionUpdater("utility", function(_, y)
+            utilYOffsetSlider:UpdateUIValue(y)
+        end)
+    end
 
     local buffHeader = UI.CreateHeader(scrollChild, L["Main Buff Container Position"])
     buffHeader:SetPoint("TOPLEFT", utilYOffsetSlider, "BOTTOMLEFT", 0, -15)

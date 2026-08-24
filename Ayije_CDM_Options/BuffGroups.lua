@@ -478,7 +478,7 @@ local function CreateBuffGroupsTab(page)
         local groups = GetSpecGroups()
         if not groups or not groups[groupIndex] then ClearRightPanel(); return end
         local _, rc = CreateRightScrollContent(700)
-        Shared.RenderGroupSettingsPanel({
+        local xSlider, ySlider = Shared.RenderGroupSettingsPanel({
             rc = rc, gd = groups[groupIndex], groupIndex = groupIndex,
             registerDropdown = RegisterRightPanelDropdown,
             saveAndRefresh = SaveAndRefresh, createSlider = CreateSlider, L = L,
@@ -505,6 +505,13 @@ local function CreateBuffGroupsTab(page)
                 buff = L["Buff Viewer Point"],
             },
         })
+        if ns.RegisterAnchorPositionUpdater then
+            ns.RegisterAnchorPositionUpdater("buff_group_" .. groupIndex, function(x, y)
+                if selectedGroupIndex ~= groupIndex or not page:IsShown() then return end
+                xSlider:UpdateUIValue(x)
+                ySlider:UpdateUIValue(y)
+            end)
+        end
     end
 
     local spellIconBorders = {}

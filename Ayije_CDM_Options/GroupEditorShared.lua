@@ -1620,4 +1620,5 @@ function Shared.RenderGroupSettingsPanel(config)
         rc:SetHeight(math.abs(sliderY - 100) + 20)
     end
     UpdateAnchorVisibility()
+    return xSlider, ySlider
 end

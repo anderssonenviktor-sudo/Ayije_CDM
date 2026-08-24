@@ -634,7 +634,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
         local groups = GetSpecGroups()
         if not groups or not groups[groupIndex] then ClearRightPanel(); return end
         local _, rc = CreateRightScrollContent(700)
-        Shared.RenderGroupSettingsPanel({
+        local xSlider, ySlider = Shared.RenderGroupSettingsPanel({
             rc = rc, gd = groups[groupIndex], groupIndex = groupIndex,
             registerDropdown = RegisterRightPanelDropdown,
             saveAndRefresh = SaveAndRefresh, createSlider = CreateSlider, L = L,
@@ -663,6 +663,13 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 utility = L["Utility Viewer Point"],
             },
         })
+        if ns.RegisterAnchorPositionUpdater then
+            ns.RegisterAnchorPositionUpdater("cooldown_group_" .. groupIndex, function(x, y)
+                if selectedGroupIndex ~= groupIndex or not subPage:IsShown() then return end
+                xSlider:UpdateUIValue(x)
+                ySlider:UpdateUIValue(y)
+            end)
+        end
     end
 
     ShowSpellSettings = function(spellID, groupIndex)

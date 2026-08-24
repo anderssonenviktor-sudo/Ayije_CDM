@@ -487,6 +487,13 @@ local function CreateBarsTab(page)
             rc:SetHeight(math.max(C.MaxDepth(), math.abs(sliderY - 92)) + 24)
         end
         UpdateAnchorVisibility()
+        if ns.RegisterAnchorPositionUpdater then
+            ns.RegisterAnchorPositionUpdater("buff_bar_group_" .. groupIndex, function(x, y)
+                if selectedGroupIndex ~= groupIndex or not page:IsShown() then return end
+                xSlider:UpdateUIValue(x)
+                ySlider:UpdateUIValue(y)
+            end)
+        end
     end
 
     -- Per-bar settings, spread across two columns.

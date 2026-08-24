@@ -680,6 +680,14 @@ local function CreateResourcesTab(page, tabId)
             offsetYSlider:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 60
 
+            if ns.RegisterAnchorPositionUpdater then
+                ns.RegisterAnchorPositionUpdater("resource_" .. barKey, function(x, y)
+                    if selectedClassKey ~= classKey or selectedBarKey ~= barKey or not page:IsShown() then return end
+                    offsetXSlider:UpdateUIValue(x)
+                    offsetYSlider:UpdateUIValue(y)
+                end)
+            end
+
         elseif isBarAnchor then
             local spacingSlider = UI.CreateModernSlider(rc, L["Bar Spacing"], -50, 50,
                 CDM:GetBarSettingForClass(classKey, barKey, "barSpacing") or 1,
@@ -796,6 +804,14 @@ local function CreateResourcesTab(page, tabId)
                 end, SLIDER_LABEL_W, SLIDER_W)
             offsetYSlider:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 60
+
+            if ns.RegisterAnchorPositionUpdater then
+                ns.RegisterAnchorPositionUpdater("resource_" .. barKey, function(x, y)
+                    if selectedClassKey ~= classKey or selectedBarKey ~= barKey or not page:IsShown() then return end
+                    offsetXSlider:UpdateUIValue(x)
+                    offsetYSlider:UpdateUIValue(y)
+                end)
+            end
         end
 
         -- Charge bars draw a recharge countdown on the recharging pip instead of
