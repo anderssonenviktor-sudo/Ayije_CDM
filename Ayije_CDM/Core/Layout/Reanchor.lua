@@ -109,6 +109,20 @@ local tempEssential, tempUtility = {}, {}
 local tempAllMainBuffs = {}
 local tempBuffSubCounts = {}
 local EMPTY_FRAMES = {}
+CDM.ungroupedAnchorFrames = CDM.ungroupedAnchorFrames or {}
+
+local function PublishUngroupedAnchorFrames(viewerName, frames)
+    local published = CDM.ungroupedAnchorFrames[viewerName]
+    if not published then
+        published = {}
+        CDM.ungroupedAnchorFrames[viewerName] = published
+    else
+        table_wipe(published)
+    end
+    for i, frame in ipairs(frames) do
+        published[i] = frame
+    end
+end
 
 local reanchorInProgress = {}
 local reanchorPending = {}
@@ -360,9 +374,6 @@ local function DispatchCooldownGroupFrames(activeSelf)
             activeSelf:PositionCooldownGroupFrames(groupIdx, groupFrames)
         end
     end
-    if activeSelf.UpdateCooldownGroupOverlays then
-        activeSelf:UpdateCooldownGroupOverlays(tempCdGroups)
-    end
 end
 
 local function ReanchorErrorHandler(err)
@@ -502,6 +513,7 @@ local function RunReanchor()
         local essContainer = activeSelf.anchorContainers and activeSelf.anchorContainers[VIEWERS.ESSENTIAL]
         local prevWidth = essContainer and essContainer:GetWidth() or 0
         activeSelf:PositionEssentialOrUtilityIcons(tempEssential, activeViewer, activeVName)
+        PublishUngroupedAnchorFrames(VIEWERS.ESSENTIAL, tempEssential)
         if activeSelf.InvalidateEssentialRow1WidthCache then
             activeSelf:InvalidateEssentialRow1WidthCache()
         end
@@ -519,14 +531,11 @@ local function RunReanchor()
 
         CollectCrossViewerGroupFrames(activeVName, inEditMode)
         DispatchCooldownGroupFrames(activeSelf)
-        if activeSelf.UpdateUngroupedCooldownOverlay then
-            activeSelf:UpdateUngroupedCooldownOverlay(VIEWERS.ESSENTIAL, tempEssential)
-        end
-
     elseif activeVName == VIEWERS.UTILITY then
         local utilContainer = activeSelf.anchorContainers and activeSelf.anchorContainers[VIEWERS.UTILITY]
         local prevWidth = utilContainer and utilContainer:GetWidth() or 0
         activeSelf:PositionEssentialOrUtilityIcons(tempUtility, activeViewer, activeVName)
+        PublishUngroupedAnchorFrames(VIEWERS.UTILITY, tempUtility)
         if activeSelf.InvalidateUtilityVisibleCountCache then
             activeSelf:InvalidateUtilityVisibleCountCache()
         end
@@ -539,15 +548,9 @@ local function RunReanchor()
 
         CollectCrossViewerGroupFrames(activeVName, inEditMode)
         DispatchCooldownGroupFrames(activeSelf)
-        if activeSelf.UpdateUngroupedCooldownOverlay then
-            activeSelf:UpdateUngroupedCooldownOverlay(VIEWERS.UTILITY, tempUtility)
-        end
-
     elseif activeVName == VIEWERS.BUFF then
         PositionBuffFramesForReanchor(activeSelf, activeViewer, activeVName)
-        if activeSelf.UpdateBuffGroupOverlays then
-            activeSelf:UpdateBuffGroupOverlays(tempBuffGroups, tempBuff)
-        end
+        PublishUngroupedAnchorFrames(VIEWERS.BUFF, tempBuff)
         local essentialViewer = _G[VIEWERS.ESSENTIAL]
         if essentialViewer then
             if InCombatLockdown() then

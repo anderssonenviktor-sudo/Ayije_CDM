@@ -108,7 +108,7 @@ local function BuildBorders(subPage, page)
     local visualHeader = UI.CreateHeader(rc, L["Visual Elements"])
     visualHeader:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 30
 
-    local reloadWarning = rc:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    local reloadWarning = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_GameFontNormalSmall")
     reloadWarning:SetPoint("LEFT", visualHeader, "RIGHT", 10, 0)
     reloadWarning:SetText(L["* These options require /reload to take effect"])
     UI.SetTextMuted(reloadWarning)

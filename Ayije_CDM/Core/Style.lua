@@ -170,7 +170,7 @@ local function RefreshStyleCache()
     styleCache.swipeColor = CfgValue(db, defaults, "swipeColor", CDM_C.SWIPE_COLOR)
     styleCache.hideGCDSwipe = CfgValue(db, defaults, "hideGCDSwipe", false)
     styleCache.desaturateOutOfResources = CfgValue(db, defaults, "desaturateOutOfResources", true)
-    styleCache.textFont = CfgValue(db, defaults, "textFont", "Friz Quadrata TT")
+    styleCache.textFont = CfgValue(db, defaults, "textFont", "Expressway")
     local rawOutline = CfgValue(db, defaults, "textFontOutline", "OUTLINE")
     styleCache.textFontOutline = CDM_C.ResolveOutlineFlags(rawOutline)
 

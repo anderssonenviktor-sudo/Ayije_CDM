@@ -72,11 +72,39 @@ end
 function Shared.CreateArrowButton(parent, direction, size)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(size, size)
-    local prefix = "common-button-collapseExpand-" .. direction
-    btn:SetNormalAtlas(prefix)
-    btn:SetPushedAtlas(prefix .. "-pressed")
-    btn:SetDisabledAtlas(prefix .. "-disabled")
-    btn:SetHighlightAtlas("common-button-collapseExpand-hover")
+    local icons = {}
+    local offsets = { { 0, 0 }, { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }
+    local iconSize = math.floor(size * 0.72)
+    for i, offset in ipairs(offsets) do
+        local icon = btn:CreateTexture(nil, "ARTWORK", nil, i)
+        icon:SetPoint("CENTER", offset[1], offset[2])
+        icon:SetSize(iconSize, iconSize)
+        icon:SetTexture("Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\collapse")
+        icon:SetVertexColor(1, 0.82, 0, 1)
+        if direction == "up" then icon:SetRotation(math.pi) end
+        icon:SetAlpha(0.8)
+        icons[i] = icon
+    end
+
+    local function SetIconState(alpha, desaturated)
+        for _, icon in ipairs(icons) do
+            icon:SetDesaturated(desaturated)
+            icon:SetAlpha(alpha)
+        end
+    end
+
+    btn:SetScript("OnEnter", function()
+        if btn:IsEnabled() then SetIconState(1, false) end
+    end)
+    btn:SetScript("OnLeave", function()
+        SetIconState(btn:IsEnabled() and 0.8 or 0.3, not btn:IsEnabled())
+    end)
+    btn:SetScript("OnDisable", function()
+        SetIconState(0.3, true)
+    end)
+    btn:SetScript("OnEnable", function()
+        SetIconState(btn:IsMouseOver() and 1 or 0.8, false)
+    end)
     return btn
 end
 
@@ -814,7 +842,7 @@ function Shared.RenderSpellPicker(config)
         rc:SetHeight(math.abs(yOff) + 10)
     end
 
-    local doneBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+    local doneBtn = UI.CreateTextButton(rc)
     doneBtn:SetSize(80, 22)
     doneBtn:SetPoint("TOPRIGHT", rc, "TOPRIGHT", 0, 0)
     doneBtn:SetText(config.doneText or "Back")

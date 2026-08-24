@@ -526,7 +526,7 @@ local function CreateBarsTab(page)
             or L["Unknown"])
         barName:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
 
-        local removeBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+        local removeBtn = UI.CreateTextButton(rc)
         removeBtn:SetSize(100, 22)
         removeBtn:SetPoint("TOPRIGHT", rc, "TOPRIGHT", -4, -2)
         removeBtn:SetText(L["Remove Bar"])
@@ -798,7 +798,7 @@ local function CreateBarsTab(page)
                             end, true)
                             picker:SetPoint("LEFT", suffix, "RIGHT", 10, 0)
 
-                            local delBtn = CreateFrame("Button", nil, pg, "UIPanelButtonTemplate")
+                            local delBtn = UI.CreateTextButton(pg)
                             delBtn:SetSize(22, 20)
                             delBtn:SetPoint("LEFT", picker, "RIGHT", 10, 0)
                             delBtn:SetText("X")
@@ -813,7 +813,7 @@ local function CreateBarsTab(page)
                         end
                     end
 
-                    local addBtn = CreateFrame("Button", nil, pg, "UIPanelButtonTemplate")
+                    local addBtn = UI.CreateTextButton(pg)
                     addBtn:SetSize(120, 22)
                     addBtn:SetPoint("TOPLEFT", col.x, col.y)
                     addBtn:SetText(L["Add Threshold"])
@@ -917,7 +917,7 @@ local function CreateBarsTab(page)
         header:SetText(headerText)
         header:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
 
-        local backBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+        local backBtn = UI.CreateTextButton(rc)
         backBtn:SetSize(70, 22)
         backBtn:SetPoint("TOPLEFT", COL_W + COL_GAP, yOff)
         backBtn:SetText(L["Back"])
@@ -1025,7 +1025,7 @@ local function CreateBarsTab(page)
     -- Toolbar buttons
 
     do
-        local addGroupBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        local addGroupBtn = UI.CreateTextButton(buttonRow)
         addGroupBtn:SetSize(100, 22)
         addGroupBtn:SetPoint("LEFT", 0, 0)
         addGroupBtn:SetText(L["Add Group"])
@@ -1034,7 +1034,7 @@ local function CreateBarsTab(page)
             if not groups then return end
             local newIndex = #groups + 1
             groups[newIndex] = M.CreateGroup(groups,
-                Shared.GetUniqueGroupName(groups, "Group " .. newIndex))
+                Shared.GetUniqueGroupName(groups, "BAR" .. newIndex))
             selectedGroupIndex = newIndex
             selectedBar = nil
             SaveAndRefresh()
@@ -1042,7 +1042,7 @@ local function CreateBarsTab(page)
             ShowGroupSettings(newIndex)
         end)
 
-        local addBarBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        local addBarBtn = UI.CreateTextButton(buttonRow)
         addBarBtn:SetSize(100, 22)
         addBarBtn:SetPoint("LEFT", addGroupBtn, "RIGHT", 6, 0)
         addBarBtn:SetText(L["Add Bar"])

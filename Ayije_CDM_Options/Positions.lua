@@ -51,7 +51,7 @@ local function CreateLockSection(parent, anchor, page, fieldName, lockKey, viewe
     )
     page[fieldName]:SetPoint("TOPLEFT", anchor, "BOTTOMLEFT", 0, -15)
 
-    local helpText = parent:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+    local helpText = parent:CreateFontString(nil, "ARTWORK", "AyijeCDM_GameFontNormalSmall")
     helpText:SetPoint("TOPLEFT", page[fieldName], "BOTTOMLEFT", 0, -5)
     helpText:SetText(L["Unlock to drag the container freely.\nUse sliders below for precise positioning."])
     UI.SetTextMuted(helpText)

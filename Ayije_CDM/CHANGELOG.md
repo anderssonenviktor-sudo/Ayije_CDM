@@ -1,4 +1,6 @@
 ## Changelog
-## v.1.9
+## v.1.11
 
-- Tick marks for Arcane Missiles with new tier set support
+- Anchormode added
+- lads of ux work
+- bug fixes

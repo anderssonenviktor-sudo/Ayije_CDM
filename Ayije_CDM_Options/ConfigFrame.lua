@@ -40,15 +40,15 @@ local function ApplyFooterTextStyle(fontString)
 
     local db = CDM.db or {}
     local defaults = CDM.defaults or {}
-    local fontName = db.textFont or defaults.textFont or "Friz Quadrata TT"
+    local fontName = db.textFont or defaults.textFont or "Expressway"
     local fontOutline = nil
     local fontPath = (LSM and LSM:Fetch("font", fontName)) or CDM_C.FONT_PATH
     local fontSize = (CDM.Pixel and CDM.Pixel.FontSize(24)) or 24
 
-    fontString:SetFontObject("GameFontHighlightSmall")
+    fontString:SetFontObject("AyijeCDM_GameFontHighlightSmall")
     local setOk = fontString:SetFont(fontPath, fontSize, fontOutline)
     if not setOk then
-        fontString:SetFont(STANDARD_TEXT_FONT, fontSize, fontOutline)
+        fontString:SetFont(CDM_C.FONT_PATH, fontSize, fontOutline)
     end
 end
 
@@ -213,10 +213,10 @@ local function CreateConfigFrame()
     title:SetText(L["Cooldown Manager"])
     UI.SetTextColor(title, CDM_C.GOLD or { r = 1, g = 0.82, b = 0, a = 1 })
 
-    local cdmBtn = CreateFrame("Button", nil, titleContainer, "UIPanelButtonTemplate")
-    cdmBtn:SetSize(90, 24)
+    local cdmBtn = UI.CreateTextButton(titleContainer)
+    cdmBtn:SetSize(40, 24)
     cdmBtn:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 22, -32)
-    cdmBtn:SetText(L["Settings"])
+    cdmBtn:SetText(L["CD"])
     cdmBtn:SetScript("OnClick", function()
         if not CooldownViewerSettings then return end
         if CooldownViewerSettings:IsVisible() then
@@ -226,10 +226,20 @@ local function CreateConfigFrame()
         end
     end)
 
-    local editModeBtn = CreateFrame("Button", nil, titleContainer, "UIPanelButtonTemplate")
-    editModeBtn:SetSize(140, 24)
+    local editModeBtn = UI.CreateTextButton(titleContainer)
+    editModeBtn:SetSize(32, 24)
     editModeBtn:SetPoint("LEFT", cdmBtn, "RIGHT", 6, 0)
-    editModeBtn:SetText(L["Edit Mode Settings"])
+    local editModeIcon = editModeBtn:CreateTexture(nil, "OVERLAY", nil, 1)
+    editModeIcon:SetSize(20, 20)
+    editModeIcon:SetPoint("CENTER")
+    editModeIcon:SetTexture("Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\eye")
+    editModeIcon:SetVertexColor(1, 0.82, 0, 1)
+    editModeBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Edit Mode Settings"])
+        GameTooltip:Show()
+    end)
+    editModeBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     local editModeOverlay
     editModeBtn:SetScript("OnClick", function()
@@ -238,6 +248,52 @@ local function CreateConfigFrame()
             editModeOverlay = ns.CreateEditModeOverlay()
         end
         editModeOverlay:Show()
+    end)
+
+    local anchorBtn = UI.CreateTextButton(titleContainer)
+    anchorBtn:SetSize(32, 24)
+    anchorBtn:SetPoint("LEFT", editModeBtn, "RIGHT", 6, 0)
+    local anchorIcon = anchorBtn:CreateTexture(nil, "OVERLAY", nil, 1)
+    anchorIcon:SetSize(16, 16)
+    anchorIcon:SetPoint("CENTER")
+    anchorIcon:SetTexture("Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\anchor")
+    anchorIcon:SetVertexColor(1, 0.82, 0, 1)
+    anchorBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(L["Unlock Anchors"])
+        GameTooltip:Show()
+    end)
+    anchorBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    anchorBtn:SetScript("OnClick", function()
+        if not (ns.ToggleAnchorMode and ns.IsAnchorModeActive) then return end
+        local anchorsActive = ns.IsAnchorModeActive()
+        if anchorsActive then
+            ns.ToggleAnchorMode(anchorBtn)
+            if CooldownViewerSettings and CooldownViewerSettings:IsVisible() then
+                securecall("HideUIPanel", CooldownViewerSettings)
+            end
+            return
+        end
+
+        if CooldownViewerSettings and not CooldownViewerSettings:IsVisible() then
+            securecall("ShowUIPanel", CooldownViewerSettings)
+        end
+        anchorBtn:Disable()
+        C_Timer.After(0, function()
+            CDM:Refresh("LAYOUT")
+            C_Timer.After(0, function()
+                anchorBtn:Enable()
+                if ConfigFrame:IsShown() and not ns.IsAnchorModeActive() then
+                    ns.ToggleAnchorMode(anchorBtn)
+                end
+            end)
+        end)
+    end)
+
+    ConfigFrame:HookScript("OnHide", function()
+        if ns.CloseAnchorMode then
+            ns.CloseAnchorMode()
+        end
     end)
 
     ConfigFrame:SetMovable(true)

@@ -14,6 +14,18 @@ local GOLD = CDM_C.GOLD or { r = 1, g = 0.82, b = 0, a = 1 }
 local WHITE = CDM_C.WHITE or { r = 1, g = 1, b = 1, a = 1 }
 
 local colorSwatchesByKey = {}
+local TEXT_BUTTON_BACKGROUND_ALPHA = 0.6
+
+function UI.CreateTextButton(parent)
+    local button = CreateFrame("Button", nil, parent, "UIPanelButtonGrayTemplate")
+    button:SetNormalFontObject(AyijeCDM_GameFontNormal)
+    button:SetHighlightFontObject(AyijeCDM_GameFontHighlight)
+    button:SetDisabledFontObject(AyijeCDM_GameFontDisable)
+    button:GetNormalTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
+    button:GetPushedTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
+    button:GetDisabledTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
+    return button
+end
 
 local function BroadcastSwatchColor(key, r, g, b, a)
     local swatches = colorSwatchesByKey[key]
@@ -778,22 +790,22 @@ function UI.ShowCustomIconPopup(current, onConfirm)
         status:SetWidth(300)
         status:SetJustifyH("LEFT")
 
-        local spellBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        local spellBtn = UI.CreateTextButton(window)
         spellBtn:SetSize(80, 22)
         spellBtn:SetPoint("BOTTOMLEFT", window, "BOTTOMLEFT", 18, 18)
         spellBtn:SetText(L["Spell"])
 
-        local itemBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        local itemBtn = UI.CreateTextButton(window)
         itemBtn:SetSize(80, 22)
         itemBtn:SetPoint("LEFT", spellBtn, "RIGHT", 8, 0)
         itemBtn:SetText(L["Item"])
 
-        local textureBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        local textureBtn = UI.CreateTextButton(window)
         textureBtn:SetSize(80, 22)
         textureBtn:SetPoint("LEFT", itemBtn, "RIGHT", 8, 0)
         textureBtn:SetText(L["Icon ID"])
 
-        local clearBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+        local clearBtn = UI.CreateTextButton(window)
         clearBtn:SetSize(80, 22)
         clearBtn:SetPoint("LEFT", textureBtn, "RIGHT", 8, 0)
         clearBtn:SetText(L["Clear"])
@@ -925,7 +937,7 @@ function UI.CreateSubTabBar(parent, tabs, initialTab)
                 btn.Right:SetAtlas("Options_Tab_Active_Right", true)
                 btn.label:ClearAllPoints()
                 btn.label:SetPoint("BOTTOM", 0, 6)
-                btn.label:SetFontObject("GameFontHighlightSmall")
+                btn.label:SetFontObject("AyijeCDM_GameFontHighlightSmall")
                 pg:Show()
             else
                 btn.Left:SetAtlas("Options_Tab_Left", true)
@@ -933,7 +945,7 @@ function UI.CreateSubTabBar(parent, tabs, initialTab)
                 btn.Right:SetAtlas("Options_Tab_Right", true)
                 btn.label:ClearAllPoints()
                 btn.label:SetPoint("BOTTOM", 0, 4)
-                btn.label:SetFontObject("GameFontNormalSmall")
+                btn.label:SetFontObject("AyijeCDM_GameFontNormalSmall")
                 pg:Hide()
             end
         end
@@ -960,7 +972,7 @@ function UI.CreateSubTabBar(parent, tabs, initialTab)
         middle:SetPoint("BOTTOMRIGHT", right, "BOTTOMLEFT")
         btn.Middle = middle
 
-        local label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local label = btn:CreateFontString(nil, "OVERLAY", "AyijeCDM_GameFontNormalSmall")
         label:SetPoint("BOTTOM", 0, 4)
         label:SetText(info.label)
         btn.label = label

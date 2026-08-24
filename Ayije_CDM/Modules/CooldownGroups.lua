@@ -21,6 +21,7 @@ local cooldownBuffIdentityByCooldownID = {}
 local cooldownBuffSelectionSpecID
 
 CDM.cooldownGroupContainers = cdContainers
+CDM.cooldownGroupFrames = CDM.cooldownGroupFrames or {}
 
 CDM._auraOverlayEnabled = CDM._auraOverlayEnabled or {}
 CDM._readyGlowCooldownIDs = CDM._readyGlowCooldownIDs or {}
@@ -221,6 +222,17 @@ function CDM:PositionCooldownGroupFrames(groupIndex, frames)
     local spacingSnapped = Snap(spacing)
     local count = #frames
     local maxPerRow = groupData.maxPerRow or 0
+
+    local publishedFrames = CDM.cooldownGroupFrames[groupIndex]
+    if not publishedFrames then
+        publishedFrames = {}
+        CDM.cooldownGroupFrames[groupIndex] = publishedFrames
+    else
+        table_wipe(publishedFrames)
+    end
+    for i, frame in ipairs(frames) do
+        publishedFrames[i] = frame
+    end
 
     container:SetSize(iconWSnapped, iconHSnapped)
 

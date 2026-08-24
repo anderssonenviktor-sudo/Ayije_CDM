@@ -263,7 +263,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
         end)
 
         if check.var == "powerPercent" then
-            local pctLabel = row:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+            local pctLabel = row:CreateFontString(nil, "ARTWORK", "AyijeCDM_GameFontNormalSmall")
             pctLabel:SetPoint("LEFT", valBox, "RIGHT", 3, 0)
             pctLabel:SetText("%")
         end
@@ -311,7 +311,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
         if registerDropdown then registerDropdown(toggleDD) end
     end
 
-    local deleteBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+    local deleteBtn = UI.CreateTextButton(row)
     deleteBtn:SetSize(20, 20)
     deleteBtn:SetText("X")
     deleteBtn:SetPoint("RIGHT", 2, 0)
@@ -380,7 +380,7 @@ local function ShowBarConditions(condPage, condManager, classKey, barKey)
         ruleLabel:SetText(L["Rule"] .. " " .. ruleIdx)
         UI.SetTextSubtle(ruleLabel)
 
-        local deleteRuleBtn = CreateFrame("Button", nil, ruleHeader, "UIPanelButtonTemplate")
+        local deleteRuleBtn = UI.CreateTextButton(ruleHeader)
         deleteRuleBtn:SetSize(20, 20)
         deleteRuleBtn:SetText("X")
         deleteRuleBtn:SetPoint("RIGHT", 2, 0)
@@ -390,7 +390,7 @@ local function ShowBarConditions(condPage, condManager, classKey, barKey)
         end)
 
         if ruleIdx > 1 then
-            local moveUpBtn = CreateFrame("Button", nil, ruleHeader, "UIPanelButtonTemplate")
+            local moveUpBtn = UI.CreateTextButton(ruleHeader)
             moveUpBtn:SetSize(30, 20)
             moveUpBtn:SetText("Up")
             moveUpBtn:SetPoint("RIGHT", deleteRuleBtn, "LEFT", -2, 0)
@@ -401,7 +401,7 @@ local function ShowBarConditions(condPage, condManager, classKey, barKey)
         end
 
         if ruleIdx < #conditions then
-            local moveDownBtn = CreateFrame("Button", nil, ruleHeader, "UIPanelButtonTemplate")
+            local moveDownBtn = UI.CreateTextButton(ruleHeader)
             moveDownBtn:SetSize(30, 20)
             moveDownBtn:SetText("Dn")
             moveDownBtn:SetPoint("RIGHT", deleteRuleBtn, "LEFT", ruleIdx > 1 and -34 or -2, 0)
@@ -452,7 +452,7 @@ local function ShowBarConditions(condPage, condManager, classKey, barKey)
 
         for checkIdx, leaf in ipairs(checks) do
             if checkIdx > 1 then
-                local opLabel = rc:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+                local opLabel = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_GameFontNormalSmall")
                 opLabel:SetPoint("TOPLEFT", 20, yOff)
                 opLabel:SetText("AND")
                 UI.SetTextMuted(opLabel)
@@ -478,7 +478,7 @@ local function ShowBarConditions(condPage, condManager, classKey, barKey)
             yOff = yOff - 34
         end
 
-        local addCheckBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+        local addCheckBtn = UI.CreateTextButton(rc)
         addCheckBtn:SetSize(100, 20)
         addCheckBtn:SetPoint("TOPLEFT", 20, yOff)
         addCheckBtn:SetText(L["+ Add Check"])
@@ -567,7 +567,7 @@ local function ShowBarConditions(condPage, condManager, classKey, barKey)
         yOff = yOff - 10
     end
 
-    local addRuleBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+    local addRuleBtn = UI.CreateTextButton(rc)
     addRuleBtn:SetSize(120, 24)
     addRuleBtn:SetPoint("TOPLEFT", 0, yOff)
     addRuleBtn:SetText(L["+ Add Rule"])

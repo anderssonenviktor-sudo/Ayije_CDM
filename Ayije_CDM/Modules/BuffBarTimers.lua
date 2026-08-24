@@ -424,6 +424,8 @@ local function GetContainerForAnchorTarget(anchorTarget)
 end
 
 local barGroupSets = { groups = nil }
+CDM.buffBarGroupContainers = groupContainers
+CDM.buffBarGroupSets = barGroupSets
 
 local bbDescriptor = GCU and GCU.CreateDescriptor({
     containers = groupContainers,
@@ -1274,9 +1276,7 @@ end
 --
 -- While a config window is open every configured bar is drawn, whether or not
 -- its aura is up, so positions and sizes can actually be judged. This only
--- touches OUR frames: Blizzard's viewer data is never poked (see the note in
--- BuffGroupOverlays.SetConfigWindowActive -- writing to it taints the
--- CooldownViewer pipeline).
+-- touches our frames; Blizzard's CooldownViewer data is never modified.
 
 local previewConfigActive = false
 

@@ -58,7 +58,7 @@ local function FontDropdown(rc, yOff, page)
     local dd = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
     dd:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -10)
     dd:SetWidth(220)
-    dd:SetDefaultText(CDM.db.textFont or "Friz Quadrata TT")
+    dd:SetDefaultText(CDM.db.textFont or CDM.defaults.textFont or "Expressway")
     UI.SetupMediaDropdown(dd, "font",
         function() return CDM.db.textFont end,
         function(name) CDM.db.textFont = name; API:Refresh("STYLE") end,

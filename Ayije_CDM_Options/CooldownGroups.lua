@@ -366,7 +366,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     end
 
     local minGridHeight = GRID_ICON_SIZE + 8
-    local gridScrollbarSpace = 18
+    local gridScrollbarSpace = 26
 
     local iconGridFrame = CreateFrame("Frame", nil, subPage)
     iconGridFrame:SetPoint("TOPLEFT", LEFT_INSET, -26)
@@ -439,7 +439,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     iconGridFrame.highlight:SetColorTexture(1, 0.82, 0, 0.12)
     iconGridFrame.highlight:Hide()
 
-    local iconScrollFrame = CreateFrame("ScrollFrame", nil, iconGridFrame)
+    local iconScrollFrame = CreateFrame("Frame", nil, iconGridFrame)
     iconScrollFrame:SetPoint("TOPLEFT")
     iconScrollFrame:SetWidth(1)
     iconScrollFrame:SetHeight(GRID_ICON_SIZE)
@@ -448,62 +448,35 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
     local iconScrollChild = CreateFrame("Frame", nil, iconScrollFrame)
     iconScrollChild:SetSize(1, GRID_ICON_SIZE)
-    iconScrollFrame:SetScrollChild(iconScrollChild)
+    iconScrollChild:SetPoint("TOPLEFT", iconScrollFrame, "TOPLEFT")
+    local iconScrollOffset = 0
+    local maxIconScroll = 0
 
-    local horizontalScrollBar = CreateFrame("Frame", nil, iconGridFrame)
+    local horizontalScrollBar = CreateFrame("EventFrame", nil, iconGridFrame, "WowTrimHorizontalScrollBar")
     horizontalScrollBar:SetPoint("TOPLEFT", iconScrollFrame, "BOTTOMLEFT", 0, -5)
     horizontalScrollBar:SetPoint("TOPRIGHT", iconScrollFrame, "BOTTOMRIGHT", 0, -5)
-    horizontalScrollBar:SetHeight(14)
+    horizontalScrollBar:SetHeight(25)
 
     local ScrollIconRow
-    local horizontalScroll = CreateFrame("Slider", nil, horizontalScrollBar)
-    horizontalScroll:SetAllPoints()
-    horizontalScroll:SetOrientation("HORIZONTAL")
-    horizontalScroll:SetMinMaxValues(0, 0)
-    horizontalScroll:SetValueStep(1)
-    horizontalScroll:SetObeyStepOnDrag(false)
-    local horizontalTrack = horizontalScroll:CreateTexture(nil, "BACKGROUND")
-    horizontalTrack:SetPoint("LEFT")
-    horizontalTrack:SetPoint("RIGHT")
-    horizontalTrack:SetHeight(12)
-    horizontalTrack:SetColorTexture(0, 0, 0, 1)
-    local horizontalTrackInset = horizontalScroll:CreateTexture(nil, "BORDER")
-    horizontalTrackInset:SetPoint("LEFT", horizontalTrack, "LEFT", 1, 0)
-    horizontalTrackInset:SetPoint("RIGHT", horizontalTrack, "RIGHT", -1, 0)
-    horizontalTrackInset:SetHeight(10)
-    horizontalTrackInset:SetColorTexture(0, 0, 0, 0.55)
-    horizontalScroll:SetThumbTexture("Interface\\Buttons\\WHITE8X8")
-    local horizontalThumb = horizontalScroll:GetThumbTexture()
-    horizontalThumb:SetVertexColor(0.42, 0.42, 0.42, 1)
-    horizontalThumb:SetSize(48, 10)
-    horizontalScroll:SetScript("OnEnter", function()
-        horizontalThumb:SetVertexColor(0.56, 0.56, 0.56, 1)
-    end)
-    horizontalScroll:SetScript("OnLeave", function()
-        horizontalThumb:SetVertexColor(0.42, 0.42, 0.42, 1)
-    end)
-    horizontalScroll:SetScript("OnMouseDown", function()
-        horizontalThumb:SetVertexColor(0.66, 0.66, 0.66, 1)
-    end)
-    horizontalScroll:SetScript("OnMouseUp", function()
-        local shade = horizontalScroll:IsMouseOver() and 0.56 or 0.42
-        horizontalThumb:SetVertexColor(shade, shade, shade, 1)
-    end)
-    horizontalScroll:SetScript("OnValueChanged", function(_, value)
-        local _, maxScroll = horizontalScroll:GetMinMaxValues()
-        iconScrollFrame:SetHorizontalScroll(maxScroll - value)
-    end)
+    local function ApplyIconScroll(value)
+        iconScrollOffset = value
+        iconScrollChild:ClearAllPoints()
+        iconScrollChild:SetPoint("TOPLEFT", iconScrollFrame, "TOPLEFT", -value, 0)
+    end
+    horizontalScrollBar:RegisterCallback(ScrollBarMixin.Event.OnScroll, function(_, scrollPercentage)
+        ApplyIconScroll(maxIconScroll * scrollPercentage)
+    end, iconScrollFrame)
     horizontalScrollBar:Hide()
 
     ScrollIconRow = function(delta)
-        local _, maxScroll = horizontalScroll:GetMinMaxValues()
-        horizontalScroll:SetValue(math.max(0, math.min(maxScroll,
-            horizontalScroll:GetValue() + delta)))
+        if maxIconScroll <= 0 then return end
+        local nextScroll = math.max(0, math.min(maxIconScroll, iconScrollOffset + delta))
+        horizontalScrollBar:SetScrollPercentage(nextScroll / maxIconScroll, true)
     end
     local halfIconStep = GRID_ICON_SIZE / 2
-    iconScrollFrame:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
+    iconScrollFrame:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
     iconGridFrame:EnableMouseWheel(true)
-    iconGridFrame:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
+    iconGridFrame:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
 
     local gridIcons = {}
     local gridIconsActive = 0
@@ -512,7 +485,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     addRowIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
     addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", 4, -4)
     addRowIcon:EnableMouseWheel(true)
-    addRowIcon:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
+    addRowIcon:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
     local addRowBackground = addRowIcon:CreateTexture(nil, "BACKGROUND")
     addRowBackground:SetAllPoints()
     addRowBackground:SetColorTexture(0.055, 0.055, 0.055, 0.65)
@@ -546,7 +519,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     rotateBarIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
     rotateBarIcon:SetPoint("TOPRIGHT", iconActionFrame, "TOPRIGHT", -4, -4)
     rotateBarIcon:EnableMouseWheel(true)
-    rotateBarIcon:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
+    rotateBarIcon:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
     local rotateBarBackground = rotateBarIcon:CreateTexture(nil, "BACKGROUND")
     rotateBarBackground:SetAllPoints()
     rotateBarBackground:SetColorTexture(0.055, 0.055, 0.055, 0.65)
@@ -595,7 +568,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
             overlay:RegisterForClicks("LeftButtonUp", "RightButtonUp")
             overlay:RegisterForDrag("LeftButton")
             overlay:EnableMouseWheel(true)
-            overlay:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(delta * halfIconStep) end)
+            overlay:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
             frame.overlay = overlay
             gridIcons[gridIconsActive] = frame
         end
@@ -723,7 +696,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 note:SetText(L["This icon mirrors the trinket equipped in this slot. Drag it like any other cooldown, or drop it into a group."])
                 UI.SetTextMuted(note)
 
-                local removeBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+                local removeBtn = UI.CreateTextButton(rc)
                 removeBtn:SetSize(140, 22)
                 removeBtn:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
                 removeBtn:SetText(L["Remove Trinket"])
@@ -794,7 +767,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     or L["This icon tracks a custom spell. Drag it like any other cooldown, or drop it into a group."])
                 UI.SetTextMuted(note)
 
-                local removeBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+                local removeBtn = UI.CreateTextButton(rc)
                 removeBtn:SetSize(140, 22)
                 removeBtn:SetPoint("TOPLEFT", note, "BOTTOMLEFT", 0, -16)
                 removeBtn:SetText(L["Remove"])
@@ -871,7 +844,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
             borderPicker:SetPoint("LEFT", borderLabel, "RIGHT", 6, 0)
             yOff = yOff - 30
 
-            local resetHint = rc:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+            local resetHint = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_GameFontHighlightSmall")
             resetHint:SetPoint("TOPLEFT", 0, yOff)
             resetHint:SetText(L["Right-click icon to reset border color"])
             UI.SetTextFaint(resetHint)
@@ -1595,12 +1568,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
             editBox:SetMaxLetters(7)
             editBox:SetJustifyH("CENTER")
 
-            local okayButton = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+            local okayButton = UI.CreateTextButton(window)
             okayButton:SetSize(92, 22)
             okayButton:SetPoint("BOTTOMRIGHT", window, "BOTTOM", -4, 14)
             okayButton:SetText("Accept")
 
-            local cancelButton = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+            local cancelButton = UI.CreateTextButton(window)
             cancelButton:SetSize(92, 22)
             cancelButton:SetPoint("BOTTOMLEFT", window, "BOTTOM", 4, 14)
             cancelButton:SetText(CANCEL)
@@ -2021,7 +1994,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
         local totalSlots = totalSpells
         local rowWidth = totalSlots * GRID_ICON_SIZE + math.max(0, totalSlots - 1) * iconGap
         local maxScroll = math.max(0, rowWidth - availableWidth)
-        local previousScroll = iconScrollFrame:GetHorizontalScroll() or 0
+        local previousScroll = iconScrollOffset
         local startX = maxScroll > 0 and 0 or math.floor((availableWidth - rowWidth) / 2)
         local cfgColor = CDM_C.GetConfigValue("borderColor", { r = 0, g = 0, b = 0, a = 1 })
 
@@ -2029,13 +2002,14 @@ local function CreateCooldownGroupsPanel(subPage, page)
         iconScrollFrame:SetPoint("TOPLEFT", iconGridFrame, "TOPLEFT", 4, -4)
         iconScrollFrame:SetWidth(availableWidth)
         iconScrollChild:SetSize(math.max(availableWidth, rowWidth), GRID_ICON_SIZE)
-        horizontalScroll:SetMinMaxValues(0, maxScroll)
+        maxIconScroll = maxScroll
         horizontalScrollBar:SetShown(maxScroll > 0)
-        if maxScroll > 0 then
-            horizontalThumb:SetWidth(math.min(availableWidth,
-                math.max(23, math.floor(availableWidth * availableWidth / rowWidth))))
-        end
-        horizontalScroll:SetValue(maxScroll - math.min(previousScroll, maxScroll))
+        local nextScroll = math.min(previousScroll, maxScroll)
+        local visiblePercentage = rowWidth > 0 and math.min(1, availableWidth / rowWidth) or 1
+        local panPercentage = maxScroll > 0 and math.min(1, halfIconStep / maxScroll) or 1
+        horizontalScrollBar:Init(visiblePercentage, panPercentage)
+        horizontalScrollBar:SetScrollPercentage(maxScroll > 0 and nextScroll / maxScroll or 0, true)
+        ApplyIconScroll(nextScroll)
 
         addRowIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
         local plusLength = math.floor(GRID_ICON_SIZE * 0.5)
@@ -2389,7 +2363,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     end
 
     do
-        local addGroupBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        local addGroupBtn = UI.CreateTextButton(buttonRow)
         addGroupBtn:SetSize(90, 22)
         addGroupBtn:SetPoint("LEFT", 0, 0)
         addGroupBtn:SetText(L["Add Group"])
@@ -2400,7 +2374,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
             local defs = CDM.defaults or {}
             local defaultSize = defs.sizeEssRow1 or { w = 46, h = 40 }
             specGroups[newIndex] = {
-                name = "Group " .. newIndex,
+                name = "CD" .. newIndex,
                 spells = {},
                 grow = "RIGHT",
                 spacing = 1,
@@ -2426,7 +2400,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
             ShowGroupSettings(newIndex)
         end)
 
-        local addIconBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        local addIconBtn = UI.CreateTextButton(buttonRow)
         addIconBtn:SetSize(90, 22)
         addIconBtn:SetPoint("LEFT", addGroupBtn, "RIGHT", 6, 0)
         addIconBtn:SetText(L["Add Icon"])

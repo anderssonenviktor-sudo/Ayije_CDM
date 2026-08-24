@@ -224,12 +224,12 @@ local function CreateEditModeOverlay()
 
     local disclaimerPending = false
 
-    local applyBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+    local applyBtn = UI.CreateTextButton(window)
     applyBtn:SetSize(APPLY_WIDTH, BUTTON_HEIGHT)
     applyBtn:SetPoint("BOTTOMRIGHT", window, "BOTTOMRIGHT", -paddingX, paddingY + BUTTON_BOTTOM_MARGIN)
     applyBtn:SetText(L["Apply"])
 
-    local cancelBtn = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+    local cancelBtn = UI.CreateTextButton(window)
     cancelBtn:SetSize(CANCEL_WIDTH, BUTTON_HEIGHT)
     cancelBtn:SetPoint("RIGHT", applyBtn, "LEFT", -BUTTONS_GAP, 0)
     cancelBtn:SetText(L["Cancel"])

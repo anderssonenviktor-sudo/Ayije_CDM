@@ -277,7 +277,7 @@ local function CreateImportExportTab(page, tabId)
         end
     end
 
-    local exportBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    local exportBtn = UI.CreateTextButton(page)
     exportBtn:SetSize(120, 26)
     local rowCount = math.max(1, math.ceil(categoryCount / 3))
     local exportBtnYOffset = -12 - (rowCount * rowHeight) - 8
@@ -322,7 +322,7 @@ local function CreateImportExportTab(page, tabId)
     local importBoxFrame, importEditBox = UI.CreateScrollableEditBox(page, 420, 80, 380)
     importBoxFrame:SetPoint("TOPLEFT", importDesc, "BOTTOMLEFT", 0, -8)
 
-    local importBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    local importBtn = UI.CreateTextButton(page)
     importBtn:SetSize(120, 26)
     importBtn:SetPoint("TOPLEFT", importBoxFrame, "BOTTOMLEFT", 0, -6)
     importBtn:SetText(L["Import"])
@@ -340,7 +340,7 @@ local function CreateImportExportTab(page, tabId)
         SetImportStatus(importStatus, success, message)
     end)
 
-    local clearBtn = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
+    local clearBtn = UI.CreateTextButton(page)
     clearBtn:SetSize(80, 26)
     clearBtn:SetPoint("LEFT", importBtn, "RIGHT", 8, 0)
     clearBtn:SetText(L["Clear"])

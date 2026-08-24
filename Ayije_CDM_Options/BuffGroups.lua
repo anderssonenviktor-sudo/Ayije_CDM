@@ -526,7 +526,7 @@ local function CreateBuffGroupsTab(page)
             local currentIcon = existingOv and existingOv.customIcon
             local hasIcon = type(currentIcon) == "table" and tonumber(currentIcon.id)
 
-            local iconBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+            local iconBtn = UI.CreateTextButton(rc)
             iconBtn:SetSize(110, 22)
             iconBtn:SetPoint("TOPLEFT", 0, yOff)
             iconBtn:SetText(L["Custom Icon"])
@@ -787,7 +787,7 @@ local function CreateBuffGroupsTab(page)
         if ttsChecked then
             local ov = existingOv or {}
 
-            local voiceBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+            local voiceBtn = UI.CreateTextButton(rc)
             voiceBtn:SetSize(120, 22)
             voiceBtn:SetText(L["Voice Settings"])
             voiceBtn:SetPoint("LEFT", ttsCheckbox, "LEFT", 200, 0)
@@ -976,7 +976,7 @@ local function CreateBuffGroupsTab(page)
         borderColorPicker:SetPoint("LEFT", borderLabel, "RIGHT", 6, 0)
         yOff = yOff - 30
 
-        local resetHint = rc:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        local resetHint = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_GameFontHighlightSmall")
         resetHint:SetPoint("TOPLEFT", 0, yOff)
         resetHint:SetText(L["Right-click icon to reset border color"])
         UI.SetTextFaint(resetHint)
@@ -1052,7 +1052,7 @@ local function CreateBuffGroupsTab(page)
                 durInput:SetText(tostring(cbEntry and cbEntry.duration or ""))
                 yOff = yOff - 28
 
-                local saveBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+                local saveBtn = UI.CreateTextButton(rc)
                 saveBtn:SetSize(80, 22)
                 saveBtn:SetPoint("TOPLEFT", 0, yOff)
                 saveBtn:SetText(L["Save"])
@@ -1266,7 +1266,7 @@ local function CreateBuffGroupsTab(page)
                 tName:SetPoint("LEFT", tIcon, "RIGHT", 6, 0)
                 tName:SetText((spellName or tostring(sid)) .. "  |cff888888" .. dur .. "s|r")
 
-                local tAddBtn = CreateFrame("Button", nil, tRow, "UIPanelButtonTemplate")
+                local tAddBtn = UI.CreateTextButton(tRow)
                 tAddBtn:SetSize(50, 20)
                 tAddBtn:SetPoint("RIGHT", -4, 0)
                 tAddBtn:SetText(L["Add"])
@@ -1343,7 +1343,7 @@ local function CreateBuffGroupsTab(page)
             end
         end)
 
-        local advAddBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+        local advAddBtn = UI.CreateTextButton(rc)
         advAddBtn:SetSize(100, 22)
         advAddBtn:SetPoint("TOPLEFT", 0, yOff)
 
@@ -1394,7 +1394,7 @@ local function CreateBuffGroupsTab(page)
         UI.SetTextMuted(disclaimer)
         yOff = yOff - (disclaimer:GetStringHeight() + 6)
 
-        local backBtn = CreateFrame("Button", nil, rc, "UIPanelButtonTemplate")
+        local backBtn = UI.CreateTextButton(rc)
         backBtn:SetSize(80, 22)
         backBtn:SetPoint("TOPRIGHT", rc, "TOPRIGHT", 0, 0)
         backBtn:SetText(L["Back"])
@@ -1411,7 +1411,7 @@ local function CreateBuffGroupsTab(page)
     btnRefs.showAddPanel = ShowCustomBuffAddPanel
 
     do
-        local addGroupBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        local addGroupBtn = UI.CreateTextButton(buttonRow)
         addGroupBtn:SetSize(90, 22)
         addGroupBtn:SetPoint("LEFT", 0, 0)
         addGroupBtn:SetText(L["Add Group"])
@@ -1423,7 +1423,7 @@ local function CreateBuffGroupsTab(page)
             local defs = CDM.defaults or {}
             local sizeBuff = defs.sizeBuff or { w = 40, h = 36 }
             specGroups[newIndex] = {
-                name = "Group " .. newIndex,
+                name = "BUFF" .. newIndex,
                 spells = {},
                 grow = "CENTER_H",
                 spacing = 1,
@@ -1451,7 +1451,7 @@ local function CreateBuffGroupsTab(page)
         end)
         btnRefs.group = addGroupBtn
 
-        local addIconBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        local addIconBtn = UI.CreateTextButton(buttonRow)
         addIconBtn:SetSize(90, 22)
         addIconBtn:SetPoint("LEFT", addGroupBtn, "RIGHT", 6, 0)
         addIconBtn:SetText(L["Add Icon"])
@@ -1462,7 +1462,7 @@ local function CreateBuffGroupsTab(page)
         end)
         btnRefs.icon = addIconBtn
 
-        local addCustomBuffBtn = CreateFrame("Button", nil, buttonRow, "UIPanelButtonTemplate")
+        local addCustomBuffBtn = UI.CreateTextButton(buttonRow)
         addCustomBuffBtn:SetSize(140, 22)
         addCustomBuffBtn:SetPoint("LEFT", addIconBtn, "RIGHT", 6, 0)
         addCustomBuffBtn:SetText(L["Add Custom Buff"])

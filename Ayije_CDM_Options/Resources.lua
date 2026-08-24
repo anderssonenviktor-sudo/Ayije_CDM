@@ -201,7 +201,7 @@ local function BuildTicksSection(rc, classKey, barKey, startYOff)
                 end
             end)
 
-            local delBtn = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
+            local delBtn = UI.CreateTextButton(row)
             delBtn:SetSize(20, 20)
             delBtn:SetText("X")
             delBtn:SetPoint("LEFT", valBox, "RIGHT", 6, 0)
@@ -215,7 +215,7 @@ local function BuildTicksSection(rc, classKey, barKey, startYOff)
         end
 
         if #cfg.values < CDM.CONST.MAX_TICKS_PER_BAR then
-            local addBtn = CreateFrame("Button", nil, container, "UIPanelButtonTemplate")
+            local addBtn = UI.CreateTextButton(container)
             addBtn:SetSize(60, 22)
             addBtn:SetText(L["Add"])
             addBtn:SetPoint("TOPLEFT", 0, y)

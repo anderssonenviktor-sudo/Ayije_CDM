@@ -45,7 +45,7 @@ CDM.isEditModeActive = false
 
 
 local function GetSelectedTextFontName()
-    return CDM_C.GetConfigValue("textFont", "Friz Quadrata TT")
+    return CDM_C.GetConfigValue("textFont", "Expressway")
 end
 
 local function OnLSMMediaRegistered(_, mediaType, key)

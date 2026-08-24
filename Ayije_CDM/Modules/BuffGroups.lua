@@ -13,6 +13,7 @@ local table_wipe = table.wipe
 local table_sort = table.sort
 
 CDM.buffGroupContainers = {}
+CDM.buffGroupFrames = CDM.buffGroupFrames or {}
 
 local containers = CDM.buffGroupContainers
 
@@ -545,6 +546,17 @@ function CDM:PositionBuffGroupFrames(groupIndex, frames, activeSpellSetParam, re
     end
 
     container:SetSize(iconWSnapped, iconHSnapped)
+
+    local publishedFrames = CDM.buffGroupFrames[groupIndex]
+    if not publishedFrames then
+        publishedFrames = {}
+        CDM.buffGroupFrames[groupIndex] = publishedFrames
+    else
+        table_wipe(publishedFrames)
+    end
+    for i, frame in ipairs(frames) do
+        publishedFrames[i] = frame
+    end
 
     -- The container is only one icon wide; publish the real icon count.
     CDM.buffGroupLayoutCounts = CDM.buffGroupLayoutCounts or {}

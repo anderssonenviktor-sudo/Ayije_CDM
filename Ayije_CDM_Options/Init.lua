@@ -8,6 +8,23 @@ local CDM = Runtime
 local L = Runtime.L
 
 local CDM_C = CDM.CONST or {}
+local EXPRESSWAY_FONT = CDM_C.FONT_PATH or "Interface\\AddOns\\Ayije_CDM\\Media\\Fonts\\Expressway.TTF"
+
+local function CreateExpresswayFont(name, source, fallbackSize)
+    local font = _G[name] or CreateFont(name)
+    local _, size, flags = source:GetFont()
+    font:SetFont(EXPRESSWAY_FONT, size or fallbackSize, flags or "")
+    font:SetTextColor(source:GetTextColor())
+    font:SetShadowColor(source:GetShadowColor())
+    font:SetShadowOffset(source:GetShadowOffset())
+    return font
+end
+
+CreateExpresswayFont("AyijeCDM_GameFontNormal", GameFontNormal, 12)
+CreateExpresswayFont("AyijeCDM_GameFontHighlight", GameFontHighlight, 12)
+CreateExpresswayFont("AyijeCDM_GameFontDisable", GameFontDisable, 12)
+CreateExpresswayFont("AyijeCDM_GameFontNormalSmall", GameFontNormalSmall, 10)
+CreateExpresswayFont("AyijeCDM_GameFontHighlightSmall", GameFontHighlightSmall, 10)
 
 local function PrintProfileActionError(errCode)
     if errCode == "combat_blocked" then
@@ -18,19 +35,19 @@ local function PrintProfileActionError(errCode)
 end
 
 local Font12 = _G["AyijeCDM_Font12"] or CreateFont("AyijeCDM_Font12")
-Font12:SetFont(STANDARD_TEXT_FONT, 12, "")
+Font12:SetFont(EXPRESSWAY_FONT, 12, "")
 if CDM_C.ApplyShadow then
     CDM_C.ApplyShadow(Font12)
 end
 
 local Font14 = _G["AyijeCDM_Font14"] or CreateFont("AyijeCDM_Font14")
-Font14:SetFont(STANDARD_TEXT_FONT, 14, "")
+Font14:SetFont(EXPRESSWAY_FONT, 14, "")
 if CDM_C.ApplyShadow then
     CDM_C.ApplyShadow(Font14)
 end
 
 local Font18 = _G["AyijeCDM_Font18"] or CreateFont("AyijeCDM_Font18")
-Font18:SetFont(STANDARD_TEXT_FONT, 18, "")
+Font18:SetFont(EXPRESSWAY_FONT, 18, "")
 if CDM_C.ApplyShadow then
     CDM_C.ApplyShadow(Font18)
 end

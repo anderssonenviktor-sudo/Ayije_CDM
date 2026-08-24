@@ -660,7 +660,8 @@ local function SetupDraggableContainer(container, lockKey, overlayOpts)
     end)
 
     if not container.helperText then
-        local helperText = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        local helperText = container:CreateFontString(nil, "OVERLAY")
+        helperText:SetFont(CDM_C.FONT_PATH, Pixel.FontSize(12), "")
         helperText:SetPoint("BOTTOM", container, "TOP", 0, 8)
         helperText:SetText(L["Click and drag to move - /acdm > Positions to lock"])
         helperText:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
@@ -705,15 +706,16 @@ local function SetupDraggableContainer(container, lockKey, overlayOpts)
 
     local function UpdateHelperText()
         local unlocked = not IsLocked()
+        local anchorModeActive = CDM.anchorModeActive == true
         if not InCombatLockdown() then
             container:SetMovable(unlocked)
             container:EnableMouse(unlocked)
         end
         if container.helperText then
-            container.helperText:SetShown(unlocked)
+            container.helperText:SetShown(unlocked and not anchorModeActive)
         end
         if container.dragOverlay then
-            container.dragOverlay:SetShown(unlocked and not IsEditModeActive())
+            container.dragOverlay:SetShown(unlocked and not anchorModeActive and not IsEditModeActive())
         end
     end
     UpdateHelperText()

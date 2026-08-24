@@ -289,7 +289,7 @@ function TAGS:UpdateTagStyle(textFrame)
     local color = barKey and CDM:GetBarSetting(barKey, "tagColor") or { r = 1, g = 1, b = 1, a = 1 }
     local db = CDM.db
 
-    local textFontName = db and db.textFont or "Friz Quadrata TT"
+    local textFontName = db and db.textFont or "Expressway"
     local rawOutline = db and db.textFontOutline or "OUTLINE"
     local textFontOutline = CDM_C.ResolveOutlineFlags(rawOutline)
     local fontPath = LSM:Fetch("font", textFontName) or CDM_C.FONT_PATH

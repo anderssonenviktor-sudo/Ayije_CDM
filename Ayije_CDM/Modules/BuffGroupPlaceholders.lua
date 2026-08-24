@@ -289,3 +289,6 @@ CDM.BuffGroupPlaceholders.SyncGroupedFrameState = SyncGroupedFrameState
 CDM.BuffGroupPlaceholders.ReconcileGroup = ReconcileGroupPlaceholders
 CDM.BuffGroupPlaceholders.ReleaseGroup = ReleaseGroupPlaceholders
 CDM.BuffGroupPlaceholders.ReleaseAll = ReleaseAllPlaceholders
+CDM.BuffGroupPlaceholders.GetGroupFrames = function(groupIndex)
+    return activePlaceholders[groupIndex]
+end

@@ -319,7 +319,7 @@ CDM.defaults = {
     ungroupedCooldownOrder = {},
 
     -- Global Text Settings
-    textFont = "Friz Quadrata TT",
+    textFont = "Expressway",
     textFontOutline = "OUTLINE",
 
     -- Cooldown Timer Text

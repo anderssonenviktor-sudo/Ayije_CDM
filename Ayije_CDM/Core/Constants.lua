@@ -1,8 +1,14 @@
 local AddonName = "Ayije_CDM"
 local CDM = _G[AddonName]
 
+local EXPRESSWAY_FONT = "Interface\\AddOns\\Ayije_CDM\\Media\\Fonts\\Expressway.TTF"
+local LSM = LibStub and LibStub("LibSharedMedia-3.0", true)
+if LSM then
+    LSM:Register("font", "Expressway", EXPRESSWAY_FONT)
+end
+
 CDM.CONST = {
-    FONT_PATH = "Fonts\\FRIZQT__.TTF",
+    FONT_PATH = EXPRESSWAY_FONT,
     FONT_OUTLINE = "OUTLINE",
 
     SHADOW_OFFSET = {
@@ -340,7 +346,7 @@ end
 function CDM.CONST.RefreshBaseFontCache()
     local db = CDM.db
     local defaults = CDM.defaults or {}
-    local textFontName = (db and db.textFont) or defaults.textFont or "Friz Quadrata TT"
+    local textFontName = (db and db.textFont) or defaults.textFont or "Expressway"
     local LSM = GetLSM()
     baseFontCache.fontPath = (LSM and LSM:Fetch("font", textFontName)) or CDM.CONST.FONT_PATH
     local rawOutline = (db and db.textFontOutline) or defaults.textFontOutline or "OUTLINE"

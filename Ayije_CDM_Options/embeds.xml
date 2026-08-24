@@ -18,6 +18,7 @@
     <Script file="ImportExport.lua"/>
     <Script file="Profiles.lua"/>
     <Script file="EditModeOverlay.lua"/>
+    <Script file="AnchorMode.lua"/>
     <Script file="Resources_Conditions.lua"/>
     <Script file="Resources_Load.lua"/>
     <Script file="Resources.lua"/>
