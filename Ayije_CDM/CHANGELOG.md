@@ -1,5 +1,5 @@
 ## Changelog
-## v.1.11
+## v.1.12
 
 - Anchormode added
 - lads of ux work
