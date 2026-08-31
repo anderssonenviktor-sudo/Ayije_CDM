@@ -1,6 +1,6 @@
 ## Changelog
 ## v.1.12
 
-- Anchormode added
-- lads of ux work
+- Anchormode added (top left corner)
+- some ux work
 - bug fixes

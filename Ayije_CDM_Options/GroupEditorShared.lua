@@ -69,22 +69,29 @@ function Shared.GetGrowLabel(growValue)
     return UI.GetOptionLabel(Shared.GROW_OPTIONS, growValue, growValue or "RIGHT")
 end
 
-function Shared.CreateArrowButton(parent, direction, size)
+function Shared.CreateArrowButton(parent, direction, size, iconScale)
     local btn = CreateFrame("Button", nil, parent)
     btn:SetSize(size, size)
     local icons = {}
     local offsets = { { 0, 0 }, { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }
-    local iconSize = math.floor(size * 0.72)
+    local iconSize = math.floor(size * (iconScale or 0.72))
     for i, offset in ipairs(offsets) do
         local icon = btn:CreateTexture(nil, "ARTWORK", nil, i)
         icon:SetPoint("CENTER", offset[1], offset[2])
         icon:SetSize(iconSize, iconSize)
         icon:SetTexture("Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\collapse")
         icon:SetVertexColor(1, 0.82, 0, 1)
-        if direction == "up" then icon:SetRotation(math.pi) end
         icon:SetAlpha(0.8)
         icons[i] = icon
     end
+
+    function btn:SetArrowDirection(nextDirection)
+        local rotation = nextDirection == "up" and math.pi or 0
+        for _, icon in ipairs(icons) do
+            icon:SetRotation(rotation)
+        end
+    end
+    btn:SetArrowDirection(direction)
 
     local function SetIconState(alpha, desaturated)
         for _, icon in ipairs(icons) do
