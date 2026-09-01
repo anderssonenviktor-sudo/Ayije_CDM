@@ -1,6 +1,4 @@
 ## Changelog
-## v.1.12
+## v.1.13
 
-- Anchormode added (top left corner)
-- some ux work
-- bug fixes
+- Arcane missiles ticks update

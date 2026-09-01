@@ -499,8 +499,16 @@ local function UpdateArcaneMissilesTicks(frame)
     if not width or width <= 0 or not height or height <= 0 then return end
     local pixelsPerSecond = width / duration
     local visibleCount = 0
+    local lastVisibleIndex
 
-    for _, tickTime in ipairs(schedule) do
+    for i = #schedule, 1, -1 do
+        if schedule[i] < duration * 0.99 then
+            lastVisibleIndex = i
+            break
+        end
+    end
+
+    for i, tickTime in ipairs(schedule) do
         if tickTime < duration * 0.99 then
             visibleCount = visibleCount + 1
             local tick = frame.arcaneMissilesTicks[visibleCount]
@@ -511,6 +519,11 @@ local function UpdateArcaneMissilesTicks(frame)
             tick:SetSize(2, height * 0.95)
             tick:ClearAllPoints()
             tick:SetPoint("CENTER", frame.castBar, "LEFT", (duration - tickTime) * pixelsPerSecond, 0)
+            if i == lastVisibleIndex then
+                tick:SetColorTexture(1, 0, 0, 1)
+            else
+                tick:SetColorTexture(1, 1, 1, 1)
+            end
             tick:Show()
         end
     end
