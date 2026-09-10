@@ -8,6 +8,7 @@ local HalfFloor = Pixel.HalfFloor
 
 local GetFrameData = CDM.GetFrameData
 local IsSafeNumber = CDM.IsSafeNumber
+local GetSpellTexture = C_Spell.GetSpellTexture
 local VIEWERS = CDM_C.VIEWERS
 
 local math_ceil = math.ceil
@@ -98,6 +99,126 @@ local function GetSpellOverride(groupData, spellID)
 end
 
 CDM.GetCooldownGroupSpellOverride = GetSpellOverride
+
+-------------------------------------------------------------------------------
+-- Per-spell Custom Icon
+-- RefreshSpellTexture is hooked on each frame instance because Blizzard copies
+-- the leaf mixin methods onto viewer items when it creates them.
+-------------------------------------------------------------------------------
+local ApplyCooldownCustomIcon
+
+local function ResolveCooldownCustomIconOverride(frame, frameData)
+    -- Promoted buffs use the buff override table even though they are styled as
+    -- cooldown icons while displayed in the cooldown rows.
+    if frameData.cdmCooldownBuffSpellID then return nil end
+
+    local groupIdx = CDM.CheckCdGroupMatch and CDM.CheckCdGroupMatch(frame)
+    if groupIdx then
+        local sets = CDM.CooldownGroupSets
+        local group = sets and sets.groups and sets.groups[groupIdx]
+        return GetSpellOverride(group, frameData.cdGroupSpellID)
+    end
+
+    local candidates = CDM.GetSpellIDCandidates and CDM:GetSpellIDCandidates(frame)
+    if candidates then
+        for _, spellID in ipairs(candidates) do
+            local ov = CDM:GetUngroupedCooldownOverride(spellID)
+            if ov then return ov end
+        end
+    end
+    return nil
+end
+
+local function ResolveDefaultCooldownIcon(frame, frameData)
+    local identity = frameData.cdGroupSpellID
+    if not identity and frame.cooldownInfo then
+        identity = CDM_C.ResolveViewerEntryIdentity(frame.cooldownInfo)
+    end
+
+    if identity and CDM_C.GetNativeItemCategoryInfo then
+        local _, _, texture = CDM_C.GetNativeItemCategoryInfo(identity)
+        if texture then return texture end
+    end
+
+    local candidates = CDM.GetSpellIDCandidates and CDM:GetSpellIDCandidates(frame)
+    local spellID = candidates and candidates[1]
+    return spellID and GetSpellTexture(spellID) or nil
+end
+
+local function ReassertCooldownCustomIcon(frame)
+    if not CDM.cooldownCustomIconsInUse then return end
+    local frameData = GetFrameData(frame)
+    ApplyCooldownCustomIcon(frame, frameData, ResolveCooldownCustomIconOverride(frame, frameData))
+end
+
+ApplyCooldownCustomIcon = function(frame, frameData, ov)
+    if not CDM.cooldownCustomIconsInUse or frameData.cdmCooldownBuffSpellID then return end
+
+    local icon = frame.Icon
+    if not icon or not icon.SetTexture then return end
+
+    local texture = CDM.ResolveBuffCustomIconTexture and CDM.ResolveBuffCustomIconTexture(ov)
+    if texture then
+        if not frameData.cdmCooldownCustomIconHooked and frame.RefreshSpellTexture then
+            frameData.cdmCooldownCustomIconHooked = true
+            hooksecurefunc(frame, "RefreshSpellTexture", ReassertCooldownCustomIcon)
+        end
+        icon:SetTexture(texture)
+        frameData.cdmCooldownCustomIconOn = true
+    elseif frameData.cdmCooldownCustomIconOn then
+        local real = ResolveDefaultCooldownIcon(frame, frameData)
+        if real then
+            frameData.cdmCooldownCustomIconOn = nil
+            icon:SetTexture(real)
+        end
+    end
+end
+
+function CDM:ApplyCooldownCustomIcon(frame)
+    if not frame then return end
+    local frameData = GetFrameData(frame)
+    ApplyCooldownCustomIcon(frame, frameData, ResolveCooldownCustomIconOverride(frame, frameData))
+end
+
+local function RescanCooldownCustomIconGate()
+    if CDM.cooldownCustomIconsInUse then return end
+    local db = CDM.db
+    if not db then return end
+
+    local function mapHasCustomIcon(map)
+        if type(map) ~= "table" then return false end
+        for _, entry in pairs(map) do
+            if type(entry) == "table" and type(entry.customIcon) == "table" then
+                return true
+            end
+        end
+        return false
+    end
+
+    if type(db.ungroupedCooldownOverrides) == "table" then
+        for _, specOv in pairs(db.ungroupedCooldownOverrides) do
+            if mapHasCustomIcon(specOv) then
+                CDM.cooldownCustomIconsInUse = true
+                return
+            end
+        end
+    end
+
+    if type(db.cooldownGroups) == "table" then
+        for _, specGroups in pairs(db.cooldownGroups) do
+            if type(specGroups) == "table" then
+                for _, group in pairs(specGroups) do
+                    if type(group) == "table" and mapHasCustomIcon(group.spellOverrides) then
+                        CDM.cooldownCustomIconsInUse = true
+                        return
+                    end
+                end
+            end
+        end
+    end
+end
+
+CDM.RescanCooldownCustomIconGate = RescanCooldownCustomIconGate
 
 local function RefreshCooldownBuffSelection()
     table_wipe(cooldownBuffIdentityByCooldownID)
@@ -563,6 +684,7 @@ function CDM:EnsureUngroupedCooldownOverrideEntry(spellID, specID)
 end
 
 CDM:RegisterRefreshCallback("cooldownGroups", function()
+    RescanCooldownCustomIconGate()
     CDM:MarkSpecDataDirty()
     CDM:RefreshSpecData()
     RefreshCooldownBuffSelection()
@@ -573,3 +695,5 @@ end, 29, { "CD_DATA" })
 CDM:RegisterRefreshCallback("cooldownGroups_postViewer", function()
     CDM:UpdateAllCooldownGroupContainers()
 end, 45, { "LAYOUT", "CD_DATA" })
+
+CDM:RegisterEvent("PLAYER_LOGIN", RescanCooldownCustomIconGate)

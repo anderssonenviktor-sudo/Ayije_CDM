@@ -110,7 +110,7 @@ function CDM:ResolveBuffGlowState(frame, specID, preferCategory)
     end
 
     for _, id in ipairs(buffGlowCandidateList) do
-        if self:GetSpellGlowEnabled(specID, id) then
+        if self:GetSpellStackGlow(specID, id) or self:GetSpellGlowEnabled(specID, id) then
             local glowColor = self:GetSpellGlowColor(specID, id)
             frameData.cdmBuffGlowSourceID = id
             return true, glowColor, id
@@ -565,7 +565,7 @@ function CDM:RefreshSpecData()
     local rawSpellRegistry = self.db and self.db.spellRegistry
     local rawSpecRegistry = rawSpellRegistry and rawSpellRegistry[specID]
     self.SpellSets.hasBuffGlows = type(rawSpecRegistry and rawSpecRegistry.glowEnabled) == "table"
-        and next(rawSpecRegistry.glowEnabled) ~= nil or false
+        and next(rawSpecRegistry.glowEnabled) ~= nil or self:HasAnySpellStackGlowConfigured(specID)
 
     if self.RefreshBuffGroupData then
         self:RefreshBuffGroupData()

@@ -133,6 +133,7 @@ function CDM:SetupViewer(vName)
         hooksecurefunc(v, "OnAcquireItemFrame", function(_, itemFrame)
             InstallScaleLockHook(itemFrame)
             local fd = CDM.GetFrameData(itemFrame)
+            if CDM.Glow then CDM.Glow:RetireBuffStackGlow(itemFrame) end
             fd.cdmAnchor = nil
             fd.buffCategorySpellID = nil
             fd.cdGroupSpellID = nil

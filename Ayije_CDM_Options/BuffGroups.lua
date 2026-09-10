@@ -1010,10 +1010,64 @@ local function CreateBuffGroupsTab(page)
             glowEnabled,
             function(checked)
                 API:SetSpellGlowEnabled(currentSpecID, spellID, checked or nil)
+                ShowSpellSettings(spellID, groupIndex)
             end
         )
         glowCheckbox:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 36
+
+        local stackEnabled, stackThreshold, stackOperator = API:GetSpellStackGlow(currentSpecID, spellID)
+        local stackCheckbox = UI.CreateModernCheckbox(rc, L["Glow at Stacks"], stackEnabled, function(checked)
+            API:SetSpellStackGlow(currentSpecID, spellID, checked, stackThreshold, stackOperator)
+            ShowSpellSettings(spellID, groupIndex)
+        end)
+        stackCheckbox:SetPoint("TOPLEFT", 0, yOff)
+        yOff = yOff - 30
+
+        if stackEnabled then
+            local conditionLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            conditionLabel:SetPoint("TOPLEFT", 0, yOff)
+            conditionLabel:SetText(L["Condition:"])
+            local operators = {
+                { value = "lt", label = L["<"] }, { value = "lte", label = L["<="] },
+                { value = "eq", label = L["=="] }, { value = "gte", label = L[">="] },
+                { value = "gt", label = L[">"] },
+            }
+            local operatorDropdown = RegisterRightPanelDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+            operatorDropdown:SetWidth(75)
+            operatorDropdown:SetPoint("LEFT", conditionLabel, "RIGHT", 8, 0)
+            for _, option in ipairs(operators) do
+                if option.value == stackOperator then operatorDropdown:SetDefaultText(option.label) end
+            end
+            UI.SetupValueDropdown(operatorDropdown, operators, function() return stackOperator end, function(value, label)
+                stackOperator = value
+                operatorDropdown:SetDefaultText(label)
+                API:SetSpellStackGlow(currentSpecID, spellID, true, stackThreshold, stackOperator)
+            end)
+            local thresholdInput = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+            thresholdInput:SetSize(60, 20)
+            thresholdInput:SetPoint("LEFT", operatorDropdown, "RIGHT", 12, 0)
+            thresholdInput:SetAutoFocus(false)
+            thresholdInput:SetNumeric(true)
+            thresholdInput:SetMaxLetters(7)
+            thresholdInput:SetText(tostring(stackThreshold))
+            thresholdInput:SetScript("OnEditFocusLost", function(self)
+                local threshold = math.max(1, math.floor(tonumber(self:GetText()) or stackThreshold))
+                self:SetText(tostring(threshold))
+                if threshold == stackThreshold then return end
+                stackThreshold = threshold
+                -- Rebuilding the panel after a mode switch can release focus.
+                if API:GetSpellStackGlow(currentSpecID, spellID) then
+                    API:SetSpellStackGlow(currentSpecID, spellID, true, stackThreshold, stackOperator)
+                end
+            end)
+            thresholdInput:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+            thresholdInput:SetScript("OnEscapePressed", function(self)
+                self:SetText(tostring(stackThreshold))
+                self:ClearFocus()
+            end)
+            yOff = yOff - 36
+        end
 
         local glowColorLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
         glowColorLabel:SetText(L["Glow Color:"])

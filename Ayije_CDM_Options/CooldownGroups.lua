@@ -1011,6 +1011,60 @@ local function CreateCooldownGroupsPanel(subPage, page)
         yOff = yOff - 54
 
         do
+            local existingOv
+            if groupIndex then
+                local groups = GetSpecGroups()
+                local group = groups and groups[groupIndex]
+                existingOv = Shared.GetMergedOverrideEntry(group and group.spellOverrides, spellID)
+            else
+                existingOv = GetUngroupedOverride(spellID)
+            end
+
+            local currentIcon = existingOv and existingOv.customIcon
+            local hasIcon = type(currentIcon) == "table" and tonumber(currentIcon.id)
+            local iconBtn = UI.CreateTextButton(rc)
+            iconBtn:SetSize(110, 22)
+            iconBtn:SetPoint("TOPLEFT", 0, yOff)
+            iconBtn:SetText(L["Custom Icon"])
+            iconBtn:SetScript("OnClick", function()
+                UI.ShowCustomIconPopup(currentIcon, function(result)
+                    local ov = groupIndex and EnsureSpellOverride(groupIndex, spellID)
+                        or EnsureUngroupedOverrideEntry(spellID)
+                    if not ov then return end
+                    ov.customIcon = result
+                    if result then API.cooldownCustomIconsInUse = true end
+                    SaveAndRefresh()
+                    ShowSpellSettings(spellID, groupIndex)
+                end)
+            end)
+
+            local iconPreview = rc:CreateTexture(nil, "ARTWORK")
+            iconPreview:SetSize(20, 20)
+            iconPreview:SetPoint("LEFT", iconBtn, "RIGHT", 8, 0)
+            iconPreview:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+
+            local iconLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font12")
+            iconLabel:SetPoint("LEFT", iconPreview, "RIGHT", 6, 0)
+
+            if hasIcon then
+                local customTexture = CDM.ResolveBuffCustomIconTexture
+                    and CDM.ResolveBuffCustomIconTexture(existingOv)
+                iconPreview:SetTexture(customTexture)
+                local kindLabel = currentIcon.kind == "item" and L["Item"]
+                    or currentIcon.kind == "texture" and L["Icon ID"]
+                    or L["Spell"]
+                iconLabel:SetText(string.format("%s %d", kindLabel, currentIcon.id))
+                UI.SetTextSubtle(iconLabel)
+            else
+                iconPreview:SetTexture(nil)
+                iconLabel:SetText(L["Default"])
+                UI.SetTextFaint(iconLabel)
+            end
+
+            yOff = yOff - 36
+        end
+
+        do
             local auraOv
             if groupIndex then
                 local grps = GetSpecGroups()

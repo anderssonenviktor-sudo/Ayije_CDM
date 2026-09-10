@@ -222,6 +222,7 @@ local function IsRegistrySpecEmpty(node)
     if not IsEmptyTable(node.colors) then return false end
     if node.glowEnabled ~= nil and not IsEmptyTable(node.glowEnabled) then return false end
     if node.glowColors ~= nil and not IsEmptyTable(node.glowColors) then return false end
+    if not IsEmptyTable(node.stackGlows) then return false end
     return true
 end
 
@@ -233,6 +234,7 @@ local function CompactRegistrySpec(specID, profile)
 
     if IsEmptyTable(node.glowEnabled) then node.glowEnabled = nil end
     if IsEmptyTable(node.glowColors) then node.glowColors = nil end
+    if IsEmptyTable(node.stackGlows) then node.stackGlows = nil end
 
     if IsRegistrySpecEmpty(node) then
         db.spellRegistry[specID] = nil
@@ -2072,6 +2074,8 @@ function CDM:ClearStableBaseCache()
 end
 
 function CDM:GetSpellGlowEnabled(specID, spellID)
+    -- Older settings could enable both; the stack condition takes precedence.
+    if self:GetSpellStackGlow(specID, spellID) then return false end
     if not CDM.db or not CDM.db.spellRegistry then return false end
     local reg = CDM.db.spellRegistry[specID]
     if not reg or not reg.glowEnabled then return false end
@@ -2079,6 +2083,16 @@ function CDM:GetSpellGlowEnabled(specID, spellID)
     local base, stable = ResolveWithVariants(spellID)
     if base and reg.glowEnabled[base] == true then return true end
     if stable and reg.glowEnabled[stable] == true then return true end
+    return false
+end
+
+function CDM:HasAnySpellStackGlowConfigured(specID)
+    local registry = self.db and self.db.spellRegistry
+    local reg = registry and registry[specID]
+    if type(reg and reg.stackGlows) ~= "table" then return false end
+    for _, entry in pairs(reg.stackGlows) do
+        if type(entry) == "table" and entry.glowAtStacks == true then return true end
+    end
     return false
 end
 
@@ -2095,7 +2109,13 @@ function CDM:HasAnySpellGlowConfigured(specID)
     end
 
     local reg = self.db.spellRegistry[specID]
-    return type(reg and reg.glowEnabled) == "table" and next(reg.glowEnabled) ~= nil or false
+    return (type(reg and reg.glowEnabled) == "table" and next(reg.glowEnabled) ~= nil)
+        or self:HasAnySpellStackGlowConfigured(specID)
+end
+
+local function DisableStackGlowEntry(reg, spellID)
+    local entry = reg.stackGlows and reg.stackGlows[spellID]
+    if type(entry) == "table" then entry.glowAtStacks = false end
 end
 
 function CDM:SetSpellGlowEnabled(specID, spellID, enabled)
@@ -2106,14 +2126,65 @@ function CDM:SetSpellGlowEnabled(specID, spellID, enabled)
         reg.glowEnabled = {}
     end
 
-    reg.glowEnabled[spellID] = enabled and true or nil
     local base, stable = ResolveWithVariants(spellID)
     if base then reg.glowEnabled[base] = nil end
     if stable then reg.glowEnabled[stable] = nil end
+    reg.glowEnabled[spellID] = enabled and true or nil
+    if enabled then
+        DisableStackGlowEntry(reg, spellID)
+        if base then DisableStackGlowEntry(reg, base) end
+        if stable then DisableStackGlowEntry(reg, stable) end
+    end
 
     CompactRegistrySpec(specID)
     if self.MarkSpecDataDirty then self:MarkSpecDataDirty() end
     self:Refresh()
+end
+
+local stackOperators = { lt = true, lte = true, eq = true, gte = true, gt = true }
+
+function CDM:GetSpellStackGlow(specID, spellID)
+    local registry = self.db and self.db.spellRegistry
+    local reg = registry and registry[specID]
+    local settings = reg and reg.stackGlows
+    if type(settings) ~= "table" then return false, 2, "gte" end
+    local entry = settings[spellID]
+    if not entry then
+        local base, stable = ResolveWithVariants(spellID)
+        entry = (base and settings[base]) or (stable and settings[stable])
+    end
+    if type(entry) ~= "table" then return false, 2, "gte" end
+    local threshold = tonumber(entry.glowStackThreshold) or 2
+    if threshold ~= threshold or threshold == math.huge then threshold = 2 end
+    return entry.glowAtStacks == true, math.max(1, math.floor(threshold)),
+        stackOperators[entry.glowStackOperator] and entry.glowStackOperator or "gte"
+end
+
+function CDM:SetSpellStackGlow(specID, spellID, enabled, threshold, operator)
+    local wasEnabled = self:GetSpellStackGlow(specID, spellID)
+    local reg = EnsureRegistryStructure(specID)
+    if not reg then return end
+    threshold = tonumber(threshold) or 2
+    if threshold ~= threshold or threshold == math.huge then threshold = 2 end
+    threshold = math.max(1, math.floor(threshold))
+    operator = stackOperators[operator] and operator or "gte"
+    reg.stackGlows = reg.stackGlows or {}
+    local base, stable = ResolveWithVariants(spellID)
+    if (enabled or wasEnabled) and reg.glowEnabled then
+        reg.glowEnabled[spellID] = nil
+        if base then reg.glowEnabled[base] = nil end
+        if stable then reg.glowEnabled[stable] = nil end
+    end
+    if base then reg.stackGlows[base] = nil end
+    if stable then reg.stackGlows[stable] = nil end
+    reg.stackGlows[spellID] = {
+        glowAtStacks = enabled and true or false,
+        glowStackThreshold = threshold,
+        glowStackOperator = operator,
+    }
+    CompactRegistrySpec(specID)
+    if self.MarkSpecDataDirty then self:MarkSpecDataDirty() end
+    self:Refresh("BUFF_DATA")
 end
 
 function CDM:GetSpellGlowColor(specID, spellID)

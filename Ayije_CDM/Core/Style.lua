@@ -1462,6 +1462,10 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
         end
     end
 
+    if isCooldown and self.ApplyCooldownCustomIcon then
+        self:ApplyCooldownCustomIcon(frame)
+    end
+
     if fullUpdate then
         frameData.hooksInitialized = true
     end

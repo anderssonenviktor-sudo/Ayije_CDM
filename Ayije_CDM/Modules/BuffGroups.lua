@@ -1113,10 +1113,11 @@ end
 
 local function IsPromotedBuffActive(frame)
     local active = frame.isActive
-    if active ~= nil and (not issecretvalue or not issecretvalue(active)) then
+    if (not issecretvalue or not issecretvalue(active)) and active ~= nil then
         return active == true
     end
-    if frame.auraInstanceID ~= nil then return true end
+    local iid = frame.auraInstanceID
+    if (issecretvalue and issecretvalue(iid)) or iid ~= nil then return true end
     return frame:IsShown() and frame.Cooldown and frame.Cooldown:IsVisible() or false
 end
 

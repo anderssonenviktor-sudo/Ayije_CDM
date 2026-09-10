@@ -10,6 +10,8 @@ local GetFrameData = CDM.GetFrameData
 local pairs = pairs
 local ipairs = ipairs
 local type = type
+local issecretvalue = issecretvalue
+local GetAuraDataByAuraInstanceID = C_UnitAuras.GetAuraDataByAuraInstanceID
 
 CDM.Glow = CDM.Glow or {}
 local Glow = CDM.Glow
@@ -19,6 +21,10 @@ local activeGlowFrames = setmetatable({}, { __mode = "k" })
 local pendingHideFrames = setmetatable({}, { __mode = "k" })
 local buffHookedFrames = setmetatable({}, { __mode = "k" })
 local HideCustomGlow
+local StopStackGlow, FeedStackGlow, ConfigureStackGlow, RetireStackGlow
+local RefreshStackGlows
+local stackGlowFrames = setmetatable({}, { __mode = "k" })
+local stackRefreshPending = false
 
 local debounceDrainer = CreateFrame("Frame")
 debounceDrainer:Hide()
@@ -28,6 +34,10 @@ debounceDrainer:SetScript("OnUpdate", function(self)
         pendingHideFrames[frame] = nil
         HideCustomGlow(frame)
         CDM:ApplyAuraOverride(frame)
+    end
+    if stackRefreshPending then
+        stackRefreshPending = false
+        RefreshStackGlows()
     end
 end)
 
@@ -230,7 +240,19 @@ local glowStopFunctions = {
     end,
 
     button = function(frame)
+        local stack = GetFrameData(frame).stackGlow
+        local shown = frame:IsShown()
+        if stack then
+            -- Release immediately instead of fading with detached stack masks.
+            local button = frame._ButtonGlow
+            if button then
+                button.animIn:Stop()
+                button.animOut:Stop()
+            end
+            frame:Hide()
+        end
         LCG.ButtonGlow_Stop(frame)
+        if stack and shown then frame:Show() end
     end,
 
     proc = function(frame)
@@ -247,6 +269,34 @@ local glowStopFunctions = {
     end,
 }
 
+local function DetachStackMasks(frame)
+    local state = GetFrameData(frame).stackGlow
+    if not state then return end
+    for texture, maskCount in pairs(state.textures) do
+        texture:RemoveMaskTexture(state.gate.mask)
+        if maskCount == 2 then texture:RemoveMaskTexture(state.gate2.mask) end
+        state.textures[texture] = nil
+    end
+end
+
+local glowFrameKeys = {
+    pixel = "_PixelGlow" .. GLOW_KEY,
+    autocast = "_AutoCastGlow" .. GLOW_KEY,
+    button = "_ButtonGlow",
+    proc = "_ProcGlow" .. GLOW_KEY,
+}
+
+local function AttachStackRegions(state, ...)
+    for i = 1, select("#", ...) do
+        local texture = select(i, ...)
+        if texture:IsObjectType("Texture") then
+            texture:AddMaskTexture(state.gate.mask)
+            if state.operator == "eq" then texture:AddMaskTexture(state.gate2.mask) end
+            state.textures[texture] = state.operator == "eq" and 2 or 1
+        end
+    end
+end
+
 local function ShowCustomGlow(frame, overrideColor)
     if not LCG then return end
 
@@ -258,6 +308,7 @@ local function ShowCustomGlow(frame, overrideColor)
     end
 
     if frameData.cdmGlowActive then
+        DetachStackMasks(frame)
         local stopFn = glowStopFunctions[frameData.cdmGlowType]
         if stopFn then stopFn(frame) end
         frameData.cdmGlowActive = false
@@ -276,6 +327,11 @@ local function ShowCustomGlow(frame, overrideColor)
     if fn then
         local frameLevel = frame:GetFrameLevel() + 5
         fn(frame, frameLevel, overrideColor)
+        local state = frameData.stackGlow
+        local renderer = frame[glowFrameKeys[glowCache.type]]
+        if state and state.threshold and renderer then
+            AttachStackRegions(state, renderer:GetRegions())
+        end
         frameData.cdmGlowActive = true
         frameData.cdmGlowType = glowCache.type
         frameData.cdmGlowOverrideColor = overrideColor
@@ -293,6 +349,7 @@ HideCustomGlow = function(frame)
 
     local fn = glowStopFunctions[frameData.cdmGlowType]
     if fn then
+        DetachStackMasks(frame)
         fn(frame)
     end
 
@@ -371,7 +428,7 @@ local function IsBuffGlowSourceStillValid(frame, sourceID)
     if not specID then
         return false
     end
-    if not CDM:GetSpellGlowEnabled(specID, sourceID) then
+    if not CDM:GetSpellStackGlow(specID, sourceID) and not CDM:GetSpellGlowEnabled(specID, sourceID) then
         return false
     end
 
@@ -405,6 +462,10 @@ local function EnsureBuffGlowTargetHooks(frame)
 
     frame:HookScript("OnShow", function(self)
         local frameData = GetFrameData(self)
+        if frameData.stackGlow and frameData.stackGlow.threshold then
+            RefreshStackGlows(self)
+            return
+        end
         if not frameData.cdmBuffGlowWanted then
             return
         end
@@ -433,7 +494,15 @@ local function EnsureBuffGlowTargetHooks(frame)
         local host = frameData.cdmBuffGlowHost
         if host and frameData.cdmBuffGlowWanted then
             SyncBuffGlowHostFrame(self, host)
+            if frameData.stackGlow and frameData.stackGlow.threshold then
+                FeedStackGlow(self)
+            end
         end
+    end)
+
+    frame:HookScript("OnHide", function(self)
+        local state = GetFrameData(self).stackGlow
+        if state then StopStackGlow(state) end
     end)
 end
 
@@ -447,6 +516,20 @@ function Glow:RequestBuffGlow(frame, enabled, overrideColor, sourceID)
     frameData.cdmBuffGlowSourceID = sourceID
 
     EnsureBuffGlowTargetHooks(frame)
+
+    local stackEnabled, threshold, operator
+    if enabled and sourceID and CDM.GetSpellStackGlow then
+        stackEnabled, threshold, operator = CDM:GetSpellStackGlow(CDM:GetCurrentSpecID(), sourceID)
+    end
+    if stackEnabled then
+        local host = EnsureBuffGlowHostFrame(frame)
+        SyncBuffGlowHostFrame(frame, host)
+        ConfigureStackGlow(frame, host, sourceID, threshold, operator)
+        FeedStackGlow(frame)
+        return
+    elseif frameData.stackGlow and frameData.stackGlow.threshold then
+        RetireStackGlow(frame)
+    end
 
     if enabled then
         local host = EnsureBuffGlowHostFrame(frame)
@@ -466,6 +549,217 @@ function Glow:RequestBuffGlow(frame, enabled, overrideColor, sourceID)
     end
 end
 
+local stackRanges = {
+    gte = { -1, 0, false }, gt = { 0, 1, false },
+    lt = { -1, 0, true }, lte = { 0, 1, true },
+    eq = { -1, 0, false },
+}
+
+local function IsSecret(value)
+    return issecretvalue and issecretvalue(value)
+end
+
+local function ReadBuffApplications(frame)
+    local iid = frame.auraInstanceID
+    local unit = frame.auraDataUnit
+    if not IsSecret(iid) and iid and not IsSecret(unit) and unit then
+        local ok, data = pcall(GetAuraDataByAuraInstanceID, unit, iid)
+        if ok and not IsSecret(data) and data then
+            local applications = data.applications
+            if IsSecret(applications) or applications ~= nil then return applications end
+        end
+    end
+    local cached = frame.auraDataCached
+    if not IsSecret(cached) and cached then
+        return cached.applications
+    end
+end
+
+local function StackMatches(value, operator, threshold)
+    if operator == "lt" then return value < threshold end
+    if operator == "lte" then return value <= threshold end
+    if operator == "eq" then return value == threshold end
+    if operator == "gt" then return value > threshold end
+    return value >= threshold
+end
+
+local function CreateStackGate(host)
+    local bar = CreateFrame("StatusBar", nil, host)
+    bar:EnableMouse(false)
+    bar:SetOrientation("HORIZONTAL")
+    bar:SetReverseFill(false)
+    bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+    local fill = bar:GetStatusBarTexture()
+    fill:SetAlpha(0)
+    -- The mask's parent must also be an ancestor of the LCG textures.
+    local mask = host:CreateMaskTexture()
+    mask:SetTexture("Interface\\Buttons\\WHITE8x8", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE", "NEAREST")
+    return { bar = bar, fill = fill, mask = mask }
+end
+
+local function ConfigureGate(gate, threshold, range)
+    local minimum, maximum = threshold + range[1], threshold + range[2]
+    gate.bar:SetMinMaxValues(minimum, maximum)
+    gate.closeValue = range[3] and maximum or minimum
+    gate.openValue = range[3] and minimum or maximum
+    gate.mask:ClearAllPoints()
+    gate.mask:SetPoint(range[3] and "LEFT" or "RIGHT", gate.fill, "RIGHT", 0, 0)
+    gate.bar:SetValue(gate.closeValue)
+end
+
+local function SizeGate(gate, host, width, height, pad)
+    gate.bar:ClearAllPoints()
+    gate.bar:SetPoint("TOPLEFT", host, "TOPLEFT", -pad, pad)
+    gate.bar:SetPoint("BOTTOMRIGHT", host, "BOTTOMRIGHT", pad, -pad)
+    gate.mask:SetSize(width + 2 * pad, height + 2 * pad)
+end
+
+StopStackGlow = function(state)
+    state.gate.bar:SetValue(state.gate.closeValue or 0)
+    if state.gate2 then state.gate2.bar:SetValue(state.gate2.closeValue or 0) end
+    HideCustomGlow(state.host)
+    state.host:Hide()
+end
+
+RetireStackGlow = function(frame)
+    local state = GetFrameData(frame).stackGlow
+    StopStackGlow(state)
+    state.threshold = nil
+    state.sourceID = nil
+    GetFrameData(state.host).stackGlow = nil
+    stackGlowFrames[frame] = nil
+end
+
+function Glow:RetireBuffStackGlow(frame)
+    local frameData = GetFrameData(frame)
+    if frameData.stackGlow and frameData.stackGlow.threshold then
+        RetireStackGlow(frame)
+        frameData.cdmBuffGlowWanted = nil
+        frameData.cdmBuffGlowSourceID = nil
+        frameData.cdmBuffGlowOverrideColor = nil
+    end
+end
+
+local function QueueStackRefresh()
+    if not next(stackGlowFrames) then return end
+    stackRefreshPending = true
+    debounceDrainer:Show()
+end
+
+ConfigureStackGlow = function(frame, host, sourceID, threshold, operator)
+    local frameData = GetFrameData(frame)
+    local state = frameData.stackGlow
+    if not state then
+        HideCustomGlow(host)
+        state = { host = host, gate = CreateStackGate(host), textures = {} }
+        frameData.stackGlow = state
+        -- RefreshData also covers pooled icon reassignment; the aura hooks cover
+        -- changes that do not cause a layout or a complete aura reassignment.
+        for _, method in ipairs({ "RefreshData", "SetAuraInstanceInfo", "OnActiveStateChanged" }) do
+            if frame[method] then
+                hooksecurefunc(frame, method, function()
+                    if state.threshold then QueueStackRefresh() end
+                end)
+            end
+        end
+        if frame.ClearAuraInstanceInfo then
+            hooksecurefunc(frame, "ClearAuraInstanceInfo", function()
+                if state.threshold then
+                    StopStackGlow(state)
+                    QueueStackRefresh()
+                end
+            end)
+        end
+    end
+    if state.threshold ~= threshold or state.operator ~= operator or state.sourceID ~= sourceID then
+        StopStackGlow(state)
+        state.threshold, state.operator, state.sourceID = threshold, operator, sourceID
+        ConfigureGate(state.gate, threshold, stackRanges[operator])
+        if operator == "eq" then
+            if not state.gate2 then state.gate2 = CreateStackGate(host) end
+            ConfigureGate(state.gate2, threshold, stackRanges.lte)
+        end
+        state.width = nil
+    end
+    GetFrameData(host).stackGlow = state
+    stackGlowFrames[frame] = true
+end
+
+local function IsStackBuffActive(frame)
+    local active = frame.isActive
+    if not IsSecret(active) and active ~= nil then return active == true end
+    local iid = frame.auraInstanceID
+    if IsSecret(iid) or iid ~= nil then return true end
+    local cached = frame.auraDataCached
+    if IsSecret(cached) or cached ~= nil then return true end
+    return frame.isCustomBuff == true or frame.totemData ~= nil
+end
+
+FeedStackGlow = function(frame)
+    local frameData = GetFrameData(frame)
+    local state = frameData.stackGlow
+    if not state or not state.threshold then return end
+    if not frameData.cdmBuffGlowWanted or not frame:IsShown() or frameData.cdmVisualsHidden
+        or not IsStackBuffActive(frame) then
+        StopStackGlow(state)
+        return
+    end
+    local width, height = frame:GetSize()
+    local pad = math.max(12, math.ceil(math.max(width, height) * 0.4),
+        math.abs(glowCache.pixelXOffset) + glowCache.pixelThickness + 2,
+        math.abs(glowCache.pixelYOffset) + glowCache.pixelThickness + 2,
+        math.abs(glowCache.autocastXOffset) + 16 * glowCache.autocastScale,
+        math.abs(glowCache.autocastYOffset) + 16 * glowCache.autocastScale,
+        math.abs(glowCache.procXOffset) + width * 0.5,
+        math.abs(glowCache.procYOffset) + height * 0.5,
+        width * 0.5, height * 0.5)
+    if state.width ~= width or state.height ~= height or state.pad ~= pad then
+        SizeGate(state.gate, state.host, width, height, pad)
+        if state.gate2 then SizeGate(state.gate2, state.host, width, height, pad) end
+        state.width, state.height, state.pad = width, height, pad
+    end
+    local applications = ReadBuffApplications(frame)
+    if not IsSecret(applications) then
+        if applications == nil then
+            -- Unknown count on an active buff fails open, even for < 1.
+            state.gate.bar:SetValue(state.gate.openValue)
+            if state.operator == "eq" then state.gate2.bar:SetValue(state.gate2.openValue) end
+        elseif not StackMatches(applications, state.operator, state.threshold) then
+            StopStackGlow(state)
+            return
+        else
+            state.gate.bar:SetValue(applications)
+            if state.operator == "eq" then state.gate2.bar:SetValue(applications) end
+        end
+    else
+        -- Secret counts only flow into native setters, never Lua comparisons.
+        state.gate.bar:SetValue(applications)
+        if state.operator == "eq" then state.gate2.bar:SetValue(applications) end
+    end
+    state.host:Show()
+    ShowCustomGlow(state.host, frameData.cdmBuffGlowOverrideColor)
+end
+
+local function RefreshStackFrame(frame)
+    local frameData = GetFrameData(frame)
+    local specID = CDM:GetCurrentSpecID()
+    local enabled, color, sourceID = CDM:ResolveBuffGlowState(frame, specID, frameData.buffCategorySpellID ~= nil)
+    local stackEnabled = enabled and sourceID and CDM:GetSpellStackGlow(specID, sourceID)
+    if not stackEnabled and (not IsStackBuffActive(frame) or frameData.cdmVisualsHidden) then enabled = false end
+    Glow:RequestBuffGlow(frame, enabled, color, sourceID)
+end
+
+RefreshStackGlows = function(frame)
+    if frame then
+        RefreshStackFrame(frame)
+    else
+        for icon in pairs(stackGlowFrames) do RefreshStackFrame(icon) end
+    end
+end
+
+CDM:RegisterEvent("UNIT_AURA", QueueStackRefresh)
+CDM:RegisterRefreshCallback("stackGlows", QueueStackRefresh, 55, { "BUFF_DATA", "STYLE" })
+
 function Glow:HideBlizzardGlow(frame)
     HideBlizzardGlow(frame)
 end
@@ -478,6 +772,7 @@ function Glow:RefreshActiveGlows()
         HideCustomGlow(frame)
     end
     debounceDrainer:Hide()
+    if stackRefreshPending then debounceDrainer:Show() end
 
     local count = 0
     for frame in pairs(activeGlowFrames) do
@@ -494,6 +789,7 @@ function Glow:RefreshActiveGlows()
                 frameData.cdmGlowOverrideColor = CDM:GetCooldownGlowColorOverride(frame)
             end
             local stopFn = glowStopFunctions[frameData.cdmGlowType]
+            DetachStackMasks(frame)
             if stopFn then stopFn(frame) end
             frameData.cdmGlowActive = false
             frameData.cdmGlowType = nil
