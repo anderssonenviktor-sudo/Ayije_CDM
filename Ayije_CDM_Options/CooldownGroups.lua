@@ -129,100 +129,12 @@ local ICON_SIZE = 30
 local ROW_HEIGHT = 36
 local GROUP_HEADER_H = 28
 local ARROW_BTN_SIZE = 29
-local GRID_ICON_SIZE = 44
-local GRID_ICON_GAP = 4
-local GRID_FRAME_INSET = 3
-local GRID_SECTION_GAP = -3
-
-local function SkinHorizontalScrollBar(scrollBar)
-    -- The Blizzard template keeps ownership of dragging and stepping; only its regions are replaced.
-    for _, region in ipairs({ scrollBar:GetRegions() }) do
-        region:Hide()
-    end
-    if scrollBar.Background then
-        scrollBar.Background:Hide()
-    end
-
-    local track = scrollBar.Track
-    local thumb = track and track.Thumb
-    if track then
-        local trackTexture = track:CreateTexture(nil, "BACKGROUND")
-        trackTexture:SetPoint("LEFT")
-        trackTexture:SetPoint("RIGHT")
-        trackTexture:SetHeight(9)
-        trackTexture:SetColorTexture(0.025, 0.025, 0.025, 0)
-    end
-    if thumb then
-        for _, region in ipairs({ thumb:GetRegions() }) do
-            region:Hide()
-        end
-        local thumbTexture = thumb:CreateTexture(nil, "ARTWORK")
-        thumbTexture:SetPoint("TOPLEFT", 0, -3)
-        thumbTexture:SetPoint("BOTTOMRIGHT", 0, 3)
-        thumbTexture:SetColorTexture(0.36, 0.35, 0.32, 1)
-
-        local function UpdateThumb()
-            for _, region in ipairs({ thumb:GetRegions() }) do
-                if region ~= thumbTexture then region:Hide() end
-            end
-            if not thumb:IsEnabled() then
-                thumbTexture:SetVertexColor(0.45, 0.45, 0.45, 0.45)
-            elseif thumb:IsMouseOver() then
-                thumbTexture:SetVertexColor(1.25, 1.25, 1.25, 1)
-            else
-                thumbTexture:SetVertexColor(1, 1, 1, 1)
-            end
-        end
-        thumb:HookScript("OnEnter", UpdateThumb)
-        thumb:HookScript("OnLeave", UpdateThumb)
-        thumb:HookScript("OnEnable", UpdateThumb)
-        thumb:HookScript("OnDisable", UpdateThumb)
-        UpdateThumb()
-    end
-
-    local gold = CDM_C.GOLD or { r = 1, g = 0.82, b = 0, a = 1 }
-    local function SkinStepper(button, rotation)
-        if not button then return end
-        if button.Texture then button.Texture:Hide() end
-        if button.Overlay then button.Overlay:Hide() end
-        button:ClearAllPoints()
-        if rotation < 0 then
-            button:SetPoint("LEFT", 4, 0)
-        else
-            button:SetPoint("RIGHT", -5, 0)
-        end
-
-        local icons = {}
-        local offsets = { { 0, 0 }, { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } }
-        for index, offset in ipairs(offsets) do
-            local icon = button:CreateTexture(nil, "ARTWORK", nil, index)
-            icon:SetPoint("CENTER", offset[1], offset[2])
-            icon:SetSize(18, 18)
-            icon:SetTexture("Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\collapse")
-            icon:SetVertexColor(gold.r, gold.g, gold.b, gold.a)
-            icon:SetRotation(rotation)
-            icons[index] = icon
-        end
-
-        local function UpdateStepper()
-            if button.Texture then button.Texture:Hide() end
-            if button.Overlay then button.Overlay:Hide() end
-            local alpha = not button:IsEnabled() and 0.3 or (button:IsMouseOver() and 1 or 0.8)
-            for _, icon in ipairs(icons) do
-                icon:SetDesaturated(not button:IsEnabled())
-                icon:SetAlpha(alpha)
-            end
-        end
-        button:HookScript("OnEnter", UpdateStepper)
-        button:HookScript("OnLeave", UpdateStepper)
-        button:HookScript("OnEnable", UpdateStepper)
-        button:HookScript("OnDisable", UpdateStepper)
-        UpdateStepper()
-    end
-
-    SkinStepper(scrollBar.Back, -math.pi / 2)
-    SkinStepper(scrollBar.Forward, math.pi / 2)
-end
+local GRID_ICON_SIZE = 32
+local GRID_MIN_ICON_SIZE = 24
+local GRID_CONTROL_SIZE = 24
+local GRID_ICON_GAP = 1
+local GRID_FRAME_INSET = 1
+local GRID_SECTION_GAP = 0
 
 StaticPopupDialogs["AYIJE_CDM_CONFIRM_DELETE_CD_GROUP"] = {
     text = "",
@@ -457,23 +369,19 @@ local function CreateCooldownGroupsPanel(subPage, page)
         CancelDrag = dragDrop.CancelDrag
     end
 
-    local minGridHeight = GRID_ICON_SIZE + 8
-    local gridScrollbarSpace = 27
+    local minGridHeight = GRID_ICON_SIZE + GRID_FRAME_INSET * 2
 
     local iconBarFrame = CreateFrame("Frame", nil, subPage)
     iconBarFrame:SetPoint("TOPLEFT", LEFT_INSET, -26)
-    iconBarFrame:SetPoint("TOPRIGHT", subPage, "TOPRIGHT", -LEFT_INSET, -26)
-    iconBarFrame:SetHeight(minGridHeight)
+    iconBarFrame:SetSize(1, minGridHeight)
 
     local iconViewFrame = CreateFrame("Frame", nil, iconBarFrame)
     iconViewFrame:SetPoint("TOPLEFT")
-    iconViewFrame:SetSize(GRID_ICON_SIZE + GRID_FRAME_INSET * 2, minGridHeight)
+    iconViewFrame:SetSize(GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2, minGridHeight)
 
     local iconGridFrame = CreateFrame("Frame", nil, iconBarFrame)
     iconGridFrame:SetPoint("TOPLEFT", iconViewFrame, "TOPRIGHT", GRID_SECTION_GAP, 0)
-    iconGridFrame:SetPoint("TOPRIGHT", iconBarFrame, "TOPRIGHT",
-        -(GRID_ICON_SIZE + GRID_SECTION_GAP + GRID_FRAME_INSET * 2), 0)
-    iconGridFrame:SetHeight(minGridHeight)
+    iconGridFrame:SetSize(1, minGridHeight)
 
     local iconActionFrame = CreateFrame("Frame", nil, iconBarFrame)
     iconActionFrame:SetPoint("TOPLEFT", iconGridFrame, "TOPRIGHT", GRID_SECTION_GAP, 0)
@@ -482,118 +390,82 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
     local iconBarBackground = iconBarFrame:CreateTexture(nil, "BACKGROUND")
     iconBarBackground:SetAllPoints()
-    iconBarBackground:SetColorTexture(0.02, 0.02, 0.02, 0.5)
+    iconBarBackground:SetColorTexture(0.02, 0.02, 0.02, 0.2)
 
     local iconBarBorderTop = iconBarFrame:CreateTexture(nil, "BORDER")
     iconBarBorderTop:SetPoint("TOPLEFT")
     iconBarBorderTop:SetPoint("TOPRIGHT")
     iconBarBorderTop:SetHeight(1)
-    iconBarBorderTop:SetColorTexture(0, 0, 0, 1)
+    iconBarBorderTop:SetColorTexture(0.18, 0.18, 0.18, 0.45)
     local iconBarBorderBottom = iconBarFrame:CreateTexture(nil, "BORDER")
     iconBarBorderBottom:SetPoint("BOTTOMLEFT")
     iconBarBorderBottom:SetPoint("BOTTOMRIGHT")
     iconBarBorderBottom:SetHeight(1)
-    iconBarBorderBottom:SetColorTexture(0, 0, 0, 1)
+    iconBarBorderBottom:SetColorTexture(0.18, 0.18, 0.18, 0.45)
     local iconBarBorderLeft = iconBarFrame:CreateTexture(nil, "BORDER")
     iconBarBorderLeft:SetPoint("TOPLEFT")
     iconBarBorderLeft:SetPoint("BOTTOMLEFT")
     iconBarBorderLeft:SetWidth(1)
-    iconBarBorderLeft:SetColorTexture(0, 0, 0, 1)
+    iconBarBorderLeft:SetColorTexture(0.18, 0.18, 0.18, 0.45)
     local iconBarBorderRight = iconBarFrame:CreateTexture(nil, "BORDER")
     iconBarBorderRight:SetPoint("TOPRIGHT")
     iconBarBorderRight:SetPoint("BOTTOMRIGHT")
     iconBarBorderRight:SetWidth(1)
-    iconBarBorderRight:SetColorTexture(0, 0, 0, 1)
+    iconBarBorderRight:SetColorTexture(0.18, 0.18, 0.18, 0.45)
 
     local iconGridLayoutAnchor = CreateFrame("Frame", nil, subPage)
     iconGridLayoutAnchor:SetPoint("TOPLEFT", iconViewFrame, "TOPLEFT")
     iconGridLayoutAnchor:SetPoint("TOPRIGHT", iconGridFrame, "TOPRIGHT")
-    iconGridLayoutAnchor:SetHeight(minGridHeight + gridScrollbarSpace)
+    iconGridLayoutAnchor:SetHeight(minGridHeight)
 
     iconGridFrame.highlight = iconGridFrame:CreateTexture(nil, "BACKGROUND")
     iconGridFrame.highlight:SetAllPoints()
     iconGridFrame.highlight:SetColorTexture(1, 0.82, 0, 0.12)
     iconGridFrame.highlight:Hide()
 
-    local iconScrollFrame = CreateFrame("Frame", nil, iconGridFrame)
-    iconScrollFrame:SetPoint("TOPLEFT")
-    iconScrollFrame:SetWidth(1)
-    iconScrollFrame:SetHeight(GRID_ICON_SIZE)
-    iconScrollFrame:SetClipsChildren(true)
-    iconScrollFrame:EnableMouseWheel(true)
-
-    local iconScrollChild = CreateFrame("Frame", nil, iconScrollFrame)
-    iconScrollChild:SetSize(1, GRID_ICON_SIZE)
-    iconScrollChild:SetPoint("TOPLEFT", iconScrollFrame, "TOPLEFT")
-    local iconScrollOffset = 0
-    local maxIconScroll = 0
-
-    local horizontalScrollBar = CreateFrame("EventFrame", nil, iconGridFrame, "WowTrimHorizontalScrollBar")
-    horizontalScrollBar:SetPoint("TOPLEFT", iconScrollFrame, "BOTTOMLEFT", -10, -5)
-    horizontalScrollBar:SetPoint("TOPRIGHT", iconScrollFrame, "BOTTOMRIGHT", 10, -5)
-    horizontalScrollBar:SetHeight(29)
-    SkinHorizontalScrollBar(horizontalScrollBar)
-
-    local ScrollIconRow
-    local function ApplyIconScroll(value)
-        iconScrollOffset = value
-        iconScrollChild:ClearAllPoints()
-        iconScrollChild:SetPoint("TOPLEFT", iconScrollFrame, "TOPLEFT", -value, 0)
-    end
-    horizontalScrollBar:RegisterCallback(ScrollBarMixin.Event.OnScroll, function(_, scrollPercentage)
-        ApplyIconScroll(maxIconScroll * scrollPercentage)
-    end, iconScrollFrame)
-    horizontalScrollBar:Hide()
-
-    ScrollIconRow = function(delta)
-        if maxIconScroll <= 0 then return end
-        local nextScroll = math.max(0, math.min(maxIconScroll, iconScrollOffset + delta))
-        horizontalScrollBar:SetScrollPercentage(nextScroll / maxIconScroll, true)
-    end
-    local halfIconStep = GRID_ICON_SIZE / 2
-    iconScrollFrame:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
-    iconGridFrame:EnableMouseWheel(true)
-    iconGridFrame:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
+    local iconGridContent = CreateFrame("Frame", nil, iconGridFrame)
+    iconGridContent:SetPoint("TOPLEFT", GRID_FRAME_INSET, -GRID_FRAME_INSET)
+    iconGridContent:SetSize(1, GRID_ICON_SIZE)
 
     local gridIcons = {}
     local gridIconsActive = 0
 
     local addRowIcon = CreateFrame("Button", nil, iconActionFrame)
-    addRowIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
+    addRowIcon:SetSize(GRID_CONTROL_SIZE, GRID_CONTROL_SIZE)
     addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", GRID_FRAME_INSET, -GRID_FRAME_INSET)
-    addRowIcon:EnableMouseWheel(true)
-    addRowIcon:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
     local addRowBackground = addRowIcon:CreateTexture(nil, "BACKGROUND")
     addRowBackground:SetAllPoints()
-    addRowBackground:SetColorTexture(0, 0, 0, 0.2)
-
-    local addRowShadowH = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 1)
-    addRowShadowH:SetSize(18, 6)
-    addRowShadowH:SetPoint("CENTER", 1, -1)
-    addRowShadowH:SetColorTexture(0, 0, 0, 0.9)
-    local addRowShadowV = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 1)
-    addRowShadowV:SetSize(6, 18)
-    addRowShadowV:SetPoint("CENTER", 1, -1)
-    addRowShadowV:SetColorTexture(0, 0, 0, 0.9)
+    addRowBackground:SetColorTexture(0, 0, 0, 0.06)
 
     local addRowPlusH = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 2)
-    addRowPlusH:SetSize(18, 6)
+    addRowPlusH:SetSize(10, 2)
     addRowPlusH:SetPoint("CENTER")
-    addRowPlusH:SetColorTexture(0.15, 0.8, 0.2, 1)
+    addRowPlusH:SetColorTexture(0.15, 1, 0.2, 1)
     local addRowPlusV = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 2)
-    addRowPlusV:SetSize(6, 18)
+    addRowPlusV:SetSize(2, 10)
     addRowPlusV:SetPoint("CENTER")
-    addRowPlusV:SetColorTexture(0.15, 0.8, 0.2, 1)
+    addRowPlusV:SetColorTexture(0.15, 1, 0.2, 1)
     local addRowHighlight = addRowIcon:CreateTexture(nil, "HIGHLIGHT")
     addRowHighlight:SetAllPoints()
     addRowHighlight:SetColorTexture(1, 1, 1, 0.12)
-    local rotateBarIcon = Shared.CreateArrowButton(iconViewFrame, "down", GRID_ICON_SIZE, 0.9)
+    local rotateBarIcon = CreateFrame("Button", nil, iconViewFrame)
+    rotateBarIcon:SetSize(GRID_CONTROL_SIZE, GRID_CONTROL_SIZE)
+    local rotateArrow = rotateBarIcon:CreateTexture(nil, "ARTWORK")
+    rotateArrow:SetPoint("CENTER")
+    rotateArrow:SetSize(12, 12)
+    rotateArrow:SetTexture("Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\collapse")
+    rotateArrow:SetDesaturated(false)
+    rotateArrow:SetVertexColor(1, 0.82, 0, 1)
+    function rotateBarIcon:SetArrowDirection(direction)
+        rotateArrow:SetRotation(direction == "up" and math.pi or 0)
+    end
+    rotateBarIcon:SetArrowDirection("down")
     rotateBarIcon:SetPoint("TOPLEFT", iconViewFrame, "TOPLEFT", GRID_FRAME_INSET, -GRID_FRAME_INSET)
-    rotateBarIcon:EnableMouseWheel(true)
-    rotateBarIcon:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
+    rotateBarIcon:SetAlpha(1)
+    addRowIcon:SetAlpha(1)
     local rotateBarBackground = rotateBarIcon:CreateTexture(nil, "BACKGROUND")
     rotateBarBackground:SetAllPoints()
-    rotateBarBackground:SetColorTexture(0, 0, 0, 0.2)
+    rotateBarBackground:SetColorTexture(0, 0, 0, 0.06)
     local rotateBarHighlight = rotateBarIcon:CreateTexture(nil, "HIGHLIGHT")
     rotateBarHighlight:SetAllPoints()
     rotateBarHighlight:SetColorTexture(1, 1, 1, 0.12)
@@ -614,14 +486,21 @@ local function CreateCooldownGroupsPanel(subPage, page)
         gridIconsActive = gridIconsActive + 1
         local frame = gridIcons[gridIconsActive]
         if not frame then
-            frame = CreateFrame("Frame", nil, iconScrollChild)
+            frame = CreateFrame("Frame", nil, iconGridContent)
             local icon = frame:CreateTexture(nil, "ARTWORK")
             icon:SetAllPoints()
             frame.icon = icon
             CDM_C.ApplyIconTexCoord(icon, CDM_C.GetEffectiveZoomAmount())
-            local highlight = frame:CreateTexture(nil, "OVERLAY")
+            local border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+            border:SetAllPoints()
+            border:SetFrameLevel(frame:GetFrameLevel() + 1)
+            border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+            frame.border = border
+            local highlight = CreateFrame("Frame", nil, frame, "BackdropTemplate")
             highlight:SetAllPoints()
-            highlight:SetColorTexture(1, 0.82, 0, 0.35)
+            highlight:SetFrameLevel(frame:GetFrameLevel() + 3)
+            highlight:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+            highlight:SetBackdropBorderColor(0.85, 0.75, 0.45, 0.9)
             highlight:Hide()
             frame.highlight = highlight
             local overlay = CreateFrame("Button", nil, frame)
@@ -629,8 +508,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
             overlay:SetFrameLevel(frame:GetFrameLevel() + 2)
             overlay:RegisterForClicks("LeftButtonUp", "RightButtonUp")
             overlay:RegisterForDrag("LeftButton")
-            overlay:EnableMouseWheel(true)
-            overlay:SetScript("OnMouseWheel", function(_, delta) ScrollIconRow(-delta * halfIconStep) end)
             frame.overlay = overlay
             gridIcons[gridIconsActive] = frame
         end
@@ -2104,8 +1981,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     BuildIconGrid = function()
         ReleaseAllGridIcons()
 
-        local iconGap = CDM.db and CDM.db.spacing or GRID_ICON_GAP
-        minGridHeight = GRID_ICON_SIZE + 8
+        local iconGap = GRID_ICON_GAP
 
         UpdateGridVisibility()
         local showAddIcon = currentSpecID == playerSpecID and cooldownBarView == "essential"
@@ -2116,50 +1992,47 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
         local spells = GetUngroupedSpellsFromViewers()
         local totalSpells = #spells
-        local availableWidth = (iconGridFrame:GetWidth() or 0) - GRID_FRAME_INSET * 2
+        local viewWidth = GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2
+        local actionWidth = showAddIcon and (GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2) or 0
+        -- Measure the page so fitting the strip cannot shrink its next layout budget.
+        local availableWidth = subPage:GetWidth() - LEFT_INSET * 2
+            - viewWidth - actionWidth - GRID_SECTION_GAP * 2 - GRID_FRAME_INSET * 2
         if availableWidth <= 0 then availableWidth = 456 end
-        local totalSlots = totalSpells
-        local rowWidth = totalSlots * GRID_ICON_SIZE + math.max(0, totalSlots - 1) * iconGap
-        local maxScroll = math.max(0, rowWidth - availableWidth)
-        local previousScroll = iconScrollOffset
-        local startX = maxScroll > 0 and 0 or math.floor((availableWidth - rowWidth) / 2)
-        local cfgColor = CDM_C.GetConfigValue("borderColor", { r = 0, g = 0, b = 0, a = 1 })
+        local maxColumns = math.max(1, math.floor((availableWidth + iconGap) / (GRID_MIN_ICON_SIZE + iconGap)))
+        local columns = math.min(math.max(1, totalSpells), maxColumns)
+        local iconSize = math.min(GRID_ICON_SIZE, math.floor((availableWidth - (columns - 1) * iconGap) / columns))
+        local rows = math.max(1, math.ceil(totalSpells / columns))
+        local contentHeight = rows * iconSize + (rows - 1) * iconGap
+        local gridHeight = math.max(GRID_CONTROL_SIZE, contentHeight) + GRID_FRAME_INSET * 2
+        local cfgColor = { r = 0.08, g = 0.08, b = 0.08, a = 0.8 }
 
-        iconScrollFrame:ClearAllPoints()
-        iconScrollFrame:SetPoint("TOPLEFT", iconGridFrame, "TOPLEFT", GRID_FRAME_INSET, -GRID_FRAME_INSET)
-        iconScrollFrame:SetWidth(availableWidth)
-        iconScrollChild:SetSize(math.max(availableWidth, rowWidth), GRID_ICON_SIZE)
-        maxIconScroll = maxScroll
-        horizontalScrollBar:SetShown(maxScroll > 0)
-        local nextScroll = math.min(previousScroll, maxScroll)
-        local visiblePercentage = rowWidth > 0 and math.min(1, availableWidth / rowWidth) or 1
-        local panPercentage = maxScroll > 0 and math.min(1, halfIconStep / maxScroll) or 1
-        horizontalScrollBar:Init(visiblePercentage, panPercentage)
-        horizontalScrollBar:SetScrollPercentage(maxScroll > 0 and nextScroll / maxScroll or 0, true)
-        ApplyIconScroll(nextScroll)
-
-        addRowIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
-        local plusLength = math.floor(GRID_ICON_SIZE * 0.5)
-        local plusThickness = math.floor(GRID_ICON_SIZE * 0.14)
-        addRowShadowH:SetSize(plusLength, plusThickness)
-        addRowShadowV:SetSize(plusThickness, plusLength)
-        addRowPlusH:SetSize(plusLength, plusThickness)
-        addRowPlusV:SetSize(plusThickness, plusLength)
-        rotateBarIcon:SetSize(GRID_ICON_SIZE, GRID_ICON_SIZE)
+        local contentWidth = totalSpells > 0 and (columns * iconSize + (columns - 1) * iconGap) or GRID_MIN_ICON_SIZE
+        local gridWidth = contentWidth + GRID_FRAME_INSET * 2
+        iconGridContent:SetSize(contentWidth, contentHeight)
+        iconGridFrame:SetWidth(gridWidth)
+        iconBarFrame:SetSize(viewWidth + gridWidth + actionWidth + GRID_SECTION_GAP * 2, gridHeight)
+        iconViewFrame:SetHeight(gridHeight)
+        iconActionFrame:SetHeight(gridHeight)
+        iconGridFrame:SetHeight(gridHeight)
+        iconGridLayoutAnchor:SetHeight(gridHeight)
+        local controlOffset = GRID_FRAME_INSET + math.max(0, (iconSize - GRID_CONTROL_SIZE) / 2)
+        addRowIcon:ClearAllPoints()
+        addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", GRID_FRAME_INSET, -controlOffset)
+        rotateBarIcon:ClearAllPoints()
+        rotateBarIcon:SetPoint("TOPLEFT", iconViewFrame, "TOPLEFT", GRID_FRAME_INSET, -controlOffset)
         rotateBarIcon:SetArrowDirection(cooldownBarView == "essential" and "down" or "up")
 
         local function GetSlotPosition(slotIndex)
-            return startX + (slotIndex - 1) * (GRID_ICON_SIZE + iconGap), 0
+            local row = math.floor((slotIndex - 1) / columns)
+            local column = (slotIndex - 1) % columns
+            return column * (iconSize + iconGap), -row * (iconSize + iconGap)
         end
 
         for i, spellID in ipairs(spells) do
             local frame = AcquireGridIcon()
+            frame:SetSize(iconSize, iconSize)
+            frame.highlight:SetShown(selectedSpellID == spellID and not selectedSpellGroupIndex)
             frame.cdmSpellID = spellID
-
-            if CDM.BORDER and CDM.BORDER.CreateBorder then
-                CDM.BORDER:CreateBorder(frame, { forceUpdate = true })
-                if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[frame] = nil end
-            end
 
             local x, y = GetSlotPosition(i)
             frame:ClearAllPoints()
@@ -2239,8 +2112,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
             addRowIcon:Show()
         end
 
-        local gridHeight = minGridHeight + (maxScroll > 0 and gridScrollbarSpace or 0)
-        iconGridFrame:SetHeight(gridHeight)
     end
 
     SetCooldownBarView = function(view)
@@ -2543,6 +2414,13 @@ local function CreateCooldownGroupsPanel(subPage, page)
         BuildGroupsPanel()
         if addIconBtnRef then addIconBtnRef:SetEnabled(selectedGroupIndex ~= nil) end
     end
+
+    local lastGridWidth = 0
+    subPage:HookScript("OnSizeChanged", function(self, width)
+        if math.abs(width - lastGridWidth) < 1 then return end
+        lastGridWidth = width
+        if self:IsShown() then QueueLeftPanelRefresh() end
+    end)
 
     local specDropdown, RefreshSpecDropdownText = Shared.CreateSpecDropdown(page, "TOPRIGHT", -6, -8, {
         getPlayerSpecID = function() return playerSpecID end,
