@@ -1,4 +1,4 @@
 ## Changelog
-## v.1.13
+## v.1.14
 
-- Arcane missiles ticks update
+- Buffs now have glow thresholds. Glow at X stacks
