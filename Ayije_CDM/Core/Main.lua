@@ -123,6 +123,8 @@ local function InstallScaleLockHook(frame)
             self:SetScale(1)
         end
     end)
+    -- OnAcquireItemFrame applies Blizzard's scale before this hook is installed.
+    frame:SetScale(1)
 end
 
 function CDM:SetupViewer(vName)
@@ -233,6 +235,12 @@ function CDM:SetupViewer(vName)
             if relativeTo == container then return end
             SyncViewerToContainer()
         end)
+    end
+
+    if v.itemFramePool then
+        for itemFrame in v.itemFramePool:EnumerateActive() do
+            InstallScaleLockHook(itemFrame)
+        end
     end
 
     self:ForceReanchor(v)
