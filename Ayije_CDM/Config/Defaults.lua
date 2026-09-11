@@ -370,8 +370,8 @@ CDM.defaults = {
     desaturateOutOfResources = true,
 
     -- Glow Settings
-    glowType = "pixel", -- "pixel", "autocast", "button", "proc"
-    glowUseCustomColor = false,
+    glowType = "pixel",
+    glowColorMode = "default",
     glowColor = { r = 0.95, g = 0.95, b = 0.32, a = 1 },
 
     -- Pixel Glow
@@ -406,6 +406,15 @@ CDM.defaults = {
     pandemicCustomizationEnabled = false,
     pandemicBorderEnabled = false,
     pandemicBorderColor   = { r = 1.00, g = 0.70, b = 0.10, a = 1 },
+    pandemicGlow = {
+        enabled = false, style = "proc", colorMode = "default",
+        r = 1, g = 0.2, b = 0.2, alpha = 1, scale = 1,
+        layer = "normal",
+        pixel = { lines = 8, thickness = 2, background = false,
+            backgroundR = 0, backgroundG = 0, backgroundB = 0 },
+        autocast = { sparkCount = 4 },
+        shape = { intensity = 1 },
+    },
 
     chargeShowEdge  = false,
     chargeHideSwipe = false,

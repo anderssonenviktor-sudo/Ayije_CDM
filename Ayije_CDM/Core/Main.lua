@@ -134,6 +134,7 @@ function CDM:SetupViewer(vName)
             InstallScaleLockHook(itemFrame)
             local fd = CDM.GetFrameData(itemFrame)
             if CDM.Glow then CDM.Glow:RetireBuffStackGlow(itemFrame) end
+            if CDM.PandemicGlow then CDM.PandemicGlow:Reset(itemFrame) end
             fd.cdmAnchor = nil
             fd.buffCategorySpellID = nil
             fd.cdGroupSpellID = nil

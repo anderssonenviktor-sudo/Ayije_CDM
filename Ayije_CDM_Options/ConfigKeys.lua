@@ -59,6 +59,7 @@ ns.ConfigKeys = {
                 "pandemicCustomizationEnabled",
                 "pandemicBorderEnabled",
                 "pandemicBorderColor",
+                "pandemicGlow",
                 "chargeShowEdge",
                 "chargeHideSwipe",
                 "swipeColor",
@@ -202,7 +203,7 @@ ns.ConfigKeys = {
             label = "Glow Settings",
             keys = {
                 "glowType",
-                "glowUseCustomColor",
+                "glowColorMode",
                 "glowColor",
                 "glowPixelLines",
                 "glowPixelFrequency",

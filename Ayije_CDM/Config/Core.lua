@@ -411,7 +411,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 35
+local DB_SCHEMA_VERSION = 38
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1426,6 +1426,37 @@ local PROFILE_MIGRATIONS = {
             profile.externalsDisableBlink = nil
             profile.rotationAssistEnabled = nil
             profile.rotationAssistGlowRatio = nil
+        end,
+    },
+    {
+        version = 36,
+        run = function(profile)
+            if profile.glowColorMode == nil and profile.glowUseCustomColor == true then
+                profile.glowColorMode = "custom"
+            end
+            profile.glowUseCustomColor = nil
+        end,
+    },
+    {
+        version = 37,
+        run = function(profile)
+            if profile.glowType == "modern" then
+                profile.glowType = "proc"
+            end
+        end,
+    },
+    {
+        version = 38,
+        run = function(profile)
+            profile.pandemicGlowSpells = nil
+            local glow = profile.pandemicGlow
+            if type(glow) == "table" then
+                glow.speedMultiplier = nil
+                glow.offsetX, glow.offsetY = nil, nil
+                glow.combatOnly = nil
+                glow.flashOnStart = nil
+                glow.increaseNearExpiry = nil
+            end
         end,
     },
 }

@@ -5,6 +5,8 @@ local CDM_C = CDM.CONST
 local VIEWERS = CDM_C.VIEWERS
 
 local LCG = LibStub("LibCustomGlow-1.0", true)
+local Renderers = CDM.GlowRenderers
+local UnitClass = UnitClass
 
 local GetFrameData = CDM.GetFrameData
 local pairs = pairs
@@ -53,7 +55,7 @@ end
 
 local glowCache = {
     type = "proc",
-    useCustomColor = false,
+    colorMode = "default",
     color = nil,
     pixelLines = 8,
     pixelFrequency = 0.2,
@@ -150,7 +152,12 @@ local function GetGlowColor(overrideColor)
     if overrideColor then
         return GetCachedGlowColorArray(overrideColor)
     end
-    if glowCache.useCustomColor and glowCache.color then
+    if glowCache.colorMode == "class" then
+        local _, classTag = UnitClass("player")
+        local colors = _G.CUSTOM_CLASS_COLORS or _G.RAID_CLASS_COLORS
+        return GetCachedGlowColorArray(colors and colors[classTag])
+    end
+    if glowCache.colorMode == "custom" and glowCache.color then
         return GetCachedGlowColorArray(glowCache.color)
     end
     return nil
@@ -169,6 +176,15 @@ local procGlowOpts = {
 local activeGlowSnapshot = {}
 
 local glowStartFunctions = {
+    gcd = function(frame, frameLevel, overrideColor)
+        Renderers.StartFlipBook(frame, frameLevel, "gcd", GetGlowColor(overrideColor))
+    end,
+
+    shape = function(frame, frameLevel, overrideColor)
+        local color = GetGlowColor(overrideColor) or GetCachedGlowColorArray(CDM.defaults.glowColor)
+        Renderers.StartShape(frame, frameLevel, color)
+    end,
+
     pixel = function(frame, frameLevel, overrideColor)
         local color = GetGlowColor(overrideColor)
         local length = glowCache.pixelLength
@@ -231,6 +247,9 @@ local glowStartFunctions = {
 }
 
 local glowStopFunctions = {
+    gcd = Renderers.Stop,
+    shape = Renderers.Stop,
+
     pixel = function(frame)
         LCG.PixelGlow_Stop(frame, GLOW_KEY)
     end,
@@ -239,7 +258,17 @@ local glowStopFunctions = {
         LCG.AutoCastGlow_Stop(frame, GLOW_KEY)
     end,
 
-    button = function(frame)
+    button = function(frame, immediate)
+        if immediate then
+            local button = frame._ButtonGlow
+            if button then
+                -- Style switches must not leave the old button's fade-out visible.
+                button.animIn:Stop()
+                button.animOut:Stop()
+                LCG.ButtonGlowPool:Release(button)
+            end
+            return
+        end
         local stack = GetFrameData(frame).stackGlow
         local shown = frame:IsShown()
         if stack then
@@ -310,7 +339,7 @@ local function ShowCustomGlow(frame, overrideColor)
     if frameData.cdmGlowActive then
         DetachStackMasks(frame)
         local stopFn = glowStopFunctions[frameData.cdmGlowType]
-        if stopFn then stopFn(frame) end
+        if stopFn then stopFn(frame, true) end
         frameData.cdmGlowActive = false
         frameData.cdmGlowType = nil
     end
@@ -323,12 +352,17 @@ local function ShowCustomGlow(frame, overrideColor)
         frame:GetWidth()
     end
 
+    if glowCache.type ~= "button" and frame._ButtonGlow then
+        glowStopFunctions.button(frame, true)
+    end
+
     local fn = glowStartFunctions[glowCache.type]
     if fn then
         local frameLevel = frame:GetFrameLevel() + 5
         fn(frame, frameLevel, overrideColor)
         local state = frameData.stackGlow
-        local renderer = frame[glowFrameKeys[glowCache.type]]
+        local rendererKey = glowFrameKeys[glowCache.type]
+        local renderer = rendererKey and frame[rendererKey] or frameData.cdmNativeGlow
         if state and state.threshold and renderer then
             AttachStackRegions(state, renderer:GetRegions())
         end
@@ -336,6 +370,15 @@ local function ShowCustomGlow(frame, overrideColor)
         frameData.cdmGlowType = glowCache.type
         frameData.cdmGlowOverrideColor = overrideColor
         activeGlowFrames[frame] = true
+        if not rendererKey and not frameData.cdmNativeGlowHideHooked then
+            frameData.cdmNativeGlowHideHooked = true
+            frame:HookScript("OnHide", function(self)
+                local style = GetFrameData(self).cdmGlowType
+                if style == "gcd" or style == "shape" then
+                    HideCustomGlow(self)
+                end
+            end)
+        end
     end
 end
 
@@ -790,7 +833,7 @@ function Glow:RefreshActiveGlows()
             end
             local stopFn = glowStopFunctions[frameData.cdmGlowType]
             DetachStackMasks(frame)
-            if stopFn then stopFn(frame) end
+            if stopFn then stopFn(frame, true) end
             frameData.cdmGlowActive = false
             frameData.cdmGlowType = nil
             ShowCustomGlow(frame, frameData.cdmGlowOverrideColor)
@@ -852,7 +895,7 @@ function Glow:RefreshCache()
     local defaults = CDM.defaults or {}
 
     glowCache.type = GlowCfg(db, defaults, "glowType") or "proc"
-    glowCache.useCustomColor = GlowCfg(db, defaults, "glowUseCustomColor")
+    glowCache.colorMode = GlowCfg(db, defaults, "glowColorMode") or "default"
     glowCache.color = GlowCfg(db, defaults, "glowColor")
 
     glowCache.pixelLines = GlowCfg(db, defaults, "glowPixelLines")

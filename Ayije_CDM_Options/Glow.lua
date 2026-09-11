@@ -12,6 +12,14 @@ local glowTypeOptions = {
     { value = "autocast", label = L["Autocast Glow"] },
     { value = "button", label = L["Button Glow"] },
     { value = "proc", label = L["Proc Glow"] },
+    { value = "gcd", label = L["GCD"] },
+    { value = "shape", label = L["Shape Glow"] },
+}
+
+local glowColorOptions = {
+    { value = "default", label = L["Default"] },
+    { value = "class", label = L["Class Color"] },
+    { value = "custom", label = L["Custom"] },
 }
 
 local typeSections = {}
@@ -61,20 +69,31 @@ local function CreateGlowTab(page, tabId)
     )
     page.typeDropdown = ddType
 
-    page.useColorCheckbox = UI.CreateModernCheckbox(
-        scrollChild,
-        L["Use Custom Color"],
-        CDM.db.glowUseCustomColor or false,
-        function(checked)
-            CDM.db.glowUseCustomColor = checked
+    local colorLabel = scrollChild:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+    colorLabel:SetText(L["Glow Color"])
+    colorLabel:SetPoint("TOPLEFT", ddType, "BOTTOMLEFT", 0, -15)
+
+    local ddColor = CreateFrame("DropdownButton", nil, scrollChild, "WowStyle1DropdownTemplate")
+    ddColor:SetPoint("TOPLEFT", colorLabel, "BOTTOMLEFT", 0, -10)
+    ddColor:SetWidth(200)
+    ddColor:SetDefaultText(UI.GetOptionLabel(glowColorOptions, CDM.db.glowColorMode, L["Default"]))
+
+    local colorPicker = UI.CreateColorSwatch(scrollChild, L["Custom Color"], "glowColor", "STYLE")
+    colorPicker:SetPoint("TOPLEFT", ddColor, "BOTTOMLEFT", 0, -10)
+    colorPicker:SetShown(CDM.db.glowColorMode == "custom")
+    page.colorPicker = colorPicker
+    page.colorModeDropdown = ddColor
+    UI.SetupValueDropdown(
+        ddColor,
+        glowColorOptions,
+        function() return CDM.db.glowColorMode or "default" end,
+        function(value, label)
+            CDM.db.glowColorMode = value
+            ddColor:SetDefaultText(label)
+            colorPicker:SetShown(value == "custom")
             API:Refresh("STYLE")
         end
     )
-    page.useColorCheckbox:SetPoint("TOPLEFT", ddType, "BOTTOMLEFT", 0, -15)
-
-    local colorPicker = UI.CreateColorSwatch(scrollChild, L["Glow Color"], "glowColor", "STYLE")
-    colorPicker:SetPoint("TOPLEFT", page.useColorCheckbox, "BOTTOMLEFT", 0, -10)
-    page.colorPicker = colorPicker
 
     local sectionAnchor = colorPicker
 

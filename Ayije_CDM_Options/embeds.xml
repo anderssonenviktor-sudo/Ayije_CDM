@@ -6,6 +6,7 @@
     <Script file="Sizes.lua"/>
     <Script file="Layout.lua"/>
     <Script file="Positions.lua"/>
+    <Script file="PandemicGlow.lua"/>
     <Script file="Border.lua"/>
     <Script file="Text.lua"/>
     <Script file="Glow.lua"/>

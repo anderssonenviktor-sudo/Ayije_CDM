@@ -750,14 +750,17 @@ local function EnsureFrameHooks(frame, frameData, hookType)
 
     if frame.ShowPandemicStateFrame and not frameData.pandemicHooked then
         frameData.pandemicHooked = true
+        CDM.PandemicGlow:HookFrame(frame)
         hooksecurefunc(frame, "ShowPandemicStateFrame", function(self)
             local selfData = GetFrameData(self)
             if styleCache.hidePandemicIndicator and self.PandemicIcon and not selfData.isProcessingBuffOverride then
                 self.PandemicIcon:Hide()
             end
             ApplyPandemicCDMStyle(self, selfData)
+            CDM.PandemicGlow:SetState(self, true)
         end)
         hooksecurefunc(frame, "HidePandemicStateFrame", function(self)
+            CDM.PandemicGlow:SetState(self, false)
             local fd = GetFrameData(self)
             if not fd.cdmPandemicActive then return end
             ClearPandemicCDMStyle(self, fd)

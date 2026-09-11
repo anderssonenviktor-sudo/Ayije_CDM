@@ -148,6 +148,7 @@ local function BuildLook(subPage, page)
     local enableCustomizationCheckbox
     local pandemicBorderCheckbox
     local pandemicBorderColor
+    local pandemicGlowControls
 
     local function UpdatePandemicEnableState()
         local hideEnabled = CDM.db.hidePandemicIndicator == true
@@ -158,6 +159,7 @@ local function BuildLook(subPage, page)
 
         local borderColorEnabled = customizationEnabled and (CDM.db.pandemicBorderEnabled == true)
         pandemicBorderColor:SetEnabled(borderColorEnabled)
+        if pandemicGlowControls then pandemicGlowControls:SetEnabled(customizationEnabled) end
     end
 
     hidePandemicCheckbox = UI.CreateModernCheckbox(
@@ -203,8 +205,22 @@ local function BuildLook(subPage, page)
     pandemicBorderColor:SetPoint("TOPLEFT", 0, yOff)
     yOff = yOff - 50
 
+    local scrollContent, glowTop = rc, yOff
+    local glowHeight, footerHeight = 0, 0
+    local function UpdateScrollHeight()
+        UI.FinalizeScroll(sc, scrollContent, glowTop - glowHeight - 20 - footerHeight)
+    end
+    pandemicGlowControls = ns.BuildPandemicGlow(rc, function(height)
+        glowHeight = height
+        UpdateScrollHeight()
+    end)
+    pandemicGlowControls:SetPoint("TOPLEFT", 0, yOff)
     UpdatePandemicEnableState()
 
+    local footer = CreateFrame("Frame", nil, rc)
+    footer:SetPoint("TOPLEFT", pandemicGlowControls, "BOTTOMLEFT", 0, -20)
+    footer:SetWidth(490)
+    rc, yOff = footer, 0
     local chargeHeader = UI.CreateHeader(rc, L["Charge Cooldowns"])
     chargeHeader:SetPoint("TOPLEFT", 0, yOff)
     yOff = yOff - 30
@@ -249,7 +265,9 @@ local function BuildLook(subPage, page)
     desatOutOfResourcesCheckbox:SetPoint("TOPLEFT", 0, yOff)
     yOff = yOff - 30
 
-    UI.FinalizeScroll(sc, rc, yOff)
+    footerHeight = -yOff
+    footer:SetHeight(footerHeight)
+    UpdateScrollHeight()
 end
 
 local SUB_TAB_IDS = { "borders", "look" }

@@ -15,8 +15,11 @@
     <Script file="TrackerCooldownWatcher.lua"/>
     <Script file="TrackerSpellCooldownWatcher.lua"/>
     <Script file="TrackerBase.lua"/>
+    <Script file="GlowRenderers.lua"/>
+    <Script file="GlowAPI.lua"/>
     <Script file="Glow.lua"/>
     <Script file="InternalCallbacks.lua"/>
+    <Script file="PandemicGlow.lua"/>
     <Script file="SpecChange.lua"/>
     <Script file="Keybinds.lua"/>
     <Script file="Fading.lua"/>
