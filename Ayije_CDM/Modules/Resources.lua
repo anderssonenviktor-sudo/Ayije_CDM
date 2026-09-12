@@ -816,7 +816,15 @@ local function CreatePips(bar, maxPips, barWidth, barHeight)
     if maxPips <= 0 then return end
     local _, barPixels, onePixel = SnapWidthToPixelGrid(bar, barWidth)
 
-    local availablePixels = barPixels - (maxPips - 1)
+    local gapPixels = 1
+    if bar.hasPipSpacing then
+        gapPixels = math_max(0, math_floor(bar.pipSpacing / onePixel + 0.5))
+        -- Keep at least one pixel per charge when the requested gaps exceed the bar width.
+        if maxPips > 1 then
+            gapPixels = math_min(gapPixels, math_max(0, math_floor((barPixels - maxPips) / (maxPips - 1))))
+        end
+    end
+    local availablePixels = barPixels - (maxPips - 1) * gapPixels
 
     bar.pipWidths = bar.pipWidths or {}
     local pipWidths = bar.pipWidths
@@ -825,8 +833,8 @@ local function CreatePips(bar, maxPips, barWidth, barHeight)
     for i = 1, maxPips do
         local boundary = math_floor(i * availablePixels / maxPips)
         pipWidths[i] = (boundary - prevBoundary) * onePixel
-        bar.pipPositions[i] = (prevBoundary + (i - 1)) * onePixel
-        pipBoundaryPixels[i] = boundary + (i - 1)
+        bar.pipPositions[i] = (prevBoundary + (i - 1) * gapPixels) * onePixel
+        pipBoundaryPixels[i] = boundary + (i - 1) * gapPixels
         prevBoundary = boundary
     end
 
@@ -1313,7 +1321,9 @@ local function BuildChains(activeKeys)
 
     for barKey in pairs(scratchActiveSet) do
         local anchorTo = CDM:GetBarSetting(barKey, "anchorTo")
-        if anchorTo and scratchActiveSet[anchorTo] then
+        if anchorTo and scratchActiveSet[anchorTo]
+            and not scratchActiveSet[barKey].hasPipSpacing
+            and not scratchActiveSet[anchorTo].hasPipSpacing then
             local aP = CDM:GetBarSetting(barKey, "anchorPoint") or "BOTTOM"
             local tP = CDM:GetBarSetting(barKey, "anchorTargetPoint") or "TOP"
             if IsVerticalAnchor(aP, tP) then
@@ -1370,7 +1380,15 @@ local function UpdateBorders(activeKeys)
     local hostIdx = 0
     for c = 1, chainCount do
         local chain = chains[c]
-        if unified then
+        if chain[1].hasPipSpacing then
+            local bar = chain[1]
+            if bar.borderFrame then bar.borderFrame:Hide() end
+            HidePipBarDecorations(bar)
+            HideBarUnifiedVerticalSeparators(bar)
+            for i = 1, bar.activePipCount or 0 do
+                EnsurePerBarBorder(bar.pips[i], borderColor)
+            end
+        elseif unified then
             hostIdx = hostIdx + 1
             ApplyUnifiedChain(hostIdx, chain, borderColor)
         else
@@ -1608,6 +1626,21 @@ end
 local function UpdatePipBarVisuals(bar, powerType, barTexturePath, bgTexturePath, bgColor)
     ApplyPipTexturesIfChanged(bar, barTexturePath)
     ApplyBarBackground(bar, bgTexturePath, bgColor)
+    if bar.bgTexture then bar.bgTexture:SetShown(not bar.hasPipSpacing) end
+    for _, pip in ipairs(bar.pips) do
+        if bar.hasPipSpacing then
+            if not pip.bgTexture then
+                pip.bgTexture = pip:CreateTexture(nil, "BACKGROUND")
+                pip.bgTexture:SetAllPoints(pip)
+                ConfigurePixelTexture(pip.bgTexture)
+            end
+            ApplyBarBackground(pip, bgTexturePath, bgColor)
+            pip.bgTexture:Show()
+        else
+            if pip.bgTexture then pip.bgTexture:Hide() end
+            if pip.borderFrame then pip.borderFrame:Hide() end
+        end
+    end
 
     if powerType == POWER_TYPES.Runes then
         CDM._Res.UpdateRuneCooldowns(bar)
@@ -1739,16 +1772,26 @@ local function UpdateBarPositions()
         local barTexturePath, bgTexturePath = GetBarTextures(barKey)
         local bgColor = CDM:GetBarSetting(barKey, "bgColor") or DEFAULT_BG_COLOR
 
+        if IsMageChargeBar(powerType) then
+            bar.pipSpacing = CDM:GetBarSetting(barKey, "pipSpacing") or -1
+            bar.hasPipSpacing = bar.pipSpacing >= 0
+        end
+
         if bar.isPipBar then
+            local pipSpacing = barKey == "ArcaneCharges" and (CDM:GetBarSetting(barKey, "pipSpacing") or -1) or -1
+            bar.hasPipSpacing = pipSpacing >= 0
+            bar.pipSpacing = pipSpacing
             local max = GetPipBarMax(powerType)
             if max and max > 0 then
                 bar:SetSize(barWidth, barHeight)
                 local needsRecreate = ((bar.activePipCount or 0) ~= max) or
-                    (bar.lastBarWidth ~= barWidth) or (bar.lastBarHeight ~= barHeight)
+                    (bar.lastBarWidth ~= barWidth) or (bar.lastBarHeight ~= barHeight) or
+                    (bar.lastPipSpacing ~= pipSpacing)
                 if needsRecreate then
                     CreatePips(bar, max, barWidth, barHeight)
                     bar.lastBarWidth = barWidth
                     bar.lastBarHeight = barHeight
+                    bar.lastPipSpacing = pipSpacing
                 end
             else
                 bar:SetSize(barWidth, barHeight)
@@ -1804,6 +1847,8 @@ local function UpdateBarPositions()
                 end
             end
             UpdatePipBarVisuals(bar, powerType, barTexturePath, bgTexturePath, bgColor)
+        elseif IsMageChargeBar(powerType) then
+            CDM._Res.LayoutSpacedMageChargeBar(bar, barTexturePath, bgTexturePath, bgColor)
         end
     end
 

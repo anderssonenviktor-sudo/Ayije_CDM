@@ -457,6 +457,17 @@ local function CreateResourcesTab(page, tabId)
         widthSlider:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 60
 
+        if barKey == "ArcaneCharges" or barKey == "FireBlast" or barKey == "Flurry" or barKey == "Prescience" then
+            local spacingSlider = UI.CreateModernSlider(rc, L["Spacing (-1 = No Spacing)"], -1, 40,
+                CDM:GetBarSettingForClass(classKey, barKey, "pipSpacing") or -1,
+                function(v)
+                    CDM:SetBarSettingForClass(classKey, barKey, "pipSpacing", UI.RoundToInt(v))
+                    API:Refresh("RESOURCES")
+                end, SLIDER_LABEL_W, SLIDER_W)
+            spacingSlider:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 60
+        end
+
         local colorHeader = UI.CreateHeader(rc, L["Colors"])
         colorHeader:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 25

@@ -63,7 +63,7 @@ local RESOURCE_BAR_PER_KEY = {
     Maelstrom       = { color = { r = 0, g = 0.5, b = 1, a = 1 }, smoothBars = true, anchorTo = "Mana", offsetY = 1 },
     Chi             = { color = { r = 0.71, g = 1, b = 0.92, a = 1 }, anchorTo = "Energy" },
     Insanity        = { color = { r = 0.4, g = 0, b = 0.8, a = 1 }, smoothBars = true, anchorTo = "Mana", offsetY = 1 },
-    ArcaneCharges   = { color = { r = 0.1, g = 0.1, b = 0.98, a = 1 }, anchorTo = "Mana", offsetY = 1 },
+    ArcaneCharges   = { color = { r = 0.1, g = 0.1, b = 0.98, a = 1 }, anchorTo = "Mana", offsetY = 1, pipSpacing = -1 },
     Fury            = { color = { r = 0.79, g = 0.26, b = 0.99, a = 1 }, smoothBars = true },
     Essence         = {
         color = { r = 0.16, g = 0.57, b = 0.49, a = 1 },
@@ -99,6 +99,7 @@ local RESOURCE_BAR_PER_KEY = {
     IgnorePain      = { color = { r = 0.9, g = 0.8, b = 0.2, a = 1 }, hideIcon = false, anchorTo = "Rage" },
     TipOfTheSpear   = { color = { r = 0.9, g = 0.3, b = 0.15, a = 1 }, anchorTo = "Focus", tagShowAuraTime = false },
     Flurry          = {
+        pipSpacing = -1,
         color = { r = 0.35, g = 0.75, b = 0.95, a = 1 },
         rechargingColor = { r = 0.12, g = 0.26, b = 0.36, a = 1 },
         anchorTo = "Mana",
@@ -111,6 +112,7 @@ local RESOURCE_BAR_PER_KEY = {
         chargeTickWidth = 1,
     },
     FireBlast       = {
+        pipSpacing = -1,
         color = { r = 0.95, g = 0.45, b = 0.15, a = 1 },
         rechargingColor = { r = 0.34, g = 0.15, b = 0.05, a = 1 },
         anchorTo = "Mana",
@@ -123,6 +125,7 @@ local RESOURCE_BAR_PER_KEY = {
         chargeTickWidth = 1,
     },
     Prescience      = {
+        pipSpacing = -1,
         color = { r = 0.85, g = 0.55, b = 0.25, a = 1 },
         rechargingColor = { r = 0.75, g = 0.75, b = 0.75, a = 1 },
         bgColor = { r = 0, g = 0, b = 0, a = 0.6 },

@@ -469,6 +469,15 @@ end
 local SetStatusBarColorIfChanged = res.SetStatusBarColorIfChanged
 local SetVertexColorIfChanged = res.SetVertexColorIfChanged
 
+local function SetPipBackgroundColor(bar, color)
+    SetVertexColorIfChanged(bar.bgTexture, color)
+    if bar.hasPipSpacing then
+        for _, pip in ipairs(bar.pips) do
+            SetVertexColorIfChanged(pip.bgTexture, color)
+        end
+    end
+end
+
 local function ApplyPipConditions(bar, powerType, current, max)
     local frameData = GetFrameData(bar)
     local versionNow = CDM._conditionsVersion or 0
@@ -496,7 +505,7 @@ local function ApplyPipConditions(bar, powerType, current, max)
             end
             if condState.pipBgApplied and bar.bgTexture then
                 local baseBg = CDM:GetBarSetting(bar.barKey, "bgColor") or res.DEFAULT_BG_COLOR
-                SetVertexColorIfChanged(bar.bgTexture, baseBg)
+                SetPipBackgroundColor(bar, baseBg)
                 condState.pipBgApplied = nil
             end
             if condState.pipAlpha then
@@ -571,11 +580,11 @@ local function ApplyPipConditions(bar, powerType, current, max)
 
     if barMatched then
         if barMatched.bgColor and bar.bgTexture then
-            SetVertexColorIfChanged(bar.bgTexture, barMatched.bgColor)
+            SetPipBackgroundColor(bar, barMatched.bgColor)
             condState.pipBgApplied = true
         elseif condState.pipBgApplied and bar.bgTexture then
             local baseBg = CDM:GetBarSetting(bar.barKey, "bgColor") or res.DEFAULT_BG_COLOR
-            SetVertexColorIfChanged(bar.bgTexture, baseBg)
+            SetPipBackgroundColor(bar, baseBg)
             condState.pipBgApplied = nil
         end
         local newAlpha = barMatched.alpha or 1
@@ -587,7 +596,7 @@ local function ApplyPipConditions(bar, powerType, current, max)
     else
         if condState.pipBgApplied and bar.bgTexture then
             local baseBg = CDM:GetBarSetting(bar.barKey, "bgColor") or res.DEFAULT_BG_COLOR
-            SetVertexColorIfChanged(bar.bgTexture, baseBg)
+            SetPipBackgroundColor(bar, baseBg)
             condState.pipBgApplied = nil
         end
         if condState.pipAlpha then

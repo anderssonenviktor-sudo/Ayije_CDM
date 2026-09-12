@@ -805,6 +805,11 @@ end
 
 local function ClearMageChargeBar(bar)
     if not bar then return end
+    if bar.pips then
+        for _, pip in ipairs(bar.pips) do
+            if pip.chargeDisplay then ClearMageChargeBar(pip.chargeDisplay) end
+        end
+    end
     if bar.mageRecharge then
         bar.mageRecharge:SetScript("OnUpdate", nil)
         bar.mageRecharge:Hide()
@@ -816,6 +821,74 @@ local function ClearMageChargeBar(bar)
     end
 end
 
+local function LayoutSpacedMageChargeBar(bar, texturePath, bgTexturePath, bgColor)
+    local fill = bar:GetStatusBarTexture()
+    if fill then fill:SetShown(not bar.hasPipSpacing) end
+    if bar.bg then bar.bg:SetShown(not bar.hasPipSpacing) end
+    if not bar.hasPipSpacing then
+        if bar.pips then
+            for _, pip in ipairs(bar.pips) do
+                ClearMageChargeBar(pip.chargeDisplay)
+                pip:Hide()
+            end
+        end
+        return
+    end
+
+    ClearMageChargeBar(bar)
+    bar._mageLayoutMax = nil
+    local max = SeedMageChargeMax(bar.barKey)
+    bar.activePipCount = max
+    bar.pips = bar.pips or {}
+    if max < 1 then
+        for _, pip in ipairs(bar.pips) do pip:Hide() end
+        return
+    end
+
+    local width, height = bar:GetWidth(), bar:GetHeight()
+    local pixel = Pixel.GetSize()
+    local gap = math_max(0, Snap(bar.pipSpacing))
+    if max > 1 then gap = math_min(gap, math_max(0, (width - max * pixel) / (max - 1))) end
+    local segmentWidth = (width - gap * (max - 1)) / max
+    for i = 1, max do
+        local pip = bar.pips[i]
+        if not pip then
+            pip = CreateFrame("Frame", nil, bar)
+            local clip = CreateFrame("Frame", nil, pip)
+            clip:SetAllPoints(pip)
+            clip:SetClipsChildren(true)
+            local display = CreateFrame("StatusBar", nil, clip)
+            display.barKey = bar.barKey
+            display.bg = display:CreateTexture(nil, "BACKGROUND")
+            display.bg:SetAllPoints(display)
+            pip.chargeDisplay = display
+            bar.pips[i] = pip
+        end
+        pip:ClearAllPoints()
+        pip:SetPoint("TOPLEFT", bar, "TOPLEFT", (i - 1) * (segmentWidth + gap), 0)
+        pip:SetSize(segmentWidth, height)
+        local display = pip.chargeDisplay
+        -- Each viewport shows one section of the same engine-driven charge bar;
+        -- neither charge counts nor recharge durations need to be inspected.
+        display:ClearAllPoints()
+        display:SetPoint("TOPLEFT", pip, "TOPLEFT", -(i - 1) * segmentWidth, 0)
+        display:SetSize(segmentWidth * max, height)
+        display:SetStatusBarTexture(texturePath)
+        local displayTexture = display:GetStatusBarTexture()
+        displayTexture:SetHorizTile(false)
+        displayTexture:SetVertTile(false)
+        Pixel.DisableTextureSnap(displayTexture)
+        display.bg:SetTexture(bgTexturePath)
+        display.bg:SetHorizTile(false)
+        display.bg:SetVertTile(false)
+        Pixel.DisableTextureSnap(display.bg)
+        display.bg:SetVertexColor(bgColor.r, bgColor.g, bgColor.b, bgColor.a)
+        display._mageLayoutMax = nil
+        pip:Show()
+    end
+    for i = max + 1, #bar.pips do bar.pips[i]:Hide() end
+end
+
 local function UpdateMageChargeBar(bar, barKey)
     barKey = barKey or (bar and bar.powerType)
     local state, def = GetMageChargeState(barKey)
@@ -823,6 +896,15 @@ local function UpdateMageChargeBar(bar, barKey)
 
     if not bar or not bar:IsShown() then
         ClearMageChargeBar(bar)
+        return 0, state.max
+    end
+
+    if bar.hasPipSpacing then
+        for i = 1, bar.activePipCount or 0 do
+            local display = bar.pips[i].chargeDisplay
+            UpdateMageChargeBar(display, barKey)
+            if display.mageTickHolder then display.mageTickHolder:Hide() end
+        end
         return 0, state.max
     end
 
@@ -1673,6 +1755,7 @@ res.UpdateTipOfTheSpearBar = UpdateTipOfTheSpearBar
 res.EnableTipOfTheSpearTracking = EnableTipOfTheSpearTracking
 res.DisableTipOfTheSpearTracking = DisableTipOfTheSpearTracking
 res.UpdateMageChargeBar = UpdateMageChargeBar
+res.LayoutSpacedMageChargeBar = LayoutSpacedMageChargeBar
 res.IsMageChargeSpellAvailable = IsMageChargeSpellAvailable
 res.EnableMageChargeTracking = EnableMageChargeTracking
 res.DisableMageChargeTracking = DisableMageChargeTracking
