@@ -66,6 +66,7 @@ local RESOURCE_BAR_PER_KEY = {
     ArcaneCharges   = { color = { r = 0.1, g = 0.1, b = 0.98, a = 1 }, anchorTo = "Mana", offsetY = 1, pipSpacing = -1 },
     Fury            = { color = { r = 0.79, g = 0.26, b = 0.99, a = 1 }, smoothBars = true },
     Essence         = {
+        pipSpacing = -1,
         color = { r = 0.16, g = 0.57, b = 0.49, a = 1 },
         rechargingColor = { r = 0.08, g = 0.28, b = 0.25, a = 1 },
         capColor = { r = 0.93, g = 0.21, b = 0.35, a = 1 },

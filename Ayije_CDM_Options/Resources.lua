@@ -457,7 +457,8 @@ local function CreateResourcesTab(page, tabId)
         widthSlider:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 60
 
-        if barKey == "ArcaneCharges" or barKey == "FireBlast" or barKey == "Flurry" or barKey == "Prescience" then
+        if barKey == "ArcaneCharges" or barKey == "Essence" or barKey == "FireBlast"
+            or barKey == "Flurry" or barKey == "Prescience" then
             local spacingSlider = UI.CreateModernSlider(rc, L["Spacing (-1 = No Spacing)"], -1, 40,
                 CDM:GetBarSettingForClass(classKey, barKey, "pipSpacing") or -1,
                 function(v)

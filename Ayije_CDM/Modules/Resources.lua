@@ -1778,7 +1778,8 @@ local function UpdateBarPositions()
         end
 
         if bar.isPipBar then
-            local pipSpacing = barKey == "ArcaneCharges" and (CDM:GetBarSetting(barKey, "pipSpacing") or -1) or -1
+            local pipSpacing = (barKey == "ArcaneCharges" or barKey == "Essence")
+                and (CDM:GetBarSetting(barKey, "pipSpacing") or -1) or -1
             bar.hasPipSpacing = pipSpacing >= 0
             bar.pipSpacing = pipSpacing
             local max = GetPipBarMax(powerType)
