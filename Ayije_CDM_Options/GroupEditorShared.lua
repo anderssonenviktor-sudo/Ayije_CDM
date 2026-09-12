@@ -954,6 +954,50 @@ function Shared.BuildTextOverrideWidgets(rc, yOff, cfg)
         chargeColorPicker:SetPoint("LEFT", chargeColorLabel, "RIGHT", 6, 0)
         yOff = yOff - 30
 
+        if cfg.stackThresholdOverride then
+            local enabled = ov.stackTextThresholdEnabled == true
+            local checkbox = UI.CreateModernCheckbox(rc, L["Color at Stacks"], enabled, function(checked)
+                write("stackTextThresholdEnabled", checked or nil)
+                if cfg.onToggle then cfg.onToggle() end
+            end)
+            checkbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 30
+            if enabled then
+                local threshold = ov.stackTextThreshold or 2
+                local label = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+                label:SetPoint("TOPLEFT", 0, yOff)
+                label:SetText(L["Condition:"] .. " " .. L[">="])
+                local input = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+                input:SetSize(60, 20)
+                input:SetPoint("LEFT", label, "RIGHT", 12, 0)
+                input:SetAutoFocus(false)
+                input:SetNumeric(true)
+                input:SetMaxLetters(7)
+                input:SetText(tostring(threshold))
+                input:SetScript("OnEditFocusLost", function(self)
+                    local value = math.max(1, math.floor(tonumber(self:GetText()) or threshold))
+                    self:SetText(tostring(value))
+                    if value == threshold then return end
+                    threshold = value
+                    write("stackTextThreshold", value)
+                end)
+                input:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+                input:SetScript("OnEscapePressed", function(self)
+                    self:SetText(tostring(threshold))
+                    self:ClearFocus()
+                end)
+                yOff = yOff - 30
+                local colorLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+                colorLabel:SetPoint("TOPLEFT", 0, yOff)
+                colorLabel:SetText(L["Threshold Color"])
+                local picker = UI.CreateSimpleColorPicker(rc,
+                    ov.stackTextThresholdColor or { r = 1, g = 0, b = 0 },
+                    function(r, g, b) writeColor("stackTextThresholdColor", r, g, b) end, false)
+                picker:SetPoint("LEFT", colorLabel, "RIGHT", 6, 0)
+                yOff = yOff - 30
+            end
+        end
+
         local posLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
         posLabel:SetText(L["Position"])
         posLabel:SetPoint("TOPLEFT", 0, yOff)

@@ -908,6 +908,7 @@ local function CreateBuffGroupsTab(page)
                     chargePos = "countPosition", chargeX = "countOffsetX", chargeY = "countOffsetY",
                 },
                 colorAlpha = false,
+                stackThresholdOverride = true,
                 save = save,
                 onToggle = refresh,
                 createDropdown = function(p) return registerDropdown(CreateFrame("DropdownButton", nil, p, "WowStyle1DropdownTemplate")) end,

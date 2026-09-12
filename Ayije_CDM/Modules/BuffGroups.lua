@@ -381,6 +381,8 @@ local function ResolveCustomIconOverrideForFrame(frame, frameData)
     return nil
 end
 
+CDM.ResolveBuffSpellOverrideForFrame = ResolveCustomIconOverrideForFrame
+
 -- Re-assert entry point for the per-frame RefreshSpellTexture hook.
 local function ReassertCustomIcon(frame)
     if not CDM.buffCustomIconsInUse then return end
