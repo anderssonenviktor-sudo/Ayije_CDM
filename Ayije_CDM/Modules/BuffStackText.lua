@@ -167,7 +167,7 @@ Sync = function(record)
     if not UsableID(id) then Park(record); return end
     local ids = ResolveCandidates(frame, id)
     local ov = CDM.ResolveBuffSpellOverrideForFrame(frame, frameData)
-    if not (ov and ov.textOverride and ov.stackTextThresholdEnabled and not ov.hideVisuals and ids) then
+    if not (ov and ov.textOverride and ov.stackTextThresholdEnabled and ids) then
         if record.formatter then Park(record) end
         return
     end
