@@ -1,4 +1,4 @@
 ## Changelog
-## v.1.15
+## v.1.16
 
-- Buffs now have glow thresholds. Glow at X stacks
+- Resources spacing options
