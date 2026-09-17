@@ -992,6 +992,19 @@ local function CreateResourcesTab(page, tabId)
                 end)
             burstGlowCB:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 35
+
+            local burstColorCB = UI.CreateModernCheckbox(rc, L["Change color on Essence Burst"],
+                CDM:GetBarSettingForClass(classKey, barKey, "essenceBurstColorEnabled") == true,
+                function(checked)
+                    CDM:SetBarSettingForClass(classKey, barKey, "essenceBurstColorEnabled", checked)
+                    API:Refresh("RESOURCES")
+                end)
+            burstColorCB:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 35
+
+            local burstColorPicker = CreateBarColorPicker(rc, L["Essence Burst Color"], classKey, barKey, "essenceBurstColor")
+            burstColorPicker:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 28
         end
 
         yOff = BuildTicksSection(rc, classKey, barKey, yOff)

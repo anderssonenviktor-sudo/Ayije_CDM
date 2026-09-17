@@ -97,6 +97,8 @@ local cachedEssenceCapColor
 local cachedEssenceNearlyCapColor
 local cachedEssenceDynamicColors = true
 local cachedEssenceBurstGlow = true
+local cachedEssenceBurstColorEnabled = false
+local cachedEssenceBurstColor
 local cachedBar2TagEnabled = false
 local cachedBar2OffsetX = 0
 local cachedBar2OffsetY = 0
@@ -125,6 +127,8 @@ local function RefreshTrackerFontCache()
     cachedEssenceNearlyCapColor = CDM:GetBarSetting("Essence", "nearlyCapColor") or cachedEssenceReadyColor
     cachedEssenceDynamicColors = CDM:GetBarSetting("Essence", "dynamicColors") ~= false
     cachedEssenceBurstGlow = CDM:GetBarSetting("Essence", "essenceBurstGlow") ~= false
+    cachedEssenceBurstColorEnabled = CDM:GetBarSetting("Essence", "essenceBurstColorEnabled") == true
+    cachedEssenceBurstColor = CDM:GetBarSetting("Essence", "essenceBurstColor") or cachedEssenceReadyColor
     cachedBar2TagEnabled = CDM:GetBarSetting("Runes", "tagEnabled") ~= false
     cachedBar2OffsetX = CDM:GetBarSetting("Runes", "tagOffsetX") or 0
     cachedBar2OffsetY = CDM:GetBarSetting("Runes", "tagOffsetY") or 0
@@ -1267,6 +1271,10 @@ local function UpdateEssenceBurstGlow(bar)
 end
 
 local function ResolveEssenceDisplayColors(current, max)
+    if cachedEssenceBurstColorEnabled and availableEssenceBursts > 0 then
+        return cachedEssenceBurstColor, cachedEssenceBurstColor
+    end
+
     local readyColor = cachedEssenceReadyColor or GetPowerColor(POWER_TYPES.Essence)
     local rechargingColor = cachedEssenceRechargingColor or readyColor
 
