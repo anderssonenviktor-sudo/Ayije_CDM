@@ -1524,10 +1524,14 @@ UpdateBarValue = function(powerType)
         end
 
         local chargedFilledPips = bar._pipChargedFilled
+        local holyPowerColor = powerType == POWER_TYPES.HolyPower and CDM._Res.GetHolyPowerDisplayColor(bar.color)
         for i, pip in ipairs(bar.pips) do
             pip:SetValue(current, Enum.StatusBarInterpolation.Immediate)
 
-            if hasChargedPoints then
+            if holyPowerColor then
+                SetStatusBarColorIfChanged(pip, holyPowerColor)
+                RememberPipBaseColor(bar, i, holyPowerColor)
+            elseif hasChargedPoints then
                 local isCharged = chargedLookup and chargedLookup[i] or (feralStacks and i <= feralStacks)
 
                 if isCharged and i <= current then
@@ -1983,6 +1987,14 @@ local function OnSpecChanged()
         CDM._Res.DisableEvokerTracking()
     end
 
+    local newIsPaladin = SPEC_TO_CLASS[newSpecID] == "PALADIN"
+    local wasPaladin = currentSpecID and SPEC_TO_CLASS[currentSpecID] == "PALADIN"
+    if newIsPaladin then
+        if not wasPaladin then CDM._Res.EnablePaladinTracking() end
+    elseif wasPaladin then
+        CDM._Res.DisablePaladinTracking()
+    end
+
     currentSpecID = newSpecID
     CDM.resourcesSpecReady = (newSpecID ~= nil)
 
@@ -2232,6 +2244,7 @@ local function DisableResources()
     CDM._Res.DisableDevourerTracking()
     CDM._Res.DisableGuardianTracking()
     CDM._Res.DisableEvokerTracking()
+    CDM._Res.DisablePaladinTracking()
     CDM._Res.StopIgnorePainTracking()
     CDM._Res.DisableAllTrackerTickers()
     HideAllResourceBars()

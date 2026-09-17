@@ -970,6 +970,25 @@ local function CreateResourcesTab(page, tabId)
             yOff = yOff - 35
         end
 
+        if barKey == "HolyPower" then
+            local paladinHeader = UI.CreateHeader(rc, L["Paladin"])
+            paladinHeader:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 25
+
+            local divinePurposeColorCB = UI.CreateModernCheckbox(rc, L["Change color on Divine Purpose"],
+                CDM:GetBarSettingForClass(classKey, barKey, "divinePurposeColorEnabled") == true,
+                function(checked)
+                    CDM:SetBarSettingForClass(classKey, barKey, "divinePurposeColorEnabled", checked)
+                    API:Refresh("RESOURCES")
+                end)
+            divinePurposeColorCB:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 35
+
+            local divinePurposeColorPicker = CreateBarColorPicker(rc, L["Divine Purpose Color"], classKey, barKey, "divinePurposeColor")
+            divinePurposeColorPicker:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 28
+        end
+
         if barKey == "Essence" then
             local essenceHeader = UI.CreateHeader(rc, L["Evoker"])
             essenceHeader:SetPoint("TOPLEFT", 0, yOff)

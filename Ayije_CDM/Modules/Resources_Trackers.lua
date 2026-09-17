@@ -99,6 +99,8 @@ local cachedEssenceDynamicColors = true
 local cachedEssenceBurstGlow = true
 local cachedEssenceBurstColorEnabled = false
 local cachedEssenceBurstColor
+local cachedDivinePurposeColorEnabled = false
+local cachedDivinePurposeColor
 local cachedBar2TagEnabled = false
 local cachedBar2OffsetX = 0
 local cachedBar2OffsetY = 0
@@ -129,6 +131,8 @@ local function RefreshTrackerFontCache()
     cachedEssenceBurstGlow = CDM:GetBarSetting("Essence", "essenceBurstGlow") ~= false
     cachedEssenceBurstColorEnabled = CDM:GetBarSetting("Essence", "essenceBurstColorEnabled") == true
     cachedEssenceBurstColor = CDM:GetBarSetting("Essence", "essenceBurstColor") or cachedEssenceReadyColor
+    cachedDivinePurposeColorEnabled = CDM:GetBarSetting("HolyPower", "divinePurposeColorEnabled") == true
+    cachedDivinePurposeColor = CDM:GetBarSetting("HolyPower", "divinePurposeColor") or GetPowerColor(POWER_TYPES.HolyPower)
     cachedBar2TagEnabled = CDM:GetBarSetting("Runes", "tagEnabled") ~= false
     cachedBar2OffsetX = CDM:GetBarSetting("Runes", "tagOffsetX") or 0
     cachedBar2OffsetY = CDM:GetBarSetting("Runes", "tagOffsetY") or 0
@@ -1244,14 +1248,14 @@ local function GetEssenceRechargeRate()
     return 0.2
 end
 
-local function CountActiveEssenceBursts()
+local function CountActiveProcOverlays(spellIDs)
     local overlayFrame = _G.SpellActivationOverlayFrame
     if not overlayFrame then return 0 end
 
     local active = 0
     for i = 1, select("#", overlayFrame:GetChildren()) do
         local child = select(i, overlayFrame:GetChildren())
-        if child and child:IsShown() and ESSENCE_BURST_OVERLAY_SPELL_IDS[child.spellID] then
+        if child and child:IsShown() and spellIDs[child.spellID] then
             active = active + 1
         end
     end
@@ -1364,7 +1368,7 @@ local function UpdateEssenceCooldowns(bar)
 end
 
 local function RefreshEssenceBurstState()
-    local bursts = CountActiveEssenceBursts()
+    local bursts = CountActiveProcOverlays(ESSENCE_BURST_OVERLAY_SPELL_IDS)
     if bursts == availableEssenceBursts then return end
     availableEssenceBursts = bursts
     res.UpdateBarValue(POWER_TYPES.Essence)
@@ -1391,7 +1395,7 @@ local function EnableEvokerTracking()
     essenceRechargeRate = GetEssenceRechargeRate()
     res.RegisterResEvent("SPELL_ACTIVATION_OVERLAY_SHOW", OnEssenceOverlayShow)
     res.RegisterResEvent("SPELL_ACTIVATION_OVERLAY_HIDE", OnEssenceOverlayHide)
-    availableEssenceBursts = CountActiveEssenceBursts()
+    availableEssenceBursts = CountActiveProcOverlays(ESSENCE_BURST_OVERLAY_SPELL_IDS)
     C_Timer.After(0.1, function()
         res.UpdateBarValue(POWER_TYPES.Essence)
     end)
@@ -1404,6 +1408,58 @@ local function DisableEvokerTracking()
     essencePrevPartial = 0
     essencePrevPower = 0
     UpdateEssenceBurstGlow(CDM.resourceBars[POWER_TYPES.Essence])
+end
+
+do
+    local DIVINE_PURPOSE_OVERLAY_SPELL_IDS = { [408458] = true }
+    local paladinTrackingEnabled = false
+    local divinePurposeActive = false
+
+    local function RefreshDivinePurposeState()
+        if not paladinTrackingEnabled then return end
+        local active = CountActiveProcOverlays(DIVINE_PURPOSE_OVERLAY_SPELL_IDS) > 0
+        if active == divinePurposeActive then return end
+        divinePurposeActive = active
+        res.UpdateBarValue(POWER_TYPES.HolyPower)
+    end
+
+    local function OnDivinePurposeOverlayShow(event, spellID)
+        if paladinTrackingEnabled and DIVINE_PURPOSE_OVERLAY_SPELL_IDS[spellID] then
+            -- Defer until Blizzard's handler has made the overlay visible.
+            C_Timer.After(0, RefreshDivinePurposeState)
+        end
+    end
+
+    local function OnDivinePurposeOverlayHide(event, spellID)
+        if paladinTrackingEnabled and (spellID == nil or DIVINE_PURPOSE_OVERLAY_SPELL_IDS[spellID]) then
+            -- Match Essence Burst's delay while the overlay animates out.
+            C_Timer.After(0.2, RefreshDivinePurposeState)
+        end
+    end
+
+    local function EnablePaladinTracking()
+        paladinTrackingEnabled = true
+        CDM:RegisterEvent("SPELL_ACTIVATION_OVERLAY_SHOW", OnDivinePurposeOverlayShow)
+        CDM:RegisterEvent("SPELL_ACTIVATION_OVERLAY_HIDE", OnDivinePurposeOverlayHide)
+        divinePurposeActive = CountActiveProcOverlays(DIVINE_PURPOSE_OVERLAY_SPELL_IDS) > 0
+        C_Timer.After(0.1, RefreshDivinePurposeState)
+    end
+
+    local function DisablePaladinTracking()
+        paladinTrackingEnabled = false
+        divinePurposeActive = false
+    end
+
+    local function GetHolyPowerDisplayColor(baseColor)
+        if cachedDivinePurposeColorEnabled and divinePurposeActive then
+            return cachedDivinePurposeColor or baseColor
+        end
+        return baseColor
+    end
+
+    res.EnablePaladinTracking = EnablePaladinTracking
+    res.DisablePaladinTracking = DisablePaladinTracking
+    res.GetHolyPowerDisplayColor = GetHolyPowerDisplayColor
 end
 
 local function OnSpellUpdateUses(event, spellID, baseSpellID)
@@ -1685,6 +1741,8 @@ local function OnTrackerProfileApplied()
     cachedEssenceNearlyCapColor = nil
     cachedEssenceDynamicColors = true
     cachedEssenceBurstGlow = true
+    cachedDivinePurposeColorEnabled = false
+    cachedDivinePurposeColor = nil
     cachedBar2TagEnabled = false
     cachedBar2OffsetX = 0
     cachedBar2OffsetY = 0
