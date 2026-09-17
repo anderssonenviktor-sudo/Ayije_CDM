@@ -9,6 +9,9 @@ manual-changelog: Ayije_CDM/Ayije_CDM/CHANGELOG.md
 
 
 ignore:
+ - .worktrees/
+ - dev-tools/
+ - design/
  - .claude/
  - .vscode/
  - CLAUDE.md
