@@ -185,7 +185,7 @@ local function CollectFramesForReanchor(activeViewer, activeVName, inEditMode)
                     frame:Hide()
                 else
                     local isCooldownBuff = CDM.IsCooldownBuffFrame and CDM.IsCooldownBuffFrame(frame)
-                    if not isCooldownBuff then
+                    if not isCooldownBuff and not (CDM.IsBuffSlotReplacement and CDM:IsBuffSlotReplacement(frame)) then
                         local matchType, _, groupIdx = CheckBuffRegistryMatch(frame)
                         if matchType == "buffgroup" and groupIdx then
                             if not tempBuffGroups[groupIdx] then
@@ -399,7 +399,8 @@ local function RepositionBuffFrames(viewer)
 
     for frame in viewer.itemFramePool:EnumerateActive() do
         local isCooldownBuff = CDM.IsCooldownBuffFrame and CDM.IsCooldownBuffFrame(frame)
-        if IsBuffFrameIncluded(frame) and not isCooldownBuff then
+        if IsBuffFrameIncluded(frame) and not isCooldownBuff
+            and not (CDM.IsBuffSlotReplacement and CDM:IsBuffSlotReplacement(frame)) then
             local spellID = ResolveBaseSpellID(frame)
             if spellID and hiddenBuffSet and hiddenBuffSet[spellID] then
                 -- resource-hidden: skip
@@ -563,6 +564,7 @@ local function RunReanchor()
     elseif activeVName == VIEWERS.BUFF_BAR then
         activeSelf:PositionBuffBarFrames(activeViewer, activeVName)
     end
+    if activeSelf.RefreshBuffReplacementSlots then activeSelf:RefreshBuffReplacementSlots() end
 end
 
 function CDM:ForceReanchor(viewer)

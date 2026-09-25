@@ -967,7 +967,7 @@ function Shared.BuildTextOverrideWidgets(rc, yOff, cfg)
                 local label = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
                 label:SetPoint("TOPLEFT", 0, yOff)
                 label:SetText(L["Condition:"] .. " " .. L[">="])
-                local input = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+                local input = UI.CreateCustomEditBox(rc)
                 input:SetSize(60, 20)
                 input:SetPoint("LEFT", label, "RIGHT", 12, 0)
                 input:SetAutoFocus(false)
@@ -1123,7 +1123,8 @@ end
 function Shared.CreateSpecDropdown(parent, anchorPoint, anchorX, anchorY, config)
     local L = Runtime.L
 
-    local dropdown = CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
+    local dropdown = config.createDropdown and config.createDropdown(parent)
+        or CreateFrame("DropdownButton", nil, parent, "WowStyle1DropdownTemplate")
     dropdown:SetWidth(200)
     dropdown:SetPoint(anchorPoint, parent, anchorPoint, anchorX, anchorY)
 

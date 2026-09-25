@@ -185,6 +185,7 @@ CDM.defaults = {
 
     -- BuffBar viewer settings
     buffBarContainerLocked = true,
+    smoothBuffBars = false,
     buffBarWidth = 0,               -- 0 = auto (match Essential row 1 width)
     buffBarHeight = 20,
     buffBarSpacing = 1,

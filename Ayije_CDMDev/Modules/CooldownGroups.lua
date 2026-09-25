@@ -640,7 +640,7 @@ function CDM:GetUngroupedCooldownOverride(spellID, specID)
     return specOv[spellID]
 end
 
-function CDM:GetCooldownGlowColorOverride(frame)
+local function GetCooldownGlowOverride(self, frame)
     if not frame then return nil end
 
     local frameData = GetFrameData(frame)
@@ -661,10 +661,17 @@ function CDM:GetCooldownGlowColorOverride(frame)
         end
     end
 
-    if entry and entry.glowColorOverride then
-        return entry.glowColor
-    end
-    return nil
+    return entry
+end
+
+function CDM:GetCooldownGlowColorOverride(frame)
+    local entry = GetCooldownGlowOverride(self, frame)
+    return entry and entry.glowColorOverride and entry.glowColor or nil
+end
+
+function CDM:GetCooldownGlowTypeOverride(frame)
+    local entry = GetCooldownGlowOverride(self, frame)
+    return entry and entry.glowType or nil
 end
 
 function CDM:EnsureUngroupedCooldownOverrideEntry(spellID, specID)

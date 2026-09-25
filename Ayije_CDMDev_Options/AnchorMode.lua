@@ -611,7 +611,7 @@ local function CreateNudgePanel()
         label:SetPoint("TOPLEFT", 14, y)
         label:SetText(labelText)
 
-        local box = CreateFrame("EditBox", nil, panel, "InputBoxTemplate")
+        local box = ns.ConfigUI.CreateCustomEditBox(panel)
         box:SetSize(76, 22)
         box:SetPoint("TOPRIGHT", -14, y + 4)
         box:SetAutoFocus(false)

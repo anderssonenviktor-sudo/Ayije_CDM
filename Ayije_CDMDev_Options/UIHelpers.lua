@@ -14,16 +14,111 @@ local GOLD = CDM_C.GOLD or { r = 1, g = 0.82, b = 0, a = 1 }
 local WHITE = CDM_C.WHITE or { r = 1, g = 1, b = 1, a = 1 }
 
 local colorSwatchesByKey = {}
-local TEXT_BUTTON_BACKGROUND_ALPHA = 0.6
+
+function UI.CreateCustomEditBox(parent)
+    local input = CreateFrame("EditBox", nil, parent, "BackdropTemplate")
+    input:SetSize(120, 24)
+    input:SetAutoFocus(false)
+    input:SetFontObject("AyijeCDM_Font14")
+    input:SetTextColor(0.92, 0.92, 0.9, 1)
+    input:SetTextInsets(7, 7, 2, 2)
+    input:SetJustifyH("LEFT")
+    input:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    input:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    input:SetBackdrop({ bgFile = CDM_C.TEX_WHITE8X8, edgeFile = CDM_C.TEX_WHITE8X8, edgeSize = 1 })
+    input:SetBackdropColor(0.035, 0.035, 0.035, 0.95)
+    local hovered = false
+    local function UpdateBorder()
+        if input:HasFocus() then
+            input:SetBackdropBorderColor(GOLD.r, GOLD.g, GOLD.b, 0.95)
+        elseif hovered then
+            input:SetBackdropBorderColor(GOLD.r, GOLD.g, GOLD.b, 0.45)
+        else
+            input:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.8)
+        end
+    end
+    input:HookScript("OnEnter", function() hovered = true; UpdateBorder() end)
+    input:HookScript("OnLeave", function() hovered = false; UpdateBorder() end)
+    input:HookScript("OnEditFocusGained", UpdateBorder)
+    input:HookScript("OnEditFocusLost", UpdateBorder)
+    input:HookScript("OnHide", function() hovered = false; UpdateBorder() end)
+    UpdateBorder()
+    return input
+end
+
+function UI.CreateSpellStripSurface(parent)
+    local surface = CreateFrame("Frame", nil, parent, "BackdropTemplate")
+    surface:SetFrameLevel(parent:GetFrameLevel())
+    surface:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    surface:SetBackdropColor(0.045, 0.04, 0.035, 0.95)
+    surface:SetBackdropBorderColor(0.36, 0.31, 0.21, 0.8)
+    return surface
+end
+
+function UI.StyleSpellStripAddButton(button)
+    local surface = UI.CreateSpellStripSurface(button)
+    surface:SetAllPoints()
+    surface:SetBackdropColor(0.11, 0.095, 0.06, 0.95)
+    for _, size in ipairs({ { 10, 2 }, { 2, 10 } }) do
+        local line = surface:CreateTexture(nil, "ARTWORK")
+        line:SetSize(size[1], size[2])
+        line:SetPoint("CENTER")
+        line:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 1)
+    end
+    button:HookScript("OnEnter", function()
+        surface:SetBackdropColor(0.2, 0.16, 0.07, 1)
+        surface:SetBackdropBorderColor(GOLD.r, GOLD.g, GOLD.b, 0.9)
+    end)
+    button:HookScript("OnLeave", function()
+        surface:SetBackdropColor(0.11, 0.095, 0.06, 0.95)
+        surface:SetBackdropBorderColor(0.36, 0.31, 0.21, 0.8)
+    end)
+end
 
 function UI.CreateTextButton(parent)
-    local button = CreateFrame("Button", nil, parent, "UIPanelButtonGrayTemplate")
+    local button = CreateFrame("Button", nil, parent, "BackdropTemplate")
+    button:SetSize(120, 24)
+    button:SetBackdrop({ edgeFile = CDM_C.TEX_WHITE8X8, edgeSize = 1 })
+    local label = button:CreateFontString(nil, "OVERLAY")
+    label:SetPoint("LEFT", 3, 0)
+    label:SetPoint("RIGHT", -3, 0)
+    label:SetJustifyH("CENTER")
+    button:SetFontString(label)
     button:SetNormalFontObject(AyijeCDM_GameFontNormal)
     button:SetHighlightFontObject(AyijeCDM_GameFontHighlight)
     button:SetDisabledFontObject(AyijeCDM_GameFontDisable)
-    button:GetNormalTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
-    button:GetPushedTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
-    button:GetDisabledTexture():SetAlpha(TEXT_BUTTON_BACKGROUND_ALPHA)
+    button:SetPushedTextOffset(0, -1)
+
+    local function Background(r, g, b, a)
+        local texture = button:CreateTexture(nil, "BACKGROUND")
+        texture:SetPoint("TOPLEFT", 1, -1)
+        texture:SetPoint("BOTTOMRIGHT", -1, 1)
+        texture:SetColorTexture(r, g, b, a)
+        return texture
+    end
+    button:SetNormalTexture(Background(0.035, 0.035, 0.035, 0.95))
+    button:SetPushedTexture(Background(0.16, 0.13, 0.035, 0.98))
+    button:SetDisabledTexture(Background(0.035, 0.035, 0.035, 0.65))
+    button:SetHighlightTexture(Background(GOLD.r, GOLD.g, GOLD.b, 0.08))
+    button:GetHighlightTexture():SetBlendMode("BLEND")
+
+    local hovered = false
+    local function UpdateBorder()
+        if not button:IsEnabled() then
+            button:SetBackdropBorderColor(0.25, 0.25, 0.25, 0.6)
+        elseif hovered then
+            button:SetBackdropBorderColor(GOLD.r, GOLD.g, GOLD.b, 0.95)
+        else
+            button:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.8)
+        end
+    end
+    button:HookScript("OnEnter", function() hovered = true; UpdateBorder() end)
+    button:HookScript("OnLeave", function() hovered = false; UpdateBorder() end)
+    button:HookScript("OnHide", function() hovered = false; UpdateBorder() end)
+    hooksecurefunc(button, "Enable", UpdateBorder)
+    hooksecurefunc(button, "Disable", UpdateBorder)
+    hooksecurefunc(button, "SetEnabled", UpdateBorder)
+    UpdateBorder()
     return button
 end
 
@@ -264,6 +359,103 @@ function UI.CreateModernSlider(parent, label, minVal, maxVal, currentVal, onValu
     return panel
 end
 
+function UI.CreateCompactSlider(parent, label, minVal, maxVal, currentVal, onValueChanged)
+    local panel = CreateFrame("Frame", nil, parent)
+    panel:SetSize(290, 32)
+
+    panel.Label = panel:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+    panel.Label:SetPoint("LEFT")
+    panel.Label:SetWidth(154)
+    panel.Label:SetJustifyH("LEFT")
+    panel.Label:SetText(label)
+
+    local slider = CreateFrame("Slider", nil, panel)
+    slider:SetPoint("LEFT", 160, 0)
+    slider:SetSize(88, 22)
+    slider:SetOrientation("HORIZONTAL")
+    slider:SetMinMaxValues(minVal, maxVal)
+    slider:SetValueStep(1)
+    slider:SetObeyStepOnDrag(true)
+    panel.Slider = slider
+
+    local track = slider:CreateTexture(nil, "BACKGROUND")
+    track:SetPoint("LEFT")
+    track:SetPoint("RIGHT")
+    track:SetHeight(4)
+    track:SetColorTexture(0.3, 0.3, 0.3, 1)
+
+    local fill = slider:CreateTexture(nil, "ARTWORK")
+    fill:SetPoint("LEFT", track, "LEFT")
+    fill:SetHeight(4)
+    fill:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 0.65)
+
+    local thumb = slider:CreateTexture(nil, "OVERLAY")
+    thumb:SetSize(8, 12)
+    thumb:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 1)
+    slider:SetThumbTexture(thumb)
+    slider:SetScript("OnEnter", function() thumb:SetColorTexture(1, 0.94, 0.65, 1) end)
+    slider:SetScript("OnLeave", function() thumb:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 1) end)
+
+    local input = UI.CreateCustomEditBox(panel)
+    input:SetSize(36, 22)
+    input:SetPoint("RIGHT")
+    input:SetFontObject("AyijeCDM_Font14")
+    input:SetJustifyH("CENTER")
+    input:SetTextInsets(3, 3, 1, 1)
+    input:SetAutoFocus(false)
+    input:SetAltArrowKeyMode(false)
+    input:SetMaxLetters(8)
+    panel.Input = input
+
+    local value, syncing
+    local function Normalize(raw)
+        local number = tonumber(raw) or value or minVal
+        return math.max(minVal, math.min(maxVal, math.floor(number + 0.5)))
+    end
+    local function Apply(raw, silent)
+        local nextValue = Normalize(raw)
+        local changed = value ~= nextValue
+        value = nextValue
+        syncing = true
+        slider:SetValue(value)
+        syncing = false
+        fill:SetWidth(4 + (slider:GetWidth() - 8) * (value - minVal) / math.max(1, maxVal - minVal))
+        input:SetText(value)
+        if changed and not silent then onValueChanged(value) end
+    end
+    slider:SetScript("OnValueChanged", function(_, nextValue)
+        if not syncing then Apply(nextValue) end
+    end)
+    input:SetScript("OnEditFocusGained", function(self)
+        self:HighlightText()
+    end)
+    input:SetScript("OnEditFocusLost", function(self)
+        Apply(self:GetText())
+        self:HighlightText(0, 0)
+    end)
+    input:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    input:SetScript("OnEscapePressed", function(self)
+        self:SetText(value)
+        self:ClearFocus()
+    end)
+    input:SetScript("OnArrowPressed", function(self, key)
+        if key == "UP" or key == "RIGHT" then
+            Apply(Normalize(self:GetText()) + 1)
+        elseif key == "DOWN" or key == "LEFT" then
+            Apply(Normalize(self:GetText()) - 1)
+        end
+    end)
+    input:SetScript("OnHide", function(self)
+        self:SetText(value)
+        self:ClearFocus()
+    end)
+    function panel:UpdateUIValue(nextValue)
+        Apply(nextValue, true)
+    end
+    Apply(currentVal, true)
+    return panel
+end
+
 function UI.CreateModernSliderPrecise(parent, label, minVal, maxVal, currentVal, step, decimals, onValueChanged)
     currentVal = tonumber(currentVal) or minVal
     local panel = CreateFrame("Frame", nil, parent)
@@ -388,6 +580,62 @@ function UI.RoundToInt(value)
     local num = tonumber(value)
     if not num then return 0 end
     return math.floor(num + 0.5)
+end
+
+function UI.CreateCompactCheckbox(parent, label, initialValue, onChange)
+    local frame = CreateFrame("Frame", nil, parent)
+    frame:SetSize(290, 32)
+
+    local text = frame:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
+    text:SetPoint("LEFT")
+    text:SetWidth(240)
+    text:SetJustifyH("LEFT")
+    text:SetText(label)
+    frame.label = text
+
+    local checkbox = CreateFrame("CheckButton", nil, frame, "BackdropTemplate")
+    checkbox:SetSize(18, 18)
+    checkbox:SetPoint("RIGHT", -9, 0)
+    checkbox:SetHitRectInsets(-5, -5, -5, -5)
+    checkbox:SetBackdrop({ bgFile = CDM_C.TEX_WHITE8X8, edgeFile = CDM_C.TEX_WHITE8X8, edgeSize = 1 })
+    checkbox:SetBackdropColor(0, 0, 0, 0.3)
+    frame.checkbox = checkbox
+
+    local mark = checkbox:CreateTexture(nil, "ARTWORK")
+    mark:SetPoint("TOPLEFT", 4, -4)
+    mark:SetPoint("BOTTOMRIGHT", -4, 4)
+    mark:SetColorTexture(GOLD.r, GOLD.g, GOLD.b, 1)
+    checkbox:SetCheckedTexture(mark)
+
+    local hovered = false
+    local function UpdateBorder()
+        if hovered or checkbox:GetChecked() then
+            checkbox:SetBackdropBorderColor(GOLD.r, GOLD.g, GOLD.b, 0.85)
+        else
+            checkbox:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.7)
+        end
+    end
+    checkbox:SetScript("OnEnter", function()
+        hovered = true
+        UpdateBorder()
+    end)
+    checkbox:SetScript("OnLeave", function()
+        hovered = false
+        UpdateBorder()
+    end)
+    checkbox:SetScript("OnClick", function(self)
+        UpdateBorder()
+        if onChange then onChange(self:GetChecked() and true or false) end
+    end)
+    function frame:SetChecked(checked)
+        checkbox:SetChecked(checked and true or false)
+        UpdateBorder()
+    end
+    function frame:GetChecked()
+        return checkbox:GetChecked()
+    end
+    frame:SetChecked(initialValue)
+    return frame
 end
 
 function UI.CreateModernCheckbox(parent, label, initialValue, onChange)
@@ -773,7 +1021,7 @@ function UI.ShowCustomIconPopup(current, onConfirm)
         hint:SetJustifyH("LEFT")
         UI.SetTextFaint(hint)
 
-        local editBox = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
+        local editBox = UI.CreateCustomEditBox(window)
         editBox:SetSize(120, 20)
         editBox:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", 6, -14)
         editBox:SetAutoFocus(false)

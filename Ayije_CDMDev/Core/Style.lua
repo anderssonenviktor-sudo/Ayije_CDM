@@ -563,13 +563,14 @@ local function ClearReadyGlow(frame, frameData)
 end
 
 local function ApplyReadyGlow(frame, frameData, entry)
-    if frameData.cdmReadyGlowActive and frameData.cdmBuffGlowOverrideColor == entry.readyGlowColor then
+    if frameData.cdmReadyGlowActive and frameData.cdmBuffGlowOverrideColor == entry.readyGlowColor
+        and frameData.cdmBuffGlowOverrideType == entry.glowType then
         local host = frameData.cdmBuffGlowHost
         if host and host:IsShown() and host:GetWidth() >= 1 and GetFrameData(host).cdmGlowActive then
             return
         end
     end
-    CDM.Glow:RequestBuffGlow(frame, true, entry.readyGlowColor, nil)
+    CDM.Glow:RequestBuffGlow(frame, true, entry.readyGlowColor, nil, entry.glowType)
     frameData.cdmReadyGlowActive = true
 end
 
@@ -905,7 +906,7 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
 
     -- Own version gate: a threshold change leaves geometry and spell identical,
     -- so both needsVisualUpdate and fullUpdate skip. nil here is the detach.
-    if frame.Cooldown and frameData.cdmLastFormatterVer ~= styleVersion then
+    if frame.Cooldown and frame.Cooldown.SetCountdownFormatter and frameData.cdmLastFormatterVer ~= styleVersion then
         frameData.cdmLastFormatterVer = styleVersion
         frame.Cooldown:SetCountdownFormatter(CDM.CooldownFormatter.Get())
     end
@@ -1067,26 +1068,24 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
                     effectiveCdColor = effectiveCdColor or styleCache.cooldownColor
                     effectiveChargeColor = effectiveChargeColor or viewerChargeColor
                 else
+                    local cdFontKey = (desc.cdFontKey2 and isRow2) and desc.cdFontKey2 or desc.cdFontKey
+                    effectiveCdFontSize = styleCache[cdFontKey]
+                    effectiveCdColor = styleCache[desc.cdColorKey]
+                    local chargeFontKey = (desc.chargeKey2 and isRow2) and desc.chargeKey2 or desc.chargeKey
+                    effectiveChargeFS = chargeFontKey and styleCache[chargeFontKey] or styleCache.chargeFontSize
+                    effectiveChargeColor = viewerChargeColor
+                    effectiveChargePos = viewerChargePos
+                    effectiveChargeOX = viewerChargeOX
+                    effectiveChargeOY = viewerChargeOY
                     local ov = spellID and CDM:GetUngroupedCooldownOverride(spellID)
                     if ov and ov.textOverride then
-                        local db = CDM.db
-                        effectiveCdFontSize = ov.cooldownFontSize or (db and db.cooldownFontSize or 15)
-                        effectiveCdColor = ov.cooldownColor or (db and db.cooldownColor) or styleCache.cooldownColor
-                        effectiveChargeFS = ov.chargeFontSize or (db and db.chargeFontSize or 15)
-                        effectiveChargeColor = ov.chargeColor or viewerChargeColor
-                        effectiveChargePos = ov.chargePosition or viewerChargePos
-                        effectiveChargeOX = ov.chargeOffsetX or viewerChargeOX
-                        effectiveChargeOY = ov.chargeOffsetY or viewerChargeOY
-                    else
-                        local cdFontKey = (desc.cdFontKey2 and isRow2) and desc.cdFontKey2 or desc.cdFontKey
-                        effectiveCdFontSize = styleCache[cdFontKey]
-                        effectiveCdColor = styleCache[desc.cdColorKey]
-                        local chargeFontKey = (desc.chargeKey2 and isRow2) and desc.chargeKey2 or desc.chargeKey
-                        effectiveChargeFS = chargeFontKey and styleCache[chargeFontKey] or styleCache.chargeFontSize
-                        effectiveChargeColor = viewerChargeColor
-                        effectiveChargePos = viewerChargePos
-                        effectiveChargeOX = viewerChargeOX
-                        effectiveChargeOY = viewerChargeOY
+                        effectiveCdFontSize = ov.cooldownFontSize or effectiveCdFontSize
+                        effectiveCdColor = ov.cooldownColor or effectiveCdColor
+                        effectiveChargeFS = ov.chargeFontSize or effectiveChargeFS
+                        effectiveChargeColor = ov.chargeColor or effectiveChargeColor
+                        effectiveChargePos = ov.chargePosition or effectiveChargePos
+                        effectiveChargeOX = ov.chargeOffsetX or effectiveChargeOX
+                        effectiveChargeOY = ov.chargeOffsetY or effectiveChargeOY
                     end
                 end
             else
@@ -1468,6 +1467,8 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
     if isCooldown and self.ApplyCooldownCustomIcon then
         self:ApplyCooldownCustomIcon(frame)
     end
+
+    if self.ApplySpellAppearanceOverrides then self:ApplySpellAppearanceOverrides(frame, vName) end
 
     if fullUpdate then
         frameData.hooksInitialized = true

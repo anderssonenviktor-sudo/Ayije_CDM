@@ -88,6 +88,10 @@ local function BuildBreakpoints(cache)
 end
 
 function Formatter.Rebuild(styleCache)
+    if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum.NumericRuleFormatRounding) then
+        instance = nil
+        return
+    end
     local decThreshold = styleCache.cooldownDecimalThreshold or 0
     if decThreshold <= 0 and not styleCache.cooldownColorThresholdEnabled then
         instance = nil
@@ -107,4 +111,31 @@ end
 
 function Formatter.Get()
     return instance
+end
+
+local spellFormatters = {}
+local spellFormatterCount = 0
+function Formatter.GetForSpell(entry)
+    if not entry or not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter and Enum.NumericRuleFormatRounding) then return nil end
+    local seconds = math.max(0, math.min(59, math.floor(tonumber(entry.thresholdSeconds) or 0)))
+    if seconds == 0 or not (entry.thresholdDecimals or entry.thresholdColorEnabled) then return nil end
+    local color = entry.thresholdColor or { r = 1, g = 0.2, b = 0.2 }
+    local key = table.concat({ seconds, entry.thresholdDecimals and 1 or 0, entry.thresholdColorEnabled and 1 or 0,
+        color.r or 1, color.g or 0.2, color.b or 0.2 }, "|")
+    if spellFormatters[key] ~= nil then return spellFormatters[key] or nil end
+    if spellFormatterCount >= 128 then
+        spellFormatters = {}
+        spellFormatterCount = 0
+    end
+    local formatter = C_StringUtil.CreateNumericRuleFormatter()
+    local points = BuildBreakpoints({
+        cooldownDecimalThreshold = entry.thresholdDecimals and seconds or 0,
+        cooldownColorThresholdEnabled = entry.thresholdColorEnabled,
+        cooldownColorThreshold = seconds,
+        cooldownColorThresholdColor = color,
+    })
+    if not pcall(formatter.SetBreakpoints, formatter, points) then spellFormatters[key] = false; return nil end
+    spellFormatters[key] = formatter
+    spellFormatterCount = spellFormatterCount + 1
+    return formatter
 end

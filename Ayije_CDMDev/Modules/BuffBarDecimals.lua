@@ -149,9 +149,11 @@ end
 
 -- Container lifecycle
 
-local host, container, signature
+local host, container, signature, generationHost
 local boundButton = {}        -- bar index -> slot button
 local boundThr = {}           -- bar index -> threshold currently bound
+local boundText = {}
+local buttonText = {}
 -- Every slot button we ever bound on the LIVE container. There is no API to
 -- destroy a container or its slots, so these are hidden by hand on release --
 -- otherwise their engine FontStrings linger with the old font and anchor.
@@ -159,7 +161,22 @@ local retiredButtons = {}
 local pendingRegen = false
 local regenFrame
 
+local function AdoptTimer(bar, button, fs)
+    bar._engBtn, bar._engFS = button, fs
+    bar._engineOwnsTimer = true
+    bar._timerText:SetText("")
+    bar._timerText:SetAlpha(0)
+    bar._timerText:Hide()
+end
+
 local function ReleaseContainer()
+    -- Slot buttons may already be forbidden. Retire their addon-owned parent
+    -- before restoring the fallback text, so failed slot Hide calls cannot
+    -- leave a previous generation's timer visible.
+    if generationHost then
+        generationHost:Hide()
+        generationHost = nil
+    end
     for i in pairs(boundButton) do
         local bar = CDM.BuffBarTimers_GetBar and CDM.BuffBarTimers_GetBar(i)
         if bar then
@@ -168,12 +185,15 @@ local function ReleaseContainer()
             bar._engineOwnsTimer = nil
             if bar._timerText then
                 bar._timerText:SetAlpha(1)
-                bar._timerText:Show()
+                bar._timerText:SetText("")
+                bar._timerText:Hide()
             end
         end
     end
     wipe(boundButton)
     wipe(boundThr)
+    wipe(boundText)
+    wipe(buttonText)
     if container then
         -- There is no API to destroy a container or drop its slots, and a
         -- hidden container's buttons keep their regions alive -- a stale engine
@@ -246,6 +266,7 @@ local function CollectDesired()
         table.sort(ids)
 
         local cfg = entries[want.index].bar
+        local color = cfg.durationColor or { r = 1, g = 1, b = 1, a = 1 }
         local barSig = table.concat({
             cfg.durationFontSize or 15,
             cfg.durationPosition or "RIGHT",
@@ -258,6 +279,7 @@ local function CollectDesired()
             -- engine button is anchored over.
             cfg.iconGap or 1,
             tostring(cfg.showDuration ~= false),
+            color.r, color.g, color.b, color.a or 1,
         }, ",")
 
         parts[#parts + 1] = want.index .. "=" .. table.concat(ids, ",") .. "@" .. barSig
@@ -303,7 +325,11 @@ local function BuildContainer(desired)
     host:SetAlpha(1)
     host:Show()
 
-    container = CreateFrame("AuraContainer", nil, host, "CustomAuraContainerTemplate")
+    generationHost = CreateFrame("Frame", nil, host)
+    generationHost:SetSize(1, 1)
+    generationHost:SetPoint("TOPLEFT", host, "TOPLEFT")
+    container = CreateFrame("AuraContainer", nil, generationHost, "CustomAuraContainerTemplate")
+    local buildingContainer = container
     container:SetSize(1, 1)
     container:ClearAllPoints()
     -- A point is REQUIRED: an unanchored container has no renderable rect -- it
@@ -317,6 +343,7 @@ local function BuildContainer(desired)
         local index, thr, cfg = want.index, want.thr, want.cfg
 
         local function initializeFrame(button)
+            if container ~= buildingContainer then return end
             if button.SetMouseMotionEnabled then button:SetMouseMotionEnabled(false) end
             local fmt = GetDecimalFormatter(thr)
             if not fmt then return end
@@ -346,7 +373,12 @@ local function BuildContainer(desired)
             button:SetPoint("BOTTOMRIGHT", rect, "BOTTOMRIGHT", 0, 0)
             if button.SetFrameStrata then button:SetFrameStrata("HIGH") end
 
-            local fs = button:CreateFontString(nil, "OVERLAY")
+            local fs = buttonText[button]
+            if not fs then
+                fs = button:CreateFontString(nil, "OVERLAY")
+                buttonText[button] = fs
+                retiredButtons[#retiredButtons + 1] = button
+            end
             -- Style before registering, from the config directly -- this is the
             -- only window in which the engine FS can be styled at all.
             local durOX  = cfg.durationOffsetX or -2
@@ -367,16 +399,11 @@ local function BuildContainer(desired)
                 fs:SetPoint(durPos, button, durPos, durOX, durOY)
             end
 
-            retiredButtons[#retiredButtons + 1] = button
             if SetDurationTextSafe(button, fs, BuildDurationTextOpts(fmt)) then
                 boundButton[index] = button
                 boundThr[index] = thr
-                bar._engBtn = button
-                bar._engFS = fs
-                -- The engine now owns this bar's timer display. Hide ours so
-                -- the two can never render on top of each other.
-                out:SetText("")
-                bar._engineOwnsTimer = true
+                boundText[index] = fs
+                AdoptTimer(bar, button, fs)
             end
         end
 
@@ -407,12 +434,15 @@ function CDM.BuffBarDecimals_Sync()
         for k = 1, #desired do
             local want = desired[k]
             local button = boundButton[want.index]
+            local fs = boundText[want.index]
             local bar = CDM.BuffBarTimers_GetBar and CDM.BuffBarTimers_GetBar(want.index)
-            if button and bar then
-                bar._engBtn = button
-                if bar._engFS and boundThr[want.index] ~= want.thr then
+            if button and fs and bar then
+                -- Rebuild can reuse the same slot after clearing the bar's
+                -- ownership fields. Restore both the binding and visibility.
+                AdoptTimer(bar, button, fs)
+                if boundThr[want.index] ~= want.thr then
                     local fmt = GetDecimalFormatter(want.thr)
-                    if fmt and SetDurationTextSafe(button, bar._engFS, BuildDurationTextOpts(fmt)) then
+                    if fmt and SetDurationTextSafe(button, fs, BuildDurationTextOpts(fmt)) then
                         boundThr[want.index] = want.thr
                     end
                 end

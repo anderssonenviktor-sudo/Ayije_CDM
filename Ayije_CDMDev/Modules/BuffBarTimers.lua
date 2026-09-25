@@ -475,6 +475,42 @@ end
 
 local barFrames = {}          -- index (into entries) -> our bar frame
 
+local SMOOTH_INTERPOLATION = Enum and Enum.StatusBarInterpolation
+    and Enum.StatusBarInterpolation.ExponentialEaseOut
+
+local function ResetBuffBarSmoothing(bar)
+    bar._smoothInitialized = nil
+    bar._smoothAuraKey = nil
+    bar._smoothSource = nil
+    bar._smoothEnabled = nil
+end
+
+local function PrepareBuffBarSmoothing(bar, source, auraKey)
+    if bar._smoothSource ~= source then
+        ResetBuffBarSmoothing(bar)
+        bar._smoothSource = source
+    end
+    -- Aura IDs may be secret in combat. The existing frame/config assignment
+    -- remains our identity in that case; never compare or table-index a secret.
+    if not IsSecret(auraKey) and type(auraKey) == "number" then
+        if bar._smoothAuraKey ~= nil and bar._smoothAuraKey ~= auraKey then
+            bar._smoothInitialized = nil
+        end
+        bar._smoothAuraKey = auraKey
+    end
+end
+
+local function SetBuffBarValue(bar, value, enabled)
+    if enabled and SMOOTH_INTERPOLATION and bar._smoothInitialized
+        and bar._smoothEnabled == enabled then
+        bar._bar:SetValue(value, SMOOTH_INTERPOLATION)
+    else
+        bar._bar:SetValue(value)
+    end
+    bar._smoothInitialized = true
+    bar._smoothEnabled = enabled
+end
+
 local function CreateBar(index, parent)
     local wrap = CreateFrame("Frame", nil, parent)
 
@@ -521,6 +557,7 @@ local function CreateBar(index, parent)
     wrap._barBorderHost = CreateFrame("Frame", nil, wrap)
     wrap._iconBorderHost = CreateFrame("Frame", nil, wrap)
 
+    wrap:HookScript("OnHide", ResetBuffBarSmoothing)
     wrap:Hide()
     barFrames[index] = wrap
     return wrap
@@ -687,6 +724,7 @@ local function StyleBar(bar, cfg, offsetAccum, grow, host)
     if cfg.barType == M.TYPE_STACK then
         -- NormalizeBar guarantees maxStacks >= 1, so the span is never zero.
         sb:SetMinMaxValues(0, cfg.maxStacks)
+        ResetBuffBarSmoothing(bar)
         sb:SetValue(0)
         BuildStackLayers(bar, cfg)
         BuildTicks(bar, cfg, width, h)
@@ -715,9 +753,9 @@ end
 -- FontString -- both are forbidden to read after initializeFrame and throw in
 -- combat. While _engineOwnsTimer is set, the engine's FS is the visible one and
 -- the tick only hides its own.
-local function MirrorFill(sb, blizzBar)
-    sb:SetMinMaxValues(blizzBar:GetMinMaxValues())
-    sb:SetValue(blizzBar:GetValue())
+local function MirrorFill(bar, blizzBar, smoothEnabled)
+    bar._bar:SetMinMaxValues(blizzBar:GetMinMaxValues())
+    SetBuffBarValue(bar, blizzBar:GetValue(), smoothEnabled)
 end
 
 -- Stack-bar scaffolding
@@ -1069,10 +1107,12 @@ end
 
 -- Push one value to the fill and every threshold overlay. The value may be
 -- secret; it only ever reaches SetValue.
-local function SetAllBarsValue(bar, value)
-    bar._bar:SetValue(value)
+local function SetAllBarsValue(bar, value, smoothEnabled)
+    SetBuffBarValue(bar, value, smoothEnabled == true)
     local layers = bar._thrOverlays
     if layers then
+        -- Thresholds follow the actual count; their geometry is anchored to
+        -- the base fill texture, so they travel with its native interpolation.
         for i = 1, #layers do
             layers[i]:SetValue(value)
         end
@@ -1139,6 +1179,9 @@ local Renderers = {}
 
 Renderers[M.TYPE_TIMER] = function(bar, cfg, ctx)
     local blzChild, blizzBar, fbAura = ctx.blzChild, ctx.blizzBar, ctx.fbAura
+    if bar._engineOwnsTimer or cfg.showDuration == false then
+        bar._timerText:Hide()
+    end
 
     if ctx.isActive then
         if not bar:IsShown() then bar:Show() end
@@ -1147,9 +1190,13 @@ Renderers[M.TYPE_TIMER] = function(bar, cfg, ctx)
         if blizzBar then
             -- Secret values pass through the setters; never read or compare
             -- them in Lua.
-            pcall(MirrorFill, sb, blizzBar)
+            PrepareBuffBarSmoothing(bar, blizzBar, blzChild.auraInstanceID)
+            local ok = pcall(MirrorFill, bar, blizzBar, ctx.smoothEnabled)
+            if not ok then ResetBuffBarSmoothing(bar) end
             -- Fill colour is StyleBar's (cfg.barColor); mirroring Blizzard's
             -- here would overwrite it every tick.
+        else
+            ResetBuffBarSmoothing(bar)
         end
 
         pcall(UpdateIconAndName, bar, cfg, blzChild, blizzBar)
@@ -1184,14 +1231,16 @@ Renderers[M.TYPE_TIMER] = function(bar, cfg, ctx)
             and dur > 0 and exp > 0 then
             local remaining = exp - GetTime()
             if remaining < 0 then remaining = 0 end
+            PrepareBuffBarSmoothing(bar, cfg, fbAura.auraInstanceID)
             sb:SetMinMaxValues(0, dur)
-            sb:SetValue(remaining)
+            SetBuffBarValue(bar, math_min(remaining, dur), ctx.smoothEnabled)
             if cfg.showDuration ~= false and not bar._engineOwnsTimer then
                 bar._timerText:SetText(FormatTime(remaining))
                 bar._timerText:Show()
             end
         else
             -- Secret or infinite: full bar, no countdown.
+            ResetBuffBarSmoothing(bar)
             sb:SetMinMaxValues(0, 1)
             sb:SetValue(1)
             if cfg.showDuration ~= false then bar._timerText:SetText("") end
@@ -1201,6 +1250,7 @@ Renderers[M.TYPE_TIMER] = function(bar, cfg, ctx)
         return true
     end
 
+    ResetBuffBarSmoothing(bar)
     return false
 end
 
@@ -1228,6 +1278,7 @@ Renderers[M.TYPE_STACK] = function(bar, cfg, ctx)
     bar._timerText:Hide()
 
     if not tracking then
+        ResetBuffBarSmoothing(bar)
         -- Aura is down. With alwaysShow the bar stays up as an empty track so
         -- it holds its slot in the layout; without it the bar hides entirely
         -- and the Tick's caller collapses the gap.
@@ -1253,12 +1304,20 @@ Renderers[M.TYPE_STACK] = function(bar, cfg, ctx)
     if not bar:IsShown() then bar:Show() end
 
     if unreadable then
+        ResetBuffBarSmoothing(bar)
         SetAllBarsFull(bar)
         -- Fail-open: full bar, no number. Nothing to show either way.
         stackText:SetText("")
         stackText:Hide()
     else
-        SetAllBarsValue(bar, count)
+        local auraKey
+        if ctx.isActive and blzChild then
+            auraKey = blzChild.auraInstanceID
+        elseif fbAura then
+            auraKey = fbAura.auraInstanceID
+        end
+        PrepareBuffBarSmoothing(bar, ctx.isActive and blzChild or cfg, auraKey)
+        SetAllBarsValue(bar, count, ctx.smoothEnabled)
         if showText then
             -- SetStackText suppresses a clean zero, so honour its answer
             -- rather than showing an empty FontString.
@@ -1361,6 +1420,7 @@ local function Tick()
     local live = false
     -- Resolved once per tick, not per bar: it walks global frame lookups.
     local previewing = IsPreviewActive()
+    tickCtx.smoothEnabled = CDM_C.GetConfigValue("smoothBuffBars", false) == true
 
     for i = 1, #entries do
         local cfg = entries[i].bar
@@ -1405,6 +1465,7 @@ local function Tick()
             -- drawn anyway so it can be positioned. A live aura still renders
             -- normally, so the preview never masks real state.
             if previewing and not isActive and not fbAura then
+                ResetBuffBarSmoothing(bar)
                 RenderPreview(bar, cfg)
                 live = true
             else
@@ -1491,6 +1552,7 @@ local function Rebuild()
         -- which leaves the table identity unchanged.
         local rebound = bar._boundCfg ~= cfg or bar._boundSID ~= cfg.spellID
         if rebound then
+            ResetBuffBarSmoothing(bar)
             bar._boundCfg = cfg
             bar._boundSID = cfg.spellID
             bar._engBtn, bar._engFS = nil, nil

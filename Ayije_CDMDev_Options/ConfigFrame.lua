@@ -125,6 +125,7 @@ local function EnsureCategoryBuilt(id)
 end
 
 local function SelectCategory(id)
+    if ns.CloseSpellMenu then ns.CloseSpellMenu() end
     if UI and UI.CloseAllDropdownMenus then
         UI.CloseAllDropdownMenus()
     end
@@ -166,8 +167,8 @@ end
 ns.ConfigCreatePage = CreateCategoryPage
 
 local categoryHeaders = {
-    { label = L["CDM"], tabs = {"layout", "buffgroups", "bars", "positions"} },
-    { label = L["Styling"], tabs = {"sizes", "border", "text", "glow", "fading", "assist"} },
+    { label = L["CDM"], tabs = {"layout", "buffgroups", "bars"} },
+    { label = L["Styling"], tabs = {"border", "text", "glow", "fading", "assist"} },
     { label = L["Features"], tabs = {"resources", "castbar"} },
     { label = L["Utility"], tabs = {"profiles", "importexport"} },
 }
@@ -204,19 +205,46 @@ local function CreateConfigFrame()
     end
 
     local titleContainer = CreateFrame("Frame", nil, ConfigFrame)
-    titleContainer:SetPoint("TOP", ConfigFrame, "TOP", 0, 0)
-    titleContainer:SetSize(200, 40)
+    titleContainer:SetPoint("TOP", ConfigFrame, "TOP", 0, -12)
+    titleContainer:SetSize(260, 64)
     titleContainer:SetFrameLevel(ConfigFrame:GetFrameLevel() + 10)
 
-    local title = titleContainer:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font18")
-    title:SetPoint("TOP", ConfigFrame, "TOP", 0, -34)
-    title:SetText(L["Cooldown Manager"])
-    UI.SetTextColor(title, CDM_C.GOLD or { r = 1, g = 0.82, b = 0, a = 1 })
+    local titleLogo = titleContainer:CreateTexture(nil, "OVERLAY")
+    local titleLogoSize = 96
+    titleLogo:SetSize(titleLogoSize, titleLogoSize)
+    titleLogo:SetTexture("Interface\\AddOns\\" .. ADDON_NAME .. "\\Media\\Textures\\cdmlightning2.tga")
 
-    local cdmBtn = UI.CreateTextButton(titleContainer)
-    cdmBtn:SetSize(40, 24)
-    cdmBtn:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 22, -32)
-    cdmBtn:SetText(L["CD"])
+    local title = titleContainer:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font18")
+    title:SetText(" - " .. L["Development"])
+    UI.SetTextColor(title, CDM_C.GOLD or { r = 1, g = 0.82, b = 0, a = 1 })
+    local titleWidth = title:GetStringWidth()
+    titleLogo:SetPoint("LEFT", titleContainer, "CENTER", -(titleLogoSize + titleWidth) / 2, 0)
+    title:SetPoint("LEFT", titleLogo, "RIGHT", 0, 0)
+
+    local function CreateHeaderIconButton(textureName, iconSize, useThemeColor)
+        local button = CreateFrame("Button", nil, titleContainer)
+        button:SetSize(36, 36)
+        local icon = button:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(iconSize, iconSize)
+        icon:SetPoint("CENTER")
+        icon:SetTexture("Interface\\AddOns\\" .. ADDON_NAME .. "\\Media\\Textures\\" .. textureName .. ".tga")
+        if useThemeColor then
+            icon:SetVertexColor(1, 0.82, 0, 1)
+        end
+        icon:SetAlpha(0.82)
+        button:HookScript("OnEnter", function() icon:SetAlpha(1) end)
+        button:HookScript("OnLeave", function() icon:SetAlpha(button:IsEnabled() and 0.82 or 0.35) end)
+        local function UpdateEnabledState()
+            icon:SetAlpha(button:IsEnabled() and 0.82 or 0.35)
+        end
+        hooksecurefunc(button, "Enable", UpdateEnabledState)
+        hooksecurefunc(button, "Disable", UpdateEnabledState)
+        hooksecurefunc(button, "SetEnabled", UpdateEnabledState)
+        return button
+    end
+
+    local cdmBtn = CreateHeaderIconButton("wrench", 42, true)
+    cdmBtn:SetPoint("TOPLEFT", ConfigFrame, "TOPLEFT", 25, -24)
     cdmBtn:SetScript("OnClick", function()
         if not CooldownViewerSettings then return end
         if CooldownViewerSettings:IsVisible() then
@@ -226,14 +254,8 @@ local function CreateConfigFrame()
         end
     end)
 
-    local editModeBtn = UI.CreateTextButton(titleContainer)
-    editModeBtn:SetSize(32, 24)
-    editModeBtn:SetPoint("LEFT", cdmBtn, "RIGHT", 6, 0)
-    local editModeIcon = editModeBtn:CreateTexture(nil, "OVERLAY", nil, 1)
-    editModeIcon:SetSize(20, 20)
-    editModeIcon:SetPoint("CENTER")
-    editModeIcon:SetTexture("Interface\\AddOns\\Ayije_CDMDev\\Media\\Textures\\eye")
-    editModeIcon:SetVertexColor(1, 0.82, 0, 1)
+    local editModeBtn = CreateHeaderIconButton("eye2", 54, true)
+    editModeBtn:SetPoint("LEFT", cdmBtn, "RIGHT", 2, 0)
     editModeBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["Edit Mode Settings"])
@@ -250,21 +272,21 @@ local function CreateConfigFrame()
         editModeOverlay:Show()
     end)
 
-    local anchorBtn = UI.CreateTextButton(titleContainer)
-    anchorBtn:SetSize(32, 24)
-    anchorBtn:SetPoint("LEFT", editModeBtn, "RIGHT", 6, 0)
-    local anchorIcon = anchorBtn:CreateTexture(nil, "OVERLAY", nil, 1)
-    anchorIcon:SetSize(16, 16)
-    anchorIcon:SetPoint("CENTER")
-    anchorIcon:SetTexture("Interface\\AddOns\\Ayije_CDMDev\\Media\\Textures\\anchor")
-    anchorIcon:SetVertexColor(1, 0.82, 0, 1)
+    local anchorBtn = CreateHeaderIconButton("anchor2", 32, true)
+    anchorBtn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    anchorBtn:SetPoint("LEFT", editModeBtn, "RIGHT", 2, 0)
     anchorBtn:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
         GameTooltip:SetText(L["Unlock Anchors"])
+        GameTooltip:AddLine(L["Right-click for position settings."], 1, 1, 1)
         GameTooltip:Show()
     end)
     anchorBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    anchorBtn:SetScript("OnClick", function()
+    anchorBtn:SetScript("OnClick", function(_, mouseButton)
+        if mouseButton == "RightButton" then
+            SelectCategory("positions")
+            return
+        end
         if not (ns.ToggleAnchorMode and ns.IsAnchorModeActive) then return end
         local anchorsActive = ns.IsAnchorModeActive()
         if anchorsActive then

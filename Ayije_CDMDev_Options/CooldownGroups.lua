@@ -132,8 +132,8 @@ local ARROW_BTN_SIZE = 29
 local GRID_ICON_SIZE = 32
 local GRID_MIN_ICON_SIZE = 24
 local GRID_CONTROL_SIZE = 24
-local GRID_ICON_GAP = 1
-local GRID_FRAME_INSET = 1
+local GRID_ICON_GAP = 3
+local GRID_FRAME_INSET = 6
 local GRID_SECTION_GAP = 0
 
 StaticPopupDialogs["AYIJE_CDM_CONFIRM_DELETE_CD_GROUP"] = {
@@ -168,6 +168,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local ShowSpellSettings
     local BuildIconGrid
     local SetCooldownBarView
+    local SetEditorMode
+    local appearance, viewDropdown
+    local managingGroups = false
+    local CreateGroup, RefreshViewDropdownText, DeleteSelectedGroup
+    local RemoveGroupSpell
     local cooldownBarView = "essential"
     local renameLastClickTime = 0
     local renameLastClickGroup = nil
@@ -222,6 +227,41 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local CreateLayoutOnlyGroupClone = _helpers.CreateLayoutOnlyGroupClone
     local CopyGroupSettingsToSpec = _helpers.CopyGroupSettingsToSpec
     local DuplicateGroup = _helpers.DuplicateGroup
+
+    local function OpenReworkMenu(owner, spellID, groupIndex)
+        if not ns.OpenSpellCascade or not currentSpecID then return false end
+        if spellID <= 0 or IsCooldownBuffTracked(currentSpecID, spellID) or GetCustomEntryForID(spellID) then return false end
+        local specID = currentSpecID
+        local groups = GetSpecGroups()
+        local group = groups and groupIndex and groups[groupIndex]
+        local defaults = group or {
+            cooldownFontSize = CDM.db.cooldownFontSize,
+            cooldownColor = CDM.db.cooldownColor,
+            chargeFontSize = CDM.db.chargeFontSize,
+            chargeColor = CDM.db.chargeColor,
+            chargePosition = CDM.db.chargePosition,
+            chargeOffsetX = CDM.db.chargeOffsetX,
+            chargeOffsetY = CDM.db.chargeOffsetY,
+        }
+        ns.OpenSpellCascade(owner, {
+            spellID = spellID, specID = specID, buff = false, defaults = defaults,
+            valid = function()
+                local currentGroups = GetSpecGroups()
+                return currentSpecID == specID and (not groupIndex or (currentGroups and currentGroups[groupIndex] == group))
+            end,
+            read = function()
+                if group then return Shared.GetMergedOverrideEntry(group.spellOverrides, spellID) end
+                return GetUngroupedOverride(spellID)
+            end,
+            ensure = function()
+                if groupIndex then return EnsureSpellOverride(groupIndex, spellID) end
+                return EnsureUngroupedOverrideEntry(spellID)
+            end,
+            save = SaveAndRefresh,
+            remove = groupIndex and function() RemoveGroupSpell(groupIndex, spellID) end or nil,
+        })
+        return true
+    end
 
     local function RefreshLeftPanelIfNeeded()
         if RefreshAll then RefreshAll() end
@@ -372,7 +412,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local minGridHeight = GRID_ICON_SIZE + GRID_FRAME_INSET * 2
 
     local iconBarFrame = CreateFrame("Frame", nil, subPage)
-    iconBarFrame:SetPoint("TOPLEFT", LEFT_INSET, -26)
+    iconBarFrame:SetPoint("TOPLEFT", LEFT_INSET, -48)
     iconBarFrame:SetSize(1, minGridHeight)
 
     local iconViewFrame = CreateFrame("Frame", nil, iconBarFrame)
@@ -380,7 +420,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     iconViewFrame:SetSize(GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2, minGridHeight)
 
     local iconGridFrame = CreateFrame("Frame", nil, iconBarFrame)
-    iconGridFrame:SetPoint("TOPLEFT", iconViewFrame, "TOPRIGHT", GRID_SECTION_GAP, 0)
+    iconGridFrame:SetPoint("TOPLEFT", iconBarFrame, "TOPLEFT", GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2 + GRID_SECTION_GAP, 0)
     iconGridFrame:SetSize(1, minGridHeight)
 
     local iconActionFrame = CreateFrame("Frame", nil, iconBarFrame)
@@ -388,35 +428,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
     iconActionFrame:SetPoint("TOPRIGHT")
     iconActionFrame:SetHeight(minGridHeight)
 
-    local iconBarBackground = iconBarFrame:CreateTexture(nil, "BACKGROUND")
-    iconBarBackground:SetAllPoints()
-    iconBarBackground:SetColorTexture(0.02, 0.02, 0.02, 0.2)
-
-    local iconBarBorderTop = iconBarFrame:CreateTexture(nil, "BORDER")
-    iconBarBorderTop:SetPoint("TOPLEFT")
-    iconBarBorderTop:SetPoint("TOPRIGHT")
-    iconBarBorderTop:SetHeight(1)
-    iconBarBorderTop:SetColorTexture(0.18, 0.18, 0.18, 0.45)
-    local iconBarBorderBottom = iconBarFrame:CreateTexture(nil, "BORDER")
-    iconBarBorderBottom:SetPoint("BOTTOMLEFT")
-    iconBarBorderBottom:SetPoint("BOTTOMRIGHT")
-    iconBarBorderBottom:SetHeight(1)
-    iconBarBorderBottom:SetColorTexture(0.18, 0.18, 0.18, 0.45)
-    local iconBarBorderLeft = iconBarFrame:CreateTexture(nil, "BORDER")
-    iconBarBorderLeft:SetPoint("TOPLEFT")
-    iconBarBorderLeft:SetPoint("BOTTOMLEFT")
-    iconBarBorderLeft:SetWidth(1)
-    iconBarBorderLeft:SetColorTexture(0.18, 0.18, 0.18, 0.45)
-    local iconBarBorderRight = iconBarFrame:CreateTexture(nil, "BORDER")
-    iconBarBorderRight:SetPoint("TOPRIGHT")
-    iconBarBorderRight:SetPoint("BOTTOMRIGHT")
-    iconBarBorderRight:SetWidth(1)
-    iconBarBorderRight:SetColorTexture(0.18, 0.18, 0.18, 0.45)
-
-    local iconGridLayoutAnchor = CreateFrame("Frame", nil, subPage)
-    iconGridLayoutAnchor:SetPoint("TOPLEFT", iconViewFrame, "TOPLEFT")
-    iconGridLayoutAnchor:SetPoint("TOPRIGHT", iconGridFrame, "TOPRIGHT")
-    iconGridLayoutAnchor:SetHeight(minGridHeight)
+    local iconBarSurface = UI.CreateSpellStripSurface(iconBarFrame)
+    iconBarSurface:SetAllPoints()
 
     iconGridFrame.highlight = iconGridFrame:CreateTexture(nil, "BACKGROUND")
     iconGridFrame.highlight:SetAllPoints()
@@ -433,21 +446,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local addRowIcon = CreateFrame("Button", nil, iconActionFrame)
     addRowIcon:SetSize(GRID_CONTROL_SIZE, GRID_CONTROL_SIZE)
     addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", GRID_FRAME_INSET, -GRID_FRAME_INSET)
-    local addRowBackground = addRowIcon:CreateTexture(nil, "BACKGROUND")
-    addRowBackground:SetAllPoints()
-    addRowBackground:SetColorTexture(0, 0, 0, 0.06)
-
-    local addRowPlusH = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 2)
-    addRowPlusH:SetSize(10, 2)
-    addRowPlusH:SetPoint("CENTER")
-    addRowPlusH:SetColorTexture(0.15, 1, 0.2, 1)
-    local addRowPlusV = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 2)
-    addRowPlusV:SetSize(2, 10)
-    addRowPlusV:SetPoint("CENTER")
-    addRowPlusV:SetColorTexture(0.15, 1, 0.2, 1)
-    local addRowHighlight = addRowIcon:CreateTexture(nil, "HIGHLIGHT")
-    addRowHighlight:SetAllPoints()
-    addRowHighlight:SetColorTexture(1, 1, 1, 0.12)
+    UI.StyleSpellStripAddButton(addRowIcon)
     local rotateBarIcon = CreateFrame("Button", nil, iconViewFrame)
     rotateBarIcon:SetSize(GRID_CONTROL_SIZE, GRID_CONTROL_SIZE)
     local rotateArrow = rotateBarIcon:CreateTexture(nil, "ARTWORK")
@@ -524,26 +523,26 @@ local function CreateCooldownGroupsPanel(subPage, page)
     end
 
     local buttonRow = CreateFrame("Frame", nil, subPage)
-    buttonRow:SetPoint("TOPLEFT", iconGridLayoutAnchor, "BOTTOMLEFT", 0, -6)
-    buttonRow:SetPoint("TOPRIGHT", subPage, "TOPRIGHT", -10, 0)
+    buttonRow:SetPoint("TOPLEFT", iconBarFrame, "BOTTOMLEFT", 0, -6)
+    buttonRow:SetWidth(math.max(1, subPage:GetWidth() - LEFT_INSET - 10))
     buttonRow:SetHeight(26)
 
     local function UpdateGridVisibility()
         buttonRow:ClearAllPoints()
-        if currentSpecID == playerSpecID then
+        if currentSpecID == playerSpecID or (managingGroups and (selectedGroupIndex or selectedSpellGroupIndex)) then
             iconBarFrame:Show()
             iconViewFrame:Show()
             iconGridFrame:Show()
             iconActionFrame:Show()
-            buttonRow:SetPoint("TOPLEFT", iconGridLayoutAnchor, "BOTTOMLEFT", 0, -6)
-            buttonRow:SetPoint("TOPRIGHT", subPage, "TOPRIGHT", -10, 0)
+            buttonRow:SetPoint("TOPLEFT", iconBarFrame, "BOTTOMLEFT", 0, -6)
+            buttonRow:SetWidth(math.max(1, subPage:GetWidth() - LEFT_INSET - 10))
         else
             iconBarFrame:Hide()
             iconViewFrame:Hide()
             iconGridFrame:Hide()
             iconActionFrame:Hide()
-            buttonRow:SetPoint("TOPLEFT", subPage, "TOPLEFT", LEFT_INSET, -16)
-            buttonRow:SetPoint("TOPRIGHT", subPage, "TOPRIGHT", -10, 0)
+            buttonRow:SetPoint("TOPLEFT", subPage, "TOPLEFT", LEFT_INSET, -44)
+            buttonRow:SetWidth(math.max(1, subPage:GetWidth() - LEFT_INSET - 10))
         end
     end
 
@@ -557,8 +556,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
     leftScroll:SetScrollChild(leftChild)
 
     local rightPanel = CreateFrame("Frame", nil, subPage)
-    rightPanel:SetPoint("TOPLEFT", buttonRow, "BOTTOMLEFT", RIGHT_X - LEFT_INSET, -4)
-    rightPanel:SetPoint("BOTTOMRIGHT", -10, 20)
+    rightPanel:SetPoint("TOPLEFT", buttonRow, "BOTTOMLEFT", 0, -8)
+    rightPanel:SetPoint("BOTTOMRIGHT", -30, 20)
 
     local rightPlaceholder = rightPanel:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
     rightPlaceholder:SetPoint("TOP", 0, -20)
@@ -573,14 +572,45 @@ local function CreateCooldownGroupsPanel(subPage, page)
         ClearRightPanel = rpm.Clear
     end
 
-    local function ShowGroupSettings(groupIndex)
+    local ShowGroupSettings
+    ShowGroupSettings = function(groupIndex)
+        selectedGroupIndex = groupIndex
+        selectedSpellID, selectedSpellGroupIndex = nil, nil
+        if SetEditorMode then SetEditorMode(true) end
         local groups = GetSpecGroups()
         if not groups or not groups[groupIndex] then ClearRightPanel(); return end
         local _, rc = CreateRightScrollContent(700)
-        local xSlider, ySlider = Shared.RenderGroupSettingsPanel({
+        local xSlider, ySlider = ns.RenderCooldownGroupAppearance({
             rc = rc, gd = groups[groupIndex], groupIndex = groupIndex,
             registerDropdown = RegisterRightPanelDropdown,
             saveAndRefresh = SaveAndRefresh, createSlider = CreateSlider, L = L,
+            onRename = function() RefreshViewDropdownText() end,
+            onDelete = function() if DeleteSelectedGroup then DeleteSelectedGroup() end end,
+            onActions = function(owner, name)
+                MenuUtil.CreateContextMenu(owner, function(_, root)
+                    Shared.BuildGroupContextMenu(root,
+                        { rename = L["Rename"], duplicate = L["Duplicate"], copyTo = L["Copy to"] },
+                        function() name:SetFocus(); name:HighlightText() end,
+                        function()
+                            local specGroups = EnsureGroups()
+                            if not specGroups then return end
+                            local index = DuplicateGroup(groups[groupIndex], specGroups)
+                            selectedGroupIndex = index
+                            SaveAndRefresh()
+                            RefreshAll()
+                            ShowGroupSettings(index)
+                        end,
+                        function(specID)
+                            CopyGroupSettingsToSpec(groups[groupIndex], specID)
+                            if specID == playerSpecID then SaveAndRefresh() end
+                            RefreshAll()
+                        end)
+                    root:CreateDivider()
+                    root:CreateButton(L["Delete Group"], function()
+                        if DeleteSelectedGroup then DeleteSelectedGroup() end
+                    end)
+                end)
+            end,
             postSizeSection = function(parent, yOff)
                 local s = CreateSlider(parent, L["Max Per Row"], 0, 20,
                     groups[groupIndex].maxPerRow or 0,
@@ -615,7 +645,23 @@ local function CreateCooldownGroupsPanel(subPage, page)
         end
     end
 
+    RemoveGroupSpell = function(groupIndex, spellID)
+        local groups = GetSpecGroups()
+        local group = groups and groups[groupIndex]
+        if not group then return end
+        if group.spells then Shared.RemoveSpellFromGroupList(group.spells, spellID) end
+        if group.spellOverrides then
+            local override = ExtractMergedOverrideEntry(group.spellOverrides, spellID)
+            local destination = EnsureUngroupedOverrides()
+            if override and destination then StoreMergedOverrideEntry(destination, spellID, override) end
+        end
+        ShowGroupSettings(groupIndex)
+        SaveAndRefresh()
+        RefreshAll()
+    end
+
     ShowSpellSettings = function(spellID, groupIndex)
+        if SetEditorMode then SetEditorMode(true) end
         if not spellID then ClearRightPanel(); return end
 
         do
@@ -1564,7 +1610,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
             inputLabel:SetPoint("TOPLEFT", window, "TOPLEFT", 24, -42)
             inputLabel:SetText("ItemID:")
 
-            local editBox = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
+            local editBox = UI.CreateCustomEditBox(window)
             editBox:SetSize(150, 24)
             editBox:SetPoint("LEFT", inputLabel, "RIGHT", 12, 0)
             editBox:SetAutoFocus(false)
@@ -1678,7 +1724,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
         MenuUtil.CreateContextMenu(addRowIcon, function(_, rootDescription)
             rootDescription:CreateTitle("Add Icon")
 
-            local buffsMenu = rootDescription:CreateButton("Buffs")
+            local buffsMenu = rootDescription:CreateButton(L["Buffs"])
+            local menuSpec, menuProfile = currentSpecID, CDM.db
             local buffEntries = {}
             local seenBuffs = {}
             local buffViewer = _G[CDM_C.VIEWERS.BUFF]
@@ -1697,7 +1744,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                         seenBuffs[spellID] = true
                         buffEntries[#buffEntries + 1] = {
                             spellID = spellID,
-                            name = C_Spell.GetSpellName(spellID) or ("Spell " .. spellID),
+                            name = C_Spell.GetSpellName(spellID) or (L["Spell"] .. " " .. spellID),
                             icon = C_Spell.GetSpellTexture(spellID),
                         }
                     end
@@ -1707,6 +1754,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
             for _, entry in ipairs(buffEntries) do
                 local buffSpellID = entry.spellID
                 buffsMenu:CreateButton(AddMenuLabel(entry.name, entry.icon), function()
+                    if currentSpecID ~= menuSpec or CDM.db ~= menuProfile or InCombatLockdown() then return end
                     PreserveBuffOverridesForCooldownRow(buffSpellID)
                     SetCooldownBuffTracked(currentSpecID, buffSpellID, true)
                     AppendUngroupedOrder(buffSpellID)
@@ -1715,7 +1763,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
                     RefreshLeftPanelIfNeeded()
                 end)
             end
-            if #buffEntries == 0 then buffsMenu:CreateTitle("No buffs available") end
+            if #buffEntries == 0 then buffsMenu:CreateTitle(L["No buffs available"]) end
 
             local potionsMenu = rootDescription:CreateButton("Potions")
             local potionCount = 0
@@ -1753,7 +1801,11 @@ local function CreateCooldownGroupsPanel(subPage, page)
         end)
     end
 
-    addRowIcon:SetScript("OnClick", ShowAddRowMenu)
+    addRowIcon:SetScript("OnClick", function()
+        local groupIndex = managingGroups and (selectedGroupIndex or selectedSpellGroupIndex)
+        if groupIndex then ShowSpellPickerPanel(groupIndex); return end
+        ShowAddRowMenu()
+    end)
 
     ApplyUngroupedGridOrder = function(spellID, insertIndex)
         if not currentSpecID or not insertIndex then return false end
@@ -1807,6 +1859,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     end
 
     ShowSpellPickerPanel = function(groupIndex)
+        if SetEditorMode then SetEditorMode(true) end
         local groups = GetSpecGroups()
         if not groups or not groups[groupIndex] then return end
         local gd = groups[groupIndex]
@@ -1965,7 +2018,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
             end)
         end
 
-        widget.clickBtn:SetScript("OnClick", function()
+        widget.clickBtn:SetScript("OnClick", function(self, button)
+            if button ~= "RightButton" then return end
+            if button == "RightButton" and OpenReworkMenu(self, spellID, sourceGroup) then return end
             selectedSpellID = spellID
             selectedGroupIndex = nil
             selectedSpellGroupIndex = sourceGroup
@@ -1984,15 +2039,22 @@ local function CreateCooldownGroupsPanel(subPage, page)
         local iconGap = GRID_ICON_GAP
 
         UpdateGridVisibility()
-        local showAddIcon = currentSpecID == playerSpecID and cooldownBarView == "essential"
-        local showRotateIcon = currentSpecID == playerSpecID
+        local groupIndex = managingGroups and (selectedGroupIndex or selectedSpellGroupIndex)
+        local groups = GetSpecGroups()
+        local group = groups and groupIndex and groups[groupIndex]
+        local showAddIcon = group ~= nil or (currentSpecID == playerSpecID and cooldownBarView == "essential")
+        local showRotateIcon = currentSpecID == playerSpecID and not viewDropdown
         addRowIcon:SetShown(showAddIcon)
         rotateBarIcon:SetShown(showRotateIcon)
-        if currentSpecID ~= playerSpecID then return end
+        if currentSpecID ~= playerSpecID and not group then return end
 
-        local spells = GetUngroupedSpellsFromViewers()
+        local spells = group and (group.spells or {}) or GetUngroupedSpellsFromViewers()
         local totalSpells = #spells
-        local viewWidth = GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2
+        local viewWidth = showRotateIcon and (GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2) or 0
+        -- The optional switch must not leave a zero-sized frame in the anchor chain.
+        iconViewFrame:SetWidth(math.max(1, viewWidth))
+        iconGridFrame:ClearAllPoints()
+        iconGridFrame:SetPoint("TOPLEFT", iconBarFrame, "TOPLEFT", viewWidth + GRID_SECTION_GAP, 0)
         local actionWidth = showAddIcon and (GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2) or 0
         -- Measure the page so fitting the strip cannot shrink its next layout budget.
         local availableWidth = subPage:GetWidth() - LEFT_INSET * 2
@@ -2014,7 +2076,6 @@ local function CreateCooldownGroupsPanel(subPage, page)
         iconViewFrame:SetHeight(gridHeight)
         iconActionFrame:SetHeight(gridHeight)
         iconGridFrame:SetHeight(gridHeight)
-        iconGridLayoutAnchor:SetHeight(gridHeight)
         local controlOffset = GRID_FRAME_INSET + math.max(0, (iconSize - GRID_CONTROL_SIZE) / 2)
         addRowIcon:ClearAllPoints()
         addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", GRID_FRAME_INSET, -controlOffset)
@@ -2080,8 +2141,21 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 GameTooltip:Show()
             end)
             frame.overlay:SetScript("OnLeave", function() GameTooltip:Hide() end)
-            frame.overlay:SetScript("OnClick", function(_, button)
-                if button == "RightButton" and IsCooldownBuffTracked(currentSpecID, spellID) then
+            frame.overlay:SetScript("OnClick", function(self, button)
+                if button ~= "RightButton" then return end
+                if button == "RightButton" and OpenReworkMenu(self, spellID, groupIndex) then return end
+                if button == "RightButton" and group then
+                    MenuUtil.CreateContextMenu(self, function(_, root)
+                        root:CreateButton(L["Spell Settings"], function()
+                            selectedSpellID, selectedSpellGroupIndex = spellID, groupIndex
+                            selectedGroupIndex = nil
+                            ShowSpellSettings(spellID, groupIndex)
+                        end)
+                        root:CreateButton(L["Remove from group"], function() RemoveGroupSpell(groupIndex, spellID) end)
+                    end)
+                    return
+                end
+                if not group and button == "RightButton" and IsCooldownBuffTracked(currentSpecID, spellID) then
                     MenuUtil.CreateContextMenu(frame.overlay, function(_, rootDescription)
                         rootDescription:CreateButton("Remove", function()
                             SetCooldownBuffTracked(currentSpecID, spellID, false)
@@ -2098,15 +2172,15 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 end
                 selectedSpellID = spellID
                 selectedGroupIndex = nil
-                selectedSpellGroupIndex = nil
-                ShowSpellSettings(spellID, nil)
+                selectedSpellGroupIndex = groupIndex
+                ShowSpellSettings(spellID, groupIndex)
                 RefreshLeftPanelIfNeeded()
             end)
-            frame.overlay:SetScript("OnDragStart", function() StartDrag(spellID, nil, frame) end)
+            frame.overlay:SetScript("OnDragStart", function() StartDrag(spellID, groupIndex, frame) end)
             frame.overlay:SetScript("OnDragStop", function() EndDrag() end)
         end
 
-        rotateBarIcon:Show()
+        rotateBarIcon:SetShown(showRotateIcon)
 
         if showAddIcon then
             addRowIcon:Show()
@@ -2117,6 +2191,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
     SetCooldownBarView = function(view)
         if view == cooldownBarView then return end
         cooldownBarView = view
+        if RefreshViewDropdownText then RefreshViewDropdownText() end
+        if appearance then appearance.SetView(view) end
         if selectedSpellID and not selectedSpellGroupIndex then
             selectedSpellID = nil
             ClearRightPanel()
@@ -2140,13 +2216,15 @@ local function CreateCooldownGroupsPanel(subPage, page)
         spellRowPool:ReleaseAll()
         emptyRowPool:ReleaseAll()
         ClearDropTargets()
-        RegisterDropTarget(iconGridFrame, nil, {
-            label = GetUngroupedDropLabel,
+        DeleteSelectedGroup = nil
+        local stripGroup = managingGroups and (selectedGroupIndex or selectedSpellGroupIndex) or nil
+        RegisterDropTarget(iconGridFrame, stripGroup, {
+            label = stripGroup and L["Reorder icons"] or GetUngroupedDropLabel,
             insertIndex = gridIconsActive + 1,
         })
         for i = 1, gridIconsActive do
-            RegisterDropTarget(gridIcons[i], nil, {
-                label = GetUngroupedDropLabel,
+            RegisterDropTarget(gridIcons[i], stripGroup, {
+                label = stripGroup and L["Reorder icons"] or GetUngroupedDropLabel,
                 highlightFrame = iconGridFrame,
                 insertIndex = i,
                 showInsertion = true,
@@ -2160,199 +2238,206 @@ local function CreateCooldownGroupsPanel(subPage, page)
         local groups = GetSpecGroups()
         if groups then
             for groupIndex, groupData in ipairs(groups) do
-                local isExpanded = expandedGroups[groupIndex] ~= false
-                local displayName = groupData.name or ("Group " .. groupIndex)
+                local activeGroup = selectedGroupIndex or selectedSpellGroupIndex
+                if not activeGroup or activeGroup == groupIndex then
+                    local isExpanded = expandedGroups[groupIndex] ~= false
+                    local displayName = groupData.name or ("Group " .. groupIndex)
 
-                local h = headerPool:Acquire(lc)
-                Shared.ConfigureExpandableHeader(h, yOff, isExpanded, displayName, selectedGroupIndex == groupIndex)
+                    local h = headerPool:Acquire(lc)
+                    Shared.ConfigureExpandableHeader(h, yOff, isExpanded, displayName, selectedGroupIndex == groupIndex)
 
-                if renameActiveGroupIndex == groupIndex then
-                    renameActiveEditBox = Shared.SetupRenameEditBox(
-                        h.row, h.bgLeft, h.bgRight, h.nameText,
-                        displayName,
-                        function(newName)
-                            groupData.name = newName
-                            renameActiveGroupIndex = nil
-                            renameActiveEditBox = nil
-                            if selectedGroupIndex == groupIndex then ShowGroupSettings(groupIndex) end
-                            RefreshLeftPanelIfNeeded()
-                        end,
-                        function()
-                            renameActiveGroupIndex = nil
-                            renameActiveEditBox = nil
-                            RefreshLeftPanelIfNeeded()
-                        end
-                    )
-                end
+                    if renameActiveGroupIndex == groupIndex then
+                        renameActiveEditBox = Shared.SetupRenameEditBox(
+                            h.row, h.bgLeft, h.bgRight, h.nameText,
+                            displayName,
+                            function(newName)
+                                groupData.name = newName
+                                renameActiveGroupIndex = nil
+                                renameActiveEditBox = nil
+                                if selectedGroupIndex == groupIndex then ShowGroupSettings(groupIndex) end
+                                RefreshLeftPanelIfNeeded()
+                            end,
+                            function()
+                                renameActiveGroupIndex = nil
+                                renameActiveEditBox = nil
+                                RefreshLeftPanelIfNeeded()
+                            end
+                        )
+                    end
 
-                h.deleteBtn:SetScript("OnClick", function()
-                    local function DoDelete()
-                        local specGroups = EnsureGroups()
-                        if specGroups then
-                            local gd = specGroups[groupIndex]
-                            if gd and gd.spells and gd.spellOverrides then
-                                local specOv = EnsureUngroupedOverrides()
-                                if specOv then
-                                    for _, sid in ipairs(gd.spells) do
-                                        local ovData = ExtractMergedOverrideEntry(gd.spellOverrides, sid)
-                                        if ovData then StoreMergedOverrideEntry(specOv, sid, ovData) end
+                    h.deleteBtn:SetScript("OnClick", function()
+                        local function DoDelete()
+                            local specGroups = EnsureGroups()
+                            if specGroups then
+                                local gd = specGroups[groupIndex]
+                                if gd and gd.spells and gd.spellOverrides then
+                                    local specOv = EnsureUngroupedOverrides()
+                                    if specOv then
+                                        for _, sid in ipairs(gd.spells) do
+                                            local ovData = ExtractMergedOverrideEntry(gd.spellOverrides, sid)
+                                            if ovData then StoreMergedOverrideEntry(specOv, sid, ovData) end
+                                        end
                                     end
                                 end
+                                table.remove(specGroups, groupIndex)
                             end
-                            table.remove(specGroups, groupIndex)
-                        end
-                        if selectedGroupIndex == groupIndex then
-                            selectedGroupIndex = nil
-                            selectedSpellID = nil
-                            ClearRightPanel()
-                        elseif selectedGroupIndex and selectedGroupIndex > groupIndex then
-                            selectedGroupIndex = selectedGroupIndex - 1
-                        end
-                        if selectedSpellGroupIndex then
-                            if selectedSpellGroupIndex == groupIndex then
-                                selectedSpellGroupIndex = nil
+                            if selectedGroupIndex == groupIndex then
+                                selectedGroupIndex = nil
                                 selectedSpellID = nil
-                            elseif selectedSpellGroupIndex > groupIndex then
-                                selectedSpellGroupIndex = selectedSpellGroupIndex - 1
+                                ClearRightPanel()
+                                SetEditorMode(false)
+                            elseif selectedGroupIndex and selectedGroupIndex > groupIndex then
+                                selectedGroupIndex = selectedGroupIndex - 1
                             end
-                        end
-                        local newExpanded = {}
-                        for idx, val in pairs(expandedGroups) do
-                            if idx < groupIndex then
-                                newExpanded[idx] = val
-                            elseif idx > groupIndex then
-                                newExpanded[idx - 1] = val
-                            end
-                        end
-                        expandedGroups = newExpanded
-                        SaveAndRefresh(); RefreshLeftPanelIfNeeded()
-                    end
-
-                    local spellCount = groupData.spells and #groupData.spells or 0
-                    if spellCount > 0 then
-                        local dialog = StaticPopupDialogs["AYIJE_CDM_CONFIRM_DELETE_CD_GROUP"]
-                        dialog.text = string.format(
-                            L["Delete group with %d spell(s)?"],
-                            spellCount
-                        )
-                        dialog._pendingDelete = DoDelete
-                        StaticPopup_Show("AYIJE_CDM_CONFIRM_DELETE_CD_GROUP")
-                    else
-                        DoDelete()
-                    end
-                end)
-
-                h.selectBtn:SetScript("OnClick", function(_, button)
-                    if button == "RightButton" then
-                        MenuUtil.CreateContextMenu(h.selectBtn, function(_, rootDescription)
-                            Shared.BuildGroupContextMenu(rootDescription,
-                                { rename = L["Rename"], duplicate = L["Duplicate"], copyTo = L["Copy to"] },
-                                function()
-                                    renameActiveGroupIndex = groupIndex
-                                    RefreshLeftPanelIfNeeded()
-                                end,
-                                function()
-                                    local specGroups = EnsureGroups()
-                                    if not specGroups then return end
-                                    local newIdx = DuplicateGroup(groupData, specGroups)
-                                    expandedGroups[newIdx] = true
-                                    selectedGroupIndex = newIdx
+                            if selectedSpellGroupIndex then
+                                if selectedSpellGroupIndex == groupIndex then
+                                    selectedSpellGroupIndex = nil
                                     selectedSpellID = nil
-                                    if currentSpecID == playerSpecID then SaveAndRefresh() end
-                                    ShowGroupSettings(newIdx)
-                                    RefreshLeftPanelIfNeeded()
-                                end,
-                                function(specID)
-                                    CopyGroupSettingsToSpec(groupData, specID)
-                                    if specID == currentSpecID then RefreshLeftPanelIfNeeded() end
-                                    if specID == playerSpecID then SaveAndRefresh() end
+                                elseif selectedSpellGroupIndex > groupIndex then
+                                    selectedSpellGroupIndex = selectedSpellGroupIndex - 1
                                 end
-                            )
-                        end)
-                        return
-                    end
-
-                    local now = GetTime()
-                    if renameLastClickGroup == groupIndex and (now - renameLastClickTime) < 0.4 then
-                        renameActiveGroupIndex = groupIndex
-                        renameLastClickTime = 0
-                        renameLastClickGroup = nil
-                        RefreshLeftPanelIfNeeded()
-                        return
-                    end
-                    renameLastClickTime = now
-                    renameLastClickGroup = groupIndex
-                    selectedGroupIndex = groupIndex
-                    selectedSpellID = nil
-                    ShowGroupSettings(groupIndex)
-                    RefreshLeftPanelIfNeeded()
-                end)
-
-                h.expandBtn:SetScript("OnClick", function()
-                    expandedGroups[groupIndex] = not isExpanded
-                    selectedGroupIndex = groupIndex
-                    selectedSpellID = nil
-                    ShowGroupSettings(groupIndex)
-                    RefreshLeftPanelIfNeeded()
-                end)
-
-                yOff = yOff - GROUP_HEADER_H
-
-                if isExpanded then
-                    local groupContainerWidget = groupContainerPool:Acquire(lc)
-                    local groupContainer = groupContainerWidget.root
-                    groupContainer:ClearAllPoints()
-                    groupContainer:SetPoint("TOPLEFT", SCROLL_LEFT_PAD, yOff)
-                    local spells = groupData.spells
-                    local targetLabel = string.format(L["Move to %s"], groupData.name or L["Group"])
-                    RegisterDropTarget(groupContainer, groupIndex, {
-                        label = targetLabel,
-                        insertIndex = spells and (#spells + 1) or 1,
-                        showInsertion = not spells or #spells == 0,
-                    })
-                    local groupY = 0
-                    if spells and #spells > 0 then
-                        for spellIndex, spellID in ipairs(spells) do
-                            local active
-                            local trinketSlot = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(spellID)
-                            if trinketSlot then
-                                active = not isViewingPlayer
-                                    or GetInventoryItemID("player", trinketSlot) ~= nil
-                            elseif GetCustomEntryForID(spellID) then
-                                active = not isViewingPlayer
-                                    or (API.IsCustomCooldownEntryActive and API.IsCustomCooldownEntryActive(spellID))
-                                    or false
-                            else
-                                active = not isViewingPlayer
-                                    or Shared.HasEquivalentSpellID(activeSpellSet, spellID)
-                                    or Shared.HasEquivalentSpellID(activeSpellSet, ResolveCooldownOverrideID(spellID))
                             end
-                            local spellWidget = spellRowPool:Acquire(groupContainer)
-                            ConfigureSpellRow(
-                                spellWidget,
-                                groupContainer,
-                                spellID,
-                                groupIndex,
-                                groupY,
-                                active,
-                                spellIndex,
-                                #spells
-                            )
-                            RegisterDropTarget(spellWidget.root, groupIndex, {
-                                label = targetLabel,
-                                insertIndex = spellIndex,
-                                showInsertion = true,
-                                splitInsertion = true,
-                                highlightFrame = groupContainer,
-                            })
-                            groupY = groupY - ROW_HEIGHT
+                            local newExpanded = {}
+                            for idx, val in pairs(expandedGroups) do
+                                if idx < groupIndex then
+                                    newExpanded[idx] = val
+                                elseif idx > groupIndex then
+                                    newExpanded[idx - 1] = val
+                                end
+                            end
+                            expandedGroups = newExpanded
+                            SaveAndRefresh(); RefreshLeftPanelIfNeeded()
                         end
-                    else
-                        AcquireEmptyRow(groupContainer, L["Drag spells here"])
-                        groupY = -ROW_HEIGHT
+
+                        local spellCount = groupData.spells and #groupData.spells or 0
+                        if spellCount > 0 then
+                            local dialog = StaticPopupDialogs["AYIJE_CDM_CONFIRM_DELETE_CD_GROUP"]
+                            dialog.text = string.format(
+                                L["Delete group with %d spell(s)?"],
+                                spellCount
+                            )
+                            dialog._pendingDelete = DoDelete
+                            StaticPopup_Show("AYIJE_CDM_CONFIRM_DELETE_CD_GROUP")
+                        else
+                            DoDelete()
+                        end
+                    end)
+
+                    if groupIndex == stripGroup then
+                        DeleteSelectedGroup = function() h.deleteBtn:GetScript("OnClick")(h.deleteBtn) end
                     end
-                    groupContainer:SetHeight(math.abs(groupY) + 4)
-                    yOff = yOff + groupY
+                    h.selectBtn:SetScript("OnClick", function(_, button)
+                        if button == "RightButton" then
+                            MenuUtil.CreateContextMenu(h.selectBtn, function(_, rootDescription)
+                                Shared.BuildGroupContextMenu(rootDescription,
+                                    { rename = L["Rename"], duplicate = L["Duplicate"], copyTo = L["Copy to"] },
+                                    function()
+                                        renameActiveGroupIndex = groupIndex
+                                        RefreshLeftPanelIfNeeded()
+                                    end,
+                                    function()
+                                        local specGroups = EnsureGroups()
+                                        if not specGroups then return end
+                                        local newIdx = DuplicateGroup(groupData, specGroups)
+                                        expandedGroups[newIdx] = true
+                                        selectedGroupIndex = newIdx
+                                        selectedSpellID = nil
+                                        if currentSpecID == playerSpecID then SaveAndRefresh() end
+                                        ShowGroupSettings(newIdx)
+                                        RefreshLeftPanelIfNeeded()
+                                    end,
+                                    function(specID)
+                                        CopyGroupSettingsToSpec(groupData, specID)
+                                        if specID == currentSpecID then RefreshLeftPanelIfNeeded() end
+                                        if specID == playerSpecID then SaveAndRefresh() end
+                                    end
+                                )
+                            end)
+                            return
+                        end
+
+                        local now = GetTime()
+                        if renameLastClickGroup == groupIndex and (now - renameLastClickTime) < 0.4 then
+                            renameActiveGroupIndex = groupIndex
+                            renameLastClickTime = 0
+                            renameLastClickGroup = nil
+                            RefreshLeftPanelIfNeeded()
+                            return
+                        end
+                        renameLastClickTime = now
+                        renameLastClickGroup = groupIndex
+                        selectedGroupIndex = groupIndex
+                        selectedSpellID = nil
+                        ShowGroupSettings(groupIndex)
+                        RefreshLeftPanelIfNeeded()
+                    end)
+
+                    h.expandBtn:SetScript("OnClick", function()
+                        expandedGroups[groupIndex] = not isExpanded
+                        selectedGroupIndex = groupIndex
+                        selectedSpellID = nil
+                        ShowGroupSettings(groupIndex)
+                        RefreshLeftPanelIfNeeded()
+                    end)
+
+                    yOff = yOff - GROUP_HEADER_H
+
+                    if isExpanded then
+                        local groupContainerWidget = groupContainerPool:Acquire(lc)
+                        local groupContainer = groupContainerWidget.root
+                        groupContainer:ClearAllPoints()
+                        groupContainer:SetPoint("TOPLEFT", SCROLL_LEFT_PAD, yOff)
+                        local spells = groupData.spells
+                        local targetLabel = string.format(L["Move to %s"], groupData.name or L["Group"])
+                        if leftScroll:IsShown() then RegisterDropTarget(groupContainer, groupIndex, {
+                            label = targetLabel,
+                            insertIndex = spells and (#spells + 1) or 1,
+                            showInsertion = not spells or #spells == 0,
+                        }) end
+                        local groupY = 0
+                        if spells and #spells > 0 then
+                            for spellIndex, spellID in ipairs(spells) do
+                                local active
+                                local trinketSlot = GetTrinketSlotFromSentinel and GetTrinketSlotFromSentinel(spellID)
+                                if trinketSlot then
+                                    active = not isViewingPlayer
+                                        or GetInventoryItemID("player", trinketSlot) ~= nil
+                                elseif GetCustomEntryForID(spellID) then
+                                    active = not isViewingPlayer
+                                        or (API.IsCustomCooldownEntryActive and API.IsCustomCooldownEntryActive(spellID))
+                                        or false
+                                else
+                                    active = not isViewingPlayer
+                                        or Shared.HasEquivalentSpellID(activeSpellSet, spellID)
+                                        or Shared.HasEquivalentSpellID(activeSpellSet, ResolveCooldownOverrideID(spellID))
+                                end
+                                local spellWidget = spellRowPool:Acquire(groupContainer)
+                                ConfigureSpellRow(
+                                    spellWidget,
+                                    groupContainer,
+                                    spellID,
+                                    groupIndex,
+                                    groupY,
+                                    active,
+                                    spellIndex,
+                                    #spells
+                                )
+                                if leftScroll:IsShown() then RegisterDropTarget(spellWidget.root, groupIndex, {
+                                    label = targetLabel,
+                                    insertIndex = spellIndex,
+                                    showInsertion = true,
+                                    splitInsertion = true,
+                                    highlightFrame = groupContainer,
+                                }) end
+                                groupY = groupY - ROW_HEIGHT
+                            end
+                        else
+                            AcquireEmptyRow(groupContainer, L["Drag spells here"])
+                            groupY = -ROW_HEIGHT
+                        end
+                        groupContainer:SetHeight(math.abs(groupY) + 4)
+                        yOff = yOff + groupY
+                    end
                 end
             end
         end
@@ -2361,11 +2446,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
     end
 
     do
-        local addGroupBtn = UI.CreateTextButton(buttonRow)
-        addGroupBtn:SetSize(90, 22)
-        addGroupBtn:SetPoint("LEFT", 0, 0)
-        addGroupBtn:SetText(L["Add Group"])
-        addGroupBtn:SetScript("OnClick", function()
+        CreateGroup = function()
             local specGroups = EnsureGroups()
             if not specGroups then return end
             local newIndex = #specGroups + 1
@@ -2394,16 +2475,19 @@ local function CreateCooldownGroupsPanel(subPage, page)
             expandedGroups[newIndex] = true
             selectedGroupIndex = newIndex
             selectedSpellID = nil
-            SaveAndRefresh(); RefreshLeftPanelIfNeeded()
+            selectedSpellGroupIndex = nil
             ShowGroupSettings(newIndex)
-        end)
+            SaveAndRefresh(); RefreshLeftPanelIfNeeded()
+            leftScroll:SetVerticalScroll(0)
+        end
 
         local addIconBtn = UI.CreateTextButton(buttonRow)
         addIconBtn:SetSize(90, 22)
-        addIconBtn:SetPoint("LEFT", addGroupBtn, "RIGHT", 6, 0)
+        addIconBtn:SetPoint("LEFT", 0, 0)
         addIconBtn:SetText(L["Add Icon"])
         addIconBtn:SetScript("OnClick", function()
-            if selectedGroupIndex then ShowSpellPickerPanel(selectedGroupIndex) end
+            local groupIndex = selectedGroupIndex or selectedSpellGroupIndex
+            if groupIndex then ShowSpellPickerPanel(groupIndex) end
         end)
         addIconBtnRef = addIconBtn
     end
@@ -2412,8 +2496,79 @@ local function CreateCooldownGroupsPanel(subPage, page)
         lookupCacheBySpec = {}
         BuildIconGrid()
         BuildGroupsPanel()
-        if addIconBtnRef then addIconBtnRef:SetEnabled(selectedGroupIndex ~= nil) end
+        if addIconBtnRef then addIconBtnRef:SetEnabled((selectedGroupIndex or selectedSpellGroupIndex) ~= nil) end
+        if RefreshViewDropdownText then RefreshViewDropdownText() end
     end
+
+    local settingsHost = CreateFrame("Frame", nil, subPage)
+    settingsHost:SetPoint("TOPLEFT", buttonRow, "BOTTOMLEFT", 0, -8)
+    settingsHost:SetPoint("BOTTOMRIGHT", subPage, "BOTTOMRIGHT", -10, 20)
+    appearance = ns.CreateCooldownAppearance(settingsHost)
+
+    viewDropdown = UI.CreateCompactDropdown(subPage, { viewSelector = true, smallText = true })
+    viewDropdown:SetSize(200, 26)
+    viewDropdown:SetPoint("TOPLEFT", LEFT_INSET, -8)
+    viewDropdown:SetDefaultText(L["Essential"])
+    RefreshViewDropdownText = function()
+        local groups = GetSpecGroups()
+        local groupIndex = managingGroups and (selectedGroupIndex or selectedSpellGroupIndex)
+        local group = groups and groupIndex and groups[groupIndex]
+        local text = group and (group.name or (L["Group"] .. " " .. groupIndex))
+            or (currentSpecID ~= playerSpecID and L["Groups"])
+            or (cooldownBarView == "essential" and L["Essential"] or L["Utility"])
+        viewDropdown:OverrideText(text)
+    end
+    viewDropdown:SetupMenu(function(_, rootDescription)
+        if currentSpecID == playerSpecID then
+            for _, view in ipairs({ "essential", "utility" }) do
+                rootDescription:CreateRadio(view == "essential" and L["Essential"] or L["Utility"],
+                    function() return not managingGroups and cooldownBarView == view end,
+                    function()
+                        SetEditorMode(false)
+                        ClearRightPanel()
+                        SetCooldownBarView(view)
+                        RefreshAll()
+                        RefreshViewDropdownText()
+                    end)
+            end
+            rootDescription:CreateDivider()
+        end
+        for index, group in ipairs(GetSpecGroups() or {}) do
+            rootDescription:CreateRadio(group.name or (L["Group"] .. " " .. index),
+                function() return managingGroups and (selectedGroupIndex or selectedSpellGroupIndex) == index end,
+                function()
+                    selectedGroupIndex = index
+                    selectedSpellID, selectedSpellGroupIndex = nil, nil
+                    expandedGroups[index] = true
+                    ShowGroupSettings(index)
+                    RefreshAll()
+                    leftScroll:SetVerticalScroll(0)
+                end)
+        end
+        if #(GetSpecGroups() or {}) > 0 then rootDescription:CreateDivider() end
+        rootDescription:CreateButton("+ " .. L["New Group"], CreateGroup)
+    end)
+    local hint = buttonRow:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font12")
+    hint:SetPoint("LEFT")
+    hint:SetText(L["Right-click a spell for individual settings"])
+    UI.SetTextMuted(hint)
+
+    SetEditorMode = function(manage)
+        if ns.CloseSpellMenu then ns.CloseSpellMenu() end
+        if currentSpecID ~= playerSpecID then manage = true end
+        managingGroups = manage
+        leftScroll:Hide()
+        rightPanel:SetShown(manage)
+        settingsHost:SetShown(not manage)
+        if addIconBtnRef then addIconBtnRef:Hide() end
+        hint:Show()
+        if not manage then
+            selectedSpellID, selectedSpellGroupIndex, selectedGroupIndex = nil, nil, nil
+            appearance.SetView(cooldownBarView)
+        end
+        RefreshViewDropdownText()
+    end
+    SetEditorMode(false)
 
     local lastGridWidth = 0
     subPage:HookScript("OnSizeChanged", function(self, width)
@@ -2423,10 +2578,12 @@ local function CreateCooldownGroupsPanel(subPage, page)
     end)
 
     local specDropdown, RefreshSpecDropdownText = Shared.CreateSpecDropdown(page, "TOPRIGHT", -6, -8, {
+        createDropdown = UI.CreateCompactDropdown,
         getPlayerSpecID = function() return playerSpecID end,
         getCurrentSpecID = function() return currentSpecID end,
         onSelectionChange = function(specID)
             currentSpecID = specID
+            SetEditorMode(managingGroups)
             selectedGroupIndex = nil
             selectedSpellID = nil
             selectedSpellGroupIndex = nil
@@ -2441,7 +2598,9 @@ local function CreateCooldownGroupsPanel(subPage, page)
     subPage:HookScript("OnShow", function()
         RegisterViewerCallbacks()
         RefreshCurrentSpecID()
+        SetEditorMode(managingGroups)
         RefreshAll()
+        appearance.SetView(cooldownBarView)
         if selectedGroupIndex then
             ShowGroupSettings(selectedGroupIndex)
         elseif selectedSpellID then
@@ -2456,6 +2615,7 @@ local function CreateCooldownGroupsPanel(subPage, page)
         UnregisterViewerCallbacks()
         if UI and UI.CloseAllDropdownMenus then UI.CloseAllDropdownMenus() end
         CancelDrag()
+        if ns.CloseSpellMenu then ns.CloseSpellMenu() end
     end)
 
     subPage:SetScript("OnMouseUp", function()

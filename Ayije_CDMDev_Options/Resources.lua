@@ -182,7 +182,7 @@ local function BuildTicksSection(rc, classKey, barKey, startYOff)
             row:SetSize(160, 24)
             row:SetPoint("TOPLEFT", 0, y)
 
-            local valBox = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+            local valBox = UI.CreateCustomEditBox(row)
             valBox:SetSize(80, 22)
             valBox:SetPoint("LEFT", 6, 0)
             valBox:SetAutoFocus(false)

@@ -118,6 +118,7 @@ ns.ConfigKeys = {
         bars = {
             label = "Buff Bar Settings",
             keys = {
+                "smoothBuffBars",
                 "buffBarWidth",
                 "buffBarHeight",
                 "buffBarSpacing",

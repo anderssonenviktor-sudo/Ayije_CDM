@@ -243,7 +243,7 @@ local function CreateCheckRow(parent, check, classKey, barKey, onChange, registe
         if registerDropdown then registerDropdown(cmpDD) end
         xOff = xOff + 70
 
-        local valBox = CreateFrame("EditBox", nil, row, "InputBoxTemplate")
+        local valBox = UI.CreateCustomEditBox(row)
         valBox:SetSize(55, 22)
         valBox:SetPoint("LEFT", xOff + 6, 0)
         valBox:SetAutoFocus(false)
