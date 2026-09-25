@@ -26,20 +26,22 @@ local function Byte(value)
 end
 
 local function BuildBreakpoints(ov)
-    local threshold = tonumber(ov.stackTextThreshold) or 2
-    if threshold ~= threshold or threshold == math.huge then threshold = 2 end
-    threshold = max(1, floor(threshold))
+    local threshold = ov.stackTextThresholdEnabled and (tonumber(ov.stackTextThreshold) or 2) or math.huge
+    if threshold ~= threshold then threshold = math.huge end
+    if threshold ~= math.huge then threshold = max(1, floor(threshold)) end
     local color = ov.stackTextThresholdColor or { r = 1, g = 0, b = 0 }
-    local colored = string.format("|cFF%02X%02X%02X%%d|r", Byte(color.r), Byte(color.g), Byte(color.b))
+    local colored = ov.stackTextThresholdEnabled
+        and string.format("|cFF%02X%02X%02X%%d|r", Byte(color.r), Byte(color.g), Byte(color.b))
+        or "%d"
     local edges = { 0, 1, 2 }
-    if threshold > 2 then edges[#edges + 1] = threshold end
+    if threshold ~= math.huge and threshold > 2 then edges[#edges + 1] = threshold end
     local points = {}
     for _, edge in ipairs(edges) do
         local format = edge >= threshold and colored or "%d"
-        if edge <= 1 then format = "" end
+        if edge == 0 or (edge == 1 and not ov.stackTextShowSingle) then format = "" end
         points[#points + 1] = { threshold = edge, format = format }
     end
-    return points, threshold .. ":" .. colored
+    return points, threshold .. ":" .. colored .. ":" .. tostring(ov.stackTextShowSingle == true)
 end
 
 local function Native(record, alpha)
@@ -167,7 +169,7 @@ Sync = function(record)
     if not UsableID(id) then Park(record); return end
     local ids = ResolveCandidates(frame, id)
     local ov = CDM.ResolveBuffSpellOverrideForFrame(frame, frameData)
-    if not (ov and ov.textOverride and ov.stackTextThresholdEnabled and ids) then
+    if not (ov and ov.textOverride and (ov.stackTextThresholdEnabled or ov.stackTextShowSingle) and ids) then
         if record.formatter then Park(record) end
         return
     end

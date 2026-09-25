@@ -955,6 +955,14 @@ function Shared.BuildTextOverrideWidgets(rc, yOff, cfg)
         yOff = yOff - 30
 
         if cfg.stackThresholdOverride then
+            local showSingle = UI.CreateModernCheckbox(rc, L["Show Single Stack"], ov.stackTextShowSingle == true,
+                function(checked)
+                    write("stackTextShowSingle", checked or nil)
+                    if cfg.onToggle then cfg.onToggle() end
+                end)
+            showSingle:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 30
+
             local enabled = ov.stackTextThresholdEnabled == true
             local checkbox = UI.CreateModernCheckbox(rc, L["Color at Stacks"], enabled, function(checked)
                 write("stackTextThresholdEnabled", checked or nil)
