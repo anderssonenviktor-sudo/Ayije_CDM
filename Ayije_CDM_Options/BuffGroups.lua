@@ -984,12 +984,6 @@ local function CreateBuffGroupsTab(page)
         borderColorPicker:SetPoint("LEFT", borderLabel, "RIGHT", 6, 0)
         yOff = yOff - 30
 
-        local resetHint = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_GameFontHighlightSmall")
-        resetHint:SetPoint("TOPLEFT", 0, yOff)
-        resetHint:SetText(L["Right-click icon to reset border color"])
-        UI.SetTextFaint(resetHint)
-        yOff = yOff - 24
-
         iconContainer:EnableMouse(true)
         iconContainer:SetScript("OnMouseUp", function(_, button)
             if button == "RightButton" then

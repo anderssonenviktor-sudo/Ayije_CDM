@@ -1385,15 +1385,28 @@ local function UpdateBorders(activeKeys)
             if bar.borderFrame then bar.borderFrame:Hide() end
             HidePipBarDecorations(bar)
             HideBarUnifiedVerticalSeparators(bar)
+            local hideBorder = bar.barKey == "ArcaneCharges"
+                and CDM:GetBarSetting(bar.barKey, "hideBorder") == true
             for i = 1, bar.activePipCount or 0 do
-                EnsurePerBarBorder(bar.pips[i], borderColor)
+                local pip = bar.pips[i]
+                if hideBorder then
+                    if pip.borderFrame then pip.borderFrame:Hide() end
+                else
+                    EnsurePerBarBorder(pip, borderColor)
+                end
             end
         elseif unified then
             hostIdx = hostIdx + 1
             ApplyUnifiedChain(hostIdx, chain, borderColor)
         else
             for _, bar in ipairs(chain) do
-                EnsurePerBarBorder(bar, borderColor)
+                local hideBorder = bar.barKey == "ArcaneCharges"
+                    and CDM:GetBarSetting(bar.barKey, "hideBorder") == true
+                if hideBorder then
+                    if bar.borderFrame then bar.borderFrame:Hide() end
+                else
+                    EnsurePerBarBorder(bar, borderColor)
+                end
                 RefreshPipSeparators(bar, borderColor)
                 HideBarUnifiedVerticalSeparators(bar)
             end

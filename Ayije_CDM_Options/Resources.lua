@@ -469,6 +469,17 @@ local function CreateResourcesTab(page, tabId)
             yOff = yOff - 60
         end
 
+        if classKey == "MAGE" and barKey == "ArcaneCharges" then
+            local hideBorderCB = UI.CreateModernCheckbox(rc, L["Hide Border"],
+                CDM:GetBarSettingForClass(classKey, barKey, "hideBorder") == true,
+                function(checked)
+                    CDM:SetBarSettingForClass(classKey, barKey, "hideBorder", checked)
+                    API:Refresh("RESOURCES")
+                end)
+            hideBorderCB:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 35
+        end
+
         local colorHeader = UI.CreateHeader(rc, L["Colors"])
         colorHeader:SetPoint("TOPLEFT", 0, yOff)
         yOff = yOff - 25

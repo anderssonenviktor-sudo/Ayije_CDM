@@ -69,7 +69,7 @@ local RESOURCE_BAR_PER_KEY = {
     Maelstrom       = { color = { r = 0, g = 0.5, b = 1, a = 1 }, smoothBars = true, anchorTo = "Mana", offsetY = 1 },
     Chi             = { color = { r = 0.71, g = 1, b = 0.92, a = 1 }, anchorTo = "Energy" },
     Insanity        = { color = { r = 0.4, g = 0, b = 0.8, a = 1 }, smoothBars = true, anchorTo = "Mana", offsetY = 1 },
-    ArcaneCharges   = { color = { r = 0.1, g = 0.1, b = 0.98, a = 1 }, anchorTo = "Mana", offsetY = 1, pipSpacing = -1 },
+    ArcaneCharges   = { color = { r = 0.1, g = 0.1, b = 0.98, a = 1 }, anchorTo = "Mana", offsetY = 1, pipSpacing = -1, hideBorder = false },
     Fury            = { color = { r = 0.79, g = 0.26, b = 0.99, a = 1 }, smoothBars = true },
     Essence         = {
         pipSpacing = -1,

@@ -1223,7 +1223,6 @@ local function UpdateRuneCooldowns(bar)
     end
 end
 
--- Evoker essence enhancements (ported from ljosberinn's "Essences" addon):
 -- smooth haste-aware recharge fill, cap/nearly-cap colors, Essence Burst glow.
 local ESSENCE_RECHARGE_RATE_SPELL_ID = 361227
 local ESSENCE_GLOW_KEY = "CDM_EssenceBurst"

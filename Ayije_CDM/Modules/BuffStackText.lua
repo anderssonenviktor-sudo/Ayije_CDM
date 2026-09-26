@@ -2,14 +2,15 @@ local AddonName = "Ayije_CDM"
 local CDM = _G[AddonName]
 local CDM_C = CDM.CONST
 local GetFrameData = CDM.GetFrameData
+local Pixel = CDM.Pixel
 local InCombatLockdown = InCombatLockdown
+local GetCooldownViewerCooldownInfo = C_CooldownViewer.GetCooldownViewerCooldownInfo
 local issecretvalue = issecretvalue
 local After = C_Timer.After
 local floor, min, max = math.floor, math.min, math.max
 local records = {}
-local candidatesByID = {}
 local EMPTY = {}
-local Sync, Queue
+local Sync, Queue, Retry
 
 local function Safe(value)
     return not issecretvalue or not issecretvalue(value)
@@ -49,22 +50,36 @@ local function Native(record, alpha)
     if text then text:SetAlpha(alpha) end
 end
 
-local function Park(record)
+local function Deactivate(record)
     record.active = false
+    -- Cleanup must not prevent recovery if a frame is temporarily inaccessible.
+    local hidden = true
+    if record.host then hidden = pcall(record.host.SetAlpha, record.host, 0) end
+    local restored = pcall(Native, record, 1)
+    if not hidden then Retry(record) end
+    if not restored then Retry(record) end
+end
+
+local function Park(record)
+    Deactivate(record)
     record.cooldownID = nil
-    record.include = nil
-    if record.host then record.host:SetAlpha(0) end
-    Native(record, 1)
+    record.candidateKey = nil
     for _, source in ipairs(record.sources) do
-        if source.container.SetAuraSlotCandidateFilters then
-            pcall(source.container.SetAuraSlotCandidateFilters, source.container, "stacks", { includeSpellIDs = EMPTY })
-        end
+        source.generation = (source.generation or 0) + 1
+        source.button, source.text, source.bound = nil, nil, nil
+        source.candidateKey = nil
+        source.rebuild = true
+        source.refresh = true
     end
 end
 
-local function Fail(record)
-    record.failed = true
-    Park(record)
+Retry = function(record)
+    if record.retryQueued then return end
+    record.retryQueued = true
+    After(0.5, function()
+        record.retryQueued = false
+        Queue(record)
+    end)
 end
 
 local function Accessible(button)
@@ -72,93 +87,156 @@ local function Accessible(button)
     return not button:IsForbidden()
 end
 
-local function StyleButton(record, source, initializing)
-    local button, text = source.button, source.text
-    if not button or not Accessible(button) or (InCombatLockdown() and not initializing) then
-        record.stylePending = true
-        return
-    end
-    local native = record.frame.Applications and record.frame.Applications.Applications
-    if not native then return end
-    local font, size, flags = native:GetFont()
-    if not font then return end
-    text:SetIgnoreParentScale(true)
-    text:SetFont(font, size, flags)
-    text:SetTextColor(native:GetTextColor())
-    text:SetShadowColor(native:GetShadowColor())
-    text:SetShadowOffset(native:GetShadowOffset())
-    text:ClearAllPoints()
-    local point, _, relativePoint, x, y = native:GetPoint(1)
-    text:SetPoint(point or "BOTTOMRIGHT", button, relativePoint or point or "BOTTOMRIGHT", x or 0, y or 0)
-    return true
+local function GetStyle(ov, frameData)
+    local db = CDM.db
+    if not db then return end
+    local sets = CDM.BuffGroupSets
+    local sid = frameData.buffCategorySpellID
+    local groupIndex = UsableID(sid) and sets and sets.grouped and sets.grouped[sid]
+    local group = groupIndex and sets.groups and sets.groups[groupIndex]
+    local base = group or db
+    local point = ov.countPosition or (group and (group.countPosition or "BOTTOMRIGHT"))
+        or db.countPositionMain or "TOP"
+    local x = ov.countOffsetX or (group and (group.countOffsetX or 0)) or db.countOffsetXMain or 0
+    local y = ov.countOffsetY or (group and (group.countOffsetY or 0)) or db.countOffsetYMain or 0
+    local color = ov.countColor or base.countColor or { r = 1, g = 1, b = 1, a = 1 }
+    -- Native anchors/colors can stay secret after combat. Only public configuration
+    -- belongs in the signature; frame-level changes are not text-style changes.
+    local style = { CDM_C.GetBaseFontPath(), Pixel.FontSize(ov.countFontSize or base.countFontSize or 15),
+        CDM_C.GetBaseFontOutline(), color.r, color.g, color.b, color.a or 1,
+        0, 0, 0, 1, 0, 0, point, point, Pixel.Snap(x), Pixel.Snap(y) }
+    return style, table.concat(style, ":")
 end
 
-local function CreateSource(record, unit, filter)
+local function StyleButton(record, source)
+    local button, text = source.button, source.text
+    assert(not InCombatLockdown() and Accessible(button))
+    local s = record.style
+    button:SetAllPoints(record.frame)
+    button:SetFrameStrata("MEDIUM")
+    button:SetFrameLevel(record.frame:GetFrameLevel() + 7)
+    if button.SetMouseMotionEnabled then button:SetMouseMotionEnabled(false) end
+    if button.SetMouseClickEnabled then button:SetMouseClickEnabled(false) end
+    text:SetIgnoreParentScale(true)
+    assert(text:SetFont(s[1], s[2], s[3]))
+    text:SetTextColor(s[4], s[5], s[6], s[7])
+    text:SetShadowColor(s[8], s[9], s[10], s[11])
+    text:SetShadowOffset(s[12], s[13])
+    text:ClearAllPoints()
+    text:SetPoint(s[14], button, s[15], s[16], s[17])
+end
+
+local function CreateSource(record, source)
+    assert(not InCombatLockdown())
+    source.generation = (source.generation or 0) + 1
+    local generation = source.generation
+    source.button, source.text, source.bound = nil, nil, nil
+    source.ready = nil
+    source.rebuild = true
+    if source.container then
+        -- Retain a partially retired container until all cleanup succeeds.
+        source.container:Hide()
+        if source.container.SetEnabled then source.container:SetEnabled(false) end
+        -- SetUnit requires a string. Hidden, disabled containers unregister their unit events.
+        source.container = nil
+    end
     local container = CreateFrame("AuraContainer", nil, record.host, "CustomAuraContainerTemplate")
-    local source = { container = container }
-    record.sources[#record.sources + 1] = source
+    source.container = container
     assert(container.AddAuraSlot and container.SetAuraSlotCandidateFilters)
     container:SetSize(1, 1)
     container:SetPoint("TOPLEFT", record.frame, "TOPLEFT")
-    container:AddAuraSlot("stacks", filter, {
+    container:AddAuraSlot("stacks", source.filter, {
         candidateFilters = { includeSpellIDs = EMPTY },
         initializeFrame = function(button)
+            if source.generation ~= generation then return end
+            Deactivate(record)
+            source.bound = nil
             local ok = pcall(function()
-                assert(button.SetApplicationCount and Accessible(button))
-                button:SetAllPoints(record.frame)
-                button:SetFrameStrata("MEDIUM")
-                button:SetFrameLevel(record.frame:GetFrameLevel() + 7)
-                if button.SetMouseMotionEnabled then button:SetMouseMotionEnabled(false) end
-                if button.SetMouseClickEnabled then button:SetMouseClickEnabled(false) end
+                assert(not InCombatLockdown() and Accessible(button) and button.SetApplicationCount)
+                if source.text then source.text:Hide() end
                 source.button = button
                 source.text = button:CreateFontString(nil, "OVERLAY")
-                assert(StyleButton(record, source, true))
+                StyleButton(record, source)
                 button:SetApplicationCount(source.text, { formatter = record.formatter })
                 source.bound = true
+                source.rebuild = false
+                source.styleKey = record.styleKey
+                source.refresh = true
             end)
-            if not ok then Fail(record) else Queue(record) end
+            if not ok then
+                source.button, source.text, source.bound = nil, nil, nil
+                source.rebuild = true
+                Retry(record)
+            elseif not record.syncing then
+                Queue(record)
+            end
         end,
     })
-    container:SetUnit(unit)
+    container:SetUnit(source.unit)
     if container.SetEnabled then container:SetEnabled(true) end
     container:Show()
-    if container.UpdateAllAuras then container:UpdateAllAuras() end
+    source.ready = true
+    source.refresh = true
+    source.candidateKey = nil
 end
 
-local function ResolveCandidates(frame, id)
-    if not InCombatLockdown() then
-        local info = frame.cooldownInfo
-        if not info and C_CooldownViewer and C_CooldownViewer.GetCooldownViewerCooldownInfo then
-            info = C_CooldownViewer.GetCooldownViewerCooldownInfo(id)
-        end
-        if Safe(info) and type(info) == "table" then
-            local ids = {}
-            local function Add(sid)
-                if UsableID(sid) then ids[sid] = true end
-            end
-            Add(info.spellID)
-            Add(info.overrideSpellID)
-            Add(info.overrideTooltipSpellID)
-            local linked = info.linkedSpellIDs
-            if Safe(linked) and type(linked) == "table" then
-                for _, sid in ipairs(linked) do Add(sid) end
-            end
-            if next(ids) then
-                local cached = candidatesByID[id]
-                local same = cached ~= nil
-                if cached then
-                    for sid in pairs(ids) do if not cached[sid] then same = false; break end end
-                    for sid in pairs(cached) do if not ids[sid] then same = false; break end end
-                end
-                if not same then candidatesByID[id] = ids end
-            end
+local function ResolveCandidates(id)
+    -- Query by cooldown ID: frame.cooldownInfo can still describe its previous occupant.
+    local info = GetCooldownViewerCooldownInfo(id)
+    if not Safe(info) or type(info) ~= "table" then return end
+    local ids, sorted = {}, {}
+    local function Add(sid)
+        if UsableID(sid) and not ids[sid] then
+            ids[sid] = true
+            sorted[#sorted + 1] = sid
         end
     end
-    return candidatesByID[id]
+    Add(info.spellID)
+    Add(info.overrideSpellID)
+    Add(info.overrideTooltipSpellID)
+    local linked = info.linkedSpellIDs
+    if Safe(linked) and type(linked) == "table" then
+        for _, sid in ipairs(linked) do Add(sid) end
+    end
+    if #sorted == 0 then return end
+    table.sort(sorted)
+    return ids, id .. ":" .. table.concat(sorted, ",")
+end
+
+local function EnsureInfrastructure(record)
+    if not record.hostReady then
+        if InCombatLockdown() then Retry(record); return false end
+        if not record.host then record.host = CreateFrame("Frame", nil, record.frame) end
+        record.host:SetAlpha(0)
+        record.host:SetAllPoints(record.frame)
+        record.host:EnableMouse(false)
+        record.hostReady = true
+    end
+    for _, source in ipairs(record.sources) do
+        if not source.ready or source.rebuild or source.styleKey ~= record.styleKey then
+            Deactivate(record)
+            if InCombatLockdown() then
+                Retry(record)
+                return false
+            end
+            CreateSource(record, source)
+            if not source.bound then Retry(record); return false end
+        end
+    end
+    return true
+end
+
+local function CheckBinding(source)
+    if not source.bound or not source.button or not source.text then return false end
+    -- This getter returns the registered FontString, never an application-count value.
+    local ok, text = pcall(function() return source.button:GetApplicationCount() end)
+    -- An inaccessible getter does not prove that a successfully registered binding was lost.
+    if not ok then return nil end
+    if not Safe(text) then return nil end
+    return text == source.text
 end
 
 Sync = function(record)
-    if record.failed then return end
     local frame = record.frame
     local frameData = GetFrameData(frame)
     if frameData.cdmViewerName ~= CDM_C.VIEWERS.BUFF and not frameData.cdmCooldownBuffSpellID then
@@ -166,57 +244,93 @@ Sync = function(record)
         return
     end
     local id = frame.cooldownID
-    if not UsableID(id) then Park(record); return end
-    local ids = ResolveCandidates(frame, id)
-    local ov = CDM.ResolveBuffSpellOverrideForFrame(frame, frameData)
-    if not (ov and ov.textOverride and (ov.stackTextThresholdEnabled or ov.stackTextShowSingle) and ids) then
-        if record.formatter then Park(record) end
+    if not UsableID(id) then
+        Park(record)
+        -- Released pool frames have no ID. OnCooldownIDSet queues them when reused.
+        if not Safe(id) then Retry(record) end
         return
     end
+    if record.cooldownID ~= id then Park(record) end
+    local ov = CDM.ResolveBuffSpellOverrideForFrame(frame, frameData)
+    if not (ov and ov.textOverride and (ov.stackTextThresholdEnabled or ov.stackTextShowSingle)) then
+        Park(record)
+        return
+    end
+    record.cooldownID = id
+    record.style, record.styleKey = GetStyle(ov, frameData)
+    if not record.style then Deactivate(record); Retry(record); return end
     local points, signature = BuildBreakpoints(ov)
     if not record.formatter then
-        if InCombatLockdown() then record.stylePending = true; return end
-        if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter) then return end
+        if InCombatLockdown() then Deactivate(record); Retry(record); return end
+        if not (C_StringUtil and C_StringUtil.CreateNumericRuleFormatter) then Retry(record); return end
         record.formatter = C_StringUtil.CreateNumericRuleFormatter()
         assert(record.formatter)
-        record.formatter:SetBreakpoints(points)
-        record.signature = signature
-        record.host = CreateFrame("Frame", nil, frame)
-        record.host:SetAllPoints(frame)
-        record.host:EnableMouse(false)
-        record.host:SetAlpha(0)
-        CreateSource(record, "player", "HELPFUL")
-        CreateSource(record, "target", "HARMFUL|PLAYER")
-        if record.failed then return end
     end
-    -- The formatter stays bound for the frame's lifetime, including while its
-    -- AuraButtons are inaccessible. Only public configuration enters these rules.
     if record.signature ~= signature then
         record.formatter:SetBreakpoints(points)
         record.signature = signature
+        for _, source in ipairs(record.sources) do source.refresh = true end
     end
-    record.stylePending = false
+    local ids, candidateKey = ResolveCandidates(id)
+    if not ids then Deactivate(record); Retry(record); return end
+    if record.candidateKey and record.candidateKey ~= candidateKey then Park(record) end
+    record.cooldownID, record.candidateKey = id, candidateKey
     for _, source in ipairs(record.sources) do
-        StyleButton(record, source)
-        if record.include ~= ids or record.cooldownID ~= id then
-            source.container:SetAuraSlotCandidateFilters("stacks", { includeSpellIDs = ids })
+        local bound = CheckBinding(source)
+        if bound == nil then
+            Deactivate(record)
+            Retry(record)
+            return
+        elseif source.bound and not bound then
+            source.button, source.text, source.bound = nil, nil, nil
+            source.rebuild = true
+            Deactivate(record)
         end
-        if record.failed then return end
+    end
+    if not EnsureInfrastructure(record) then return end
+    for _, source in ipairs(record.sources) do
+        if source.candidateKey ~= candidateKey then
+            source.container:SetAuraSlotCandidateFilters("stacks", { includeSpellIDs = ids })
+            source.candidateKey = candidateKey
+            source.refresh = true
+        end
+        if source.refresh then
+            source.container:UpdateAllAuras()
+            source.refresh = false
+        end
     end
     for _, source in ipairs(record.sources) do
-        if not source.bound then return end
+        local bound = CheckBinding(source)
+        if bound == nil then
+            Deactivate(record)
+            Retry(record)
+            return
+        elseif source.rebuild or not bound then
+            source.button, source.text, source.bound = nil, nil, nil
+            source.rebuild = true
+            Deactivate(record)
+            Retry(record)
+            return
+        end
     end
-    record.include, record.cooldownID, record.active = ids, id, true
-    Native(record, 0)
     record.host:SetAlpha(1)
+    Native(record, 0)
+    record.active = true
 end
 
 Queue = function(record)
-    if record.queued or record.failed then return end
+    if record.queued then return end
     record.queued = true
     After(0, function()
         record.queued = false
-        if not pcall(Sync, record) then Fail(record) end
+        record.syncing = true
+        local ok = pcall(Sync, record)
+        record.syncing = false
+        if not ok then
+            Deactivate(record)
+            for _, source in ipairs(record.sources) do source.refresh = true end
+            Retry(record)
+        end
     end)
 end
 
@@ -228,12 +342,16 @@ hooksecurefunc(CDM, "ApplyStyle", function(_, frame, viewerName)
         return
     end
     if not record then
-        record = { frame = frame, sources = {} }
+        record = { frame = frame, sources = {
+            { unit = "player", filter = "HELPFUL" },
+            { unit = "target", filter = "HARMFUL|PLAYER" },
+        } }
         GetFrameData(frame).stackTextOverlay = record
         records[frame] = record
         if frame.OnCooldownIDSet then
             hooksecurefunc(frame, "OnCooldownIDSet", function()
-                Park(record)
+                local id = frame.cooldownID
+                if not UsableID(id) or record.cooldownID ~= id then Park(record) end
                 Queue(record)
             end)
         end
@@ -252,13 +370,15 @@ end)
 
 CDM:RegisterEvent("PLAYER_TARGET_CHANGED", function()
     for _, record in pairs(records) do
-        if record.active then
-            local target = record.sources[2]
-            if target and target.container.UpdateAllAuras then
-                if not pcall(target.container.UpdateAllAuras, target.container) then Fail(record) end
-            end
-        end
+        record.sources[2].refresh = true
+        Deactivate(record)
+        Queue(record)
     end
+end)
+
+CDM:RegisterEvent("UNIT_AURA", function(_, unit)
+    if unit ~= "player" and unit ~= "target" then return end
+    for _, record in pairs(records) do Queue(record) end
 end)
 
 CDM:RegisterCombatStateHandler(function(inCombat)
