@@ -163,10 +163,16 @@ function CDM:SetupViewer(vName)
                     if not fd2 or not fd2.cdmAnchor then return end
                     local a = fd2.cdmAnchor
                     if relativeTo == a[2] then return end
+                    if fd2.buffSlotSource and InCombatLockdown() and frame:IsProtected() then
+                        CDM.combatDirtyViewers[VIEWERS.BUFF] = true
+                        return
+                    end
                     RawClearAllPoints(frame)
                     RawSetPoint(frame, a[1], a[2], a[3], a[4], a[5])
                 end)
             end
+
+            if CDM.QueueBuffReplacements then CDM:QueueBuffReplacements() end
 
             if (vName == VIEWERS.BUFF or vName == VIEWERS.BUFF_BAR) and not fd.cdmActiveStateHooked then
                 fd.cdmActiveStateHooked = true

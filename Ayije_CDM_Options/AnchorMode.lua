@@ -19,6 +19,24 @@ local pairs = pairs
 local ipairs = ipairs
 local tonumber = tonumber
 
+local configWindowActive = false
+
+function CDM:SetConfigWindowActive(active)
+    active = active and true or false
+    if configWindowActive ~= active then
+        configWindowActive = active
+        self:Refresh("LAYOUT")
+    end
+    if self.UpdateBuffBarConfigPreview then
+        self:UpdateBuffBarConfigPreview(active)
+    end
+end
+
+function CDM:SetAnchorModeActive(active)
+    self.anchorModeActive = active and true or false
+    self:UpdateContainerDragOverlays()
+end
+
 local AnchorMode = {
     active = false,
     entries = {},

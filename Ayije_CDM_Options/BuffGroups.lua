@@ -520,15 +520,6 @@ local function CreateBuffGroupsTab(page)
         local save = context and context.save or SaveAndRefresh
         local refresh = context and context.refresh or function() ShowSpellSettings(spellID, groupIndex) end
         local registerDropdown = context and context.registerDropdown or RegisterRightPanelDropdown
-        yOff = yOff - 10
-        local overrideHeader = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
-        overrideHeader:SetPoint("TOPLEFT", 0, yOff)
-        overrideHeader:SetText(L["Per-Spell Overrides"])
-        overrideHeader:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
-        yOff = yOff - 34
-
-        -- Kept above the checkbox run so the column of checkboxes reads as one
-        -- uninterrupted block.
         do
             local currentIcon = existingOv and existingOv.customIcon
             local hasIcon = type(currentIcon) == "table" and tonumber(currentIcon.id)
@@ -581,68 +572,8 @@ local function CreateBuffGroupsTab(page)
             yOff = yOff - 36
         end
 
-        local hideCdChecked = existingOv and existingOv.hideCooldown or false
-        local hideVisualsChecked = existingOv and existingOv.hideVisuals or false
-        local hideCdCheckbox, hideVisualsCheckbox
-
-        if not isCustomBuff then
-            hideCdCheckbox = UI.CreateModernCheckbox(
-                rc,
-                L["Hide Cooldown Timer"],
-                hideCdChecked,
-                function(checked)
-                    local ov = ensureOv()
-                    if not ov then return end
-                    ov.hideCooldown = checked or nil
-                    save()
-                end
-            )
-            hideCdCheckbox:SetPoint("TOPLEFT", 0, yOff)
-            yOff = yOff - 36
-        end
-
-        if not isCustomBuff then
-            hideVisualsCheckbox = UI.CreateModernCheckbox(
-                rc,
-                L["Hide Icon"],
-                hideVisualsChecked,
-                function(checked)
-                    local ov = ensureOv()
-                    if not ov then return end
-                    ov.hideVisuals = checked or nil
-                    save()
-                end
-            )
-            hideVisualsCheckbox:SetPoint("TOPLEFT", 0, yOff)
-            yOff = yOff - 36
-        end
-
-        if placeholderOpts and not isCustomBuff then
-            local placeholderChecked = placeholderOpts.forced or (existingOv and existingOv.placeholder) or false
-            local placeholderCheckbox
-            placeholderCheckbox = UI.CreateModernCheckbox(
-                rc,
-                L["Show Placeholder"],
-                placeholderChecked,
-                function(checked)
-                    if placeholderOpts.forced then
-                        placeholderCheckbox:SetChecked(true)
-                        return
-                    end
-                    local ov = ensureOv()
-                    if not ov then return end
-                    ov.placeholder = checked or nil
-                    save()
-                end
-            )
-            placeholderCheckbox:SetPoint("TOPLEFT", 0, yOff)
-            if placeholderOpts.forced or not placeholderOpts.isStatic then
-                placeholderCheckbox.checkbox:Disable()
-                if not placeholderOpts.forced then
-                    placeholderCheckbox.label:SetTextColor(0.5, 0.5, 0.5)
-                end
-            end
-            yOff = yOff - 36
+        if context and context.buildAppearance then
+            yOff = context.buildAppearance(yOff)
         end
 
         local soundChecked = existingOv and existingOv.soundEnabled or false
@@ -896,6 +827,98 @@ local function CreateBuffGroupsTab(page)
             end
         end
 
+        if placeholderOpts and not isCustomBuff then
+            local placeholderChecked = placeholderOpts.forced or (existingOv and existingOv.placeholder) or false
+            local placeholderCheckbox
+            placeholderCheckbox = UI.CreateModernCheckbox(
+                rc,
+                L["Show Placeholder"],
+                placeholderChecked,
+                function(checked)
+                    if placeholderOpts.forced then
+                        placeholderCheckbox:SetChecked(true)
+                        return
+                    end
+                    local ov = ensureOv()
+                    if not ov then return end
+                    ov.placeholder = checked or nil
+                    save()
+                end
+            )
+            placeholderCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            if placeholderOpts.forced or not placeholderOpts.isStatic then
+                placeholderCheckbox.checkbox:Disable()
+                if not placeholderOpts.forced then
+                    placeholderCheckbox.label:SetTextColor(0.5, 0.5, 0.5)
+                end
+            end
+            yOff = yOff - 36
+        end
+
+        yOff = yOff - 10
+        local thresholdHeader = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
+        thresholdHeader:SetPoint("TOPLEFT", 0, yOff)
+        thresholdHeader:SetText(L["Thresholds"])
+        thresholdHeader:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
+        yOff = yOff - 34
+
+        if context and context.buildThresholds then
+            yOff = context.buildThresholds(yOff)
+        end
+        if not isCustomBuff then
+            yOff = Shared.BuildStackThresholdWidgets(rc, yOff, {
+                existingOv = existingOv,
+                ensureOv = ensureOv,
+                save = save,
+                onToggle = refresh,
+            })
+        end
+
+        if isCustomBuff then return yOff end
+
+        yOff = yOff - 10
+        local overrideHeader = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
+        overrideHeader:SetPoint("TOPLEFT", 0, yOff)
+        overrideHeader:SetText(L["Per-Spell Overrides"])
+        overrideHeader:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
+        yOff = yOff - 34
+
+        local hideCdChecked = existingOv and existingOv.hideCooldown or false
+        local hideVisualsChecked = existingOv and existingOv.hideVisuals or false
+        local hideCdCheckbox, hideVisualsCheckbox
+
+        if not isCustomBuff then
+            hideCdCheckbox = UI.CreateModernCheckbox(
+                rc,
+                L["Hide Cooldown Timer"],
+                hideCdChecked,
+                function(checked)
+                    local ov = ensureOv()
+                    if not ov then return end
+                    ov.hideCooldown = checked or nil
+                    save()
+                end
+            )
+            hideCdCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 36
+        end
+
+        if not isCustomBuff then
+            hideVisualsCheckbox = UI.CreateModernCheckbox(
+                rc,
+                L["Hide Icon"],
+                hideVisualsChecked,
+                function(checked)
+                    local ov = ensureOv()
+                    if not ov then return end
+                    ov.hideVisuals = checked or nil
+                    save()
+                end
+            )
+            hideVisualsCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 36
+        end
+
         if not isCustomBuff then
             yOff = Shared.BuildTextOverrideWidgets(rc, yOff, {
                 showHeader = false,
@@ -962,118 +985,124 @@ local function CreateBuffGroupsTab(page)
         spellName:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
         yOff = yOff - 40
 
-        local borderLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-        borderLabel:SetText(L["Border:"])
-        borderLabel:SetPoint("TOPLEFT", 0, yOff)
+        local function BuildAppearance(yOff)
+            local borderLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            borderLabel:SetText(L["Border Color"])
+            borderLabel:SetPoint("TOPLEFT", 0, yOff)
 
-        local configR, configG, configB = GetConfiguredBorderColor()
-        local colorInit = existingColor and
-            { r = existingColor.r or configR, g = existingColor.g or configG, b = existingColor.b or configB }
-            or { r = configR, g = configG, b = configB }
-        local borderColorPicker = UI.CreateSimpleColorPicker(rc, colorInit, function(r, g, b)
-            API:SaveSpell(currentSpecID, spellID, { r = r, g = g, b = b, a = 1 })
-            API:Refresh("BUFF_DATA")
-            if iconContainer.border then
-                iconContainer.border:SetBackdropBorderColor(r, g, b, 1)
-            end
-            local leftBorder = spellIconBorders[spellID]
-            if leftBorder then
-                leftBorder:SetBackdropBorderColor(r, g, b, 1)
-            end
-        end)
-        borderColorPicker:SetPoint("LEFT", borderLabel, "RIGHT", 6, 0)
-        yOff = yOff - 30
-
-        iconContainer:EnableMouse(true)
-        iconContainer:SetScript("OnMouseUp", function(_, button)
-            if button == "RightButton" then
-                API:ClearSpellBorderColor(currentSpecID, spellID)
+            local configR, configG, configB = GetConfiguredBorderColor()
+            local colorInit = existingColor and
+                { r = existingColor.r or configR, g = existingColor.g or configG, b = existingColor.b or configB }
+                or { r = configR, g = configG, b = configB }
+            local borderColorPicker = UI.CreateSimpleColorPicker(rc, colorInit, function(r, g, b)
+                API:SaveSpell(currentSpecID, spellID, { r = r, g = g, b = b, a = 1 })
                 API:Refresh("BUFF_DATA")
-                ApplyConfiguredBorderColor(iconContainer.border)
+                if iconContainer.border then
+                    iconContainer.border:SetBackdropBorderColor(r, g, b, 1)
+                end
                 local leftBorder = spellIconBorders[spellID]
                 if leftBorder then
-                    ApplyConfiguredBorderColor(leftBorder)
-                end
-                ShowSpellSettings(spellID, groupIndex)
-            end
-        end)
-
-        local glowEnabled = API:GetSpellGlowEnabled(currentSpecID, spellID)
-        local glowCheckbox = UI.CreateModernCheckbox(
-            rc,
-            L["Enable Glow"],
-            glowEnabled,
-            function(checked)
-                API:SetSpellGlowEnabled(currentSpecID, spellID, checked or nil)
-                ShowSpellSettings(spellID, groupIndex)
-            end
-        )
-        glowCheckbox:SetPoint("TOPLEFT", 0, yOff)
-        yOff = yOff - 36
-
-        local stackEnabled, stackThreshold, stackOperator = API:GetSpellStackGlow(currentSpecID, spellID)
-        local stackCheckbox = UI.CreateModernCheckbox(rc, L["Glow at Stacks"], stackEnabled, function(checked)
-            API:SetSpellStackGlow(currentSpecID, spellID, checked, stackThreshold, stackOperator)
-            ShowSpellSettings(spellID, groupIndex)
-        end)
-        stackCheckbox:SetPoint("TOPLEFT", 0, yOff)
-        yOff = yOff - 30
-
-        if stackEnabled then
-            local conditionLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-            conditionLabel:SetPoint("TOPLEFT", 0, yOff)
-            conditionLabel:SetText(L["Condition:"])
-            local operators = {
-                { value = "lt", label = L["<"] }, { value = "lte", label = L["<="] },
-                { value = "eq", label = L["=="] }, { value = "gte", label = L[">="] },
-                { value = "gt", label = L[">"] },
-            }
-            local operatorDropdown = RegisterRightPanelDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
-            operatorDropdown:SetWidth(75)
-            operatorDropdown:SetPoint("LEFT", conditionLabel, "RIGHT", 8, 0)
-            for _, option in ipairs(operators) do
-                if option.value == stackOperator then operatorDropdown:SetDefaultText(option.label) end
-            end
-            UI.SetupValueDropdown(operatorDropdown, operators, function() return stackOperator end, function(value, label)
-                stackOperator = value
-                operatorDropdown:SetDefaultText(label)
-                API:SetSpellStackGlow(currentSpecID, spellID, true, stackThreshold, stackOperator)
-            end)
-            local thresholdInput = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
-            thresholdInput:SetSize(60, 20)
-            thresholdInput:SetPoint("LEFT", operatorDropdown, "RIGHT", 12, 0)
-            thresholdInput:SetAutoFocus(false)
-            thresholdInput:SetNumeric(true)
-            thresholdInput:SetMaxLetters(7)
-            thresholdInput:SetText(tostring(stackThreshold))
-            thresholdInput:SetScript("OnEditFocusLost", function(self)
-                local threshold = math.max(1, math.floor(tonumber(self:GetText()) or stackThreshold))
-                self:SetText(tostring(threshold))
-                if threshold == stackThreshold then return end
-                stackThreshold = threshold
-                -- Rebuilding the panel after a mode switch can release focus.
-                if API:GetSpellStackGlow(currentSpecID, spellID) then
-                    API:SetSpellStackGlow(currentSpecID, spellID, true, stackThreshold, stackOperator)
+                    leftBorder:SetBackdropBorderColor(r, g, b, 1)
                 end
             end)
-            thresholdInput:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
-            thresholdInput:SetScript("OnEscapePressed", function(self)
-                self:SetText(tostring(stackThreshold))
-                self:ClearFocus()
+            borderColorPicker:SetPoint("LEFT", borderLabel, "RIGHT", 6, 0)
+            yOff = yOff - 30
+
+            iconContainer:EnableMouse(true)
+            iconContainer:SetScript("OnMouseUp", function(_, button)
+                if button == "RightButton" then
+                    API:ClearSpellBorderColor(currentSpecID, spellID)
+                    API:Refresh("BUFF_DATA")
+                    ApplyConfiguredBorderColor(iconContainer.border)
+                    local leftBorder = spellIconBorders[spellID]
+                    if leftBorder then
+                        ApplyConfiguredBorderColor(leftBorder)
+                    end
+                    ShowSpellSettings(spellID, groupIndex)
+                end
             end)
+
+            local glowEnabled = API:GetSpellGlowEnabled(currentSpecID, spellID)
+            local glowCheckbox = UI.CreateModernCheckbox(
+                rc,
+                L["Enable Glow"],
+                glowEnabled,
+                function(checked)
+                    API:SetSpellGlowEnabled(currentSpecID, spellID, checked or nil)
+                    ShowSpellSettings(spellID, groupIndex)
+                end
+            )
+            glowCheckbox:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 36
+
+            local glowColorLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            glowColorLabel:SetText(L["Glow Color:"])
+            glowColorLabel:SetPoint("TOPLEFT", 0, yOff)
+
+            local existingGlowColor = API:GetSpellGlowColor(currentSpecID, spellID) or { r = 1, g = 1, b = 1 }
+            local glowColorPicker = UI.CreateSimpleColorPicker(rc, existingGlowColor, function(r, g, b)
+                API:SetSpellGlowColor(currentSpecID, spellID, { r = r, g = g, b = b })
+            end)
+            glowColorPicker:SetPoint("LEFT", glowColorLabel, "RIGHT", 6, 0)
+            yOff = yOff - 30
+            return yOff
         end
 
-        local glowColorLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-        glowColorLabel:SetText(L["Glow Color:"])
-        glowColorLabel:SetPoint("TOPLEFT", 0, yOff)
+        local function BuildThresholds(yOff)
+            local stackEnabled, stackThreshold, stackOperator = API:GetSpellStackGlow(currentSpecID, spellID)
+            local stackCheckbox = UI.CreateModernCheckbox(rc, L["Glow at Stacks"], stackEnabled, function(checked)
+                API:SetSpellStackGlow(currentSpecID, spellID, checked, stackThreshold, stackOperator)
+                ShowSpellSettings(spellID, groupIndex)
+            end)
+            stackCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 30
 
-        local existingGlowColor = API:GetSpellGlowColor(currentSpecID, spellID) or { r = 1, g = 1, b = 1 }
-        local glowColorPicker = UI.CreateSimpleColorPicker(rc, existingGlowColor, function(r, g, b)
-            API:SetSpellGlowColor(currentSpecID, spellID, { r = r, g = g, b = b })
-        end)
-        glowColorPicker:SetPoint("LEFT", glowColorLabel, "RIGHT", 6, 0)
-        yOff = yOff - 30
+            if stackEnabled then
+                local conditionLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+                conditionLabel:SetPoint("TOPLEFT", 0, yOff)
+                conditionLabel:SetText(L["Condition:"])
+                local operators = {
+                    { value = "lt", label = L["<"] }, { value = "lte", label = L["<="] },
+                    { value = "eq", label = L["=="] }, { value = "gte", label = L[">="] },
+                    { value = "gt", label = L[">"] },
+                }
+                local operatorDropdown = RegisterRightPanelDropdown(CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+                operatorDropdown:SetWidth(75)
+                operatorDropdown:SetPoint("LEFT", conditionLabel, "RIGHT", 8, 0)
+                for _, option in ipairs(operators) do
+                    if option.value == stackOperator then operatorDropdown:SetDefaultText(option.label) end
+                end
+                UI.SetupValueDropdown(operatorDropdown, operators, function() return stackOperator end, function(value, label)
+                    stackOperator = value
+                    operatorDropdown:SetDefaultText(label)
+                    API:SetSpellStackGlow(currentSpecID, spellID, true, stackThreshold, stackOperator)
+                end)
+                local thresholdInput = CreateFrame("EditBox", nil, rc, "InputBoxTemplate")
+                thresholdInput:SetSize(60, 20)
+                thresholdInput:SetPoint("LEFT", operatorDropdown, "RIGHT", 12, 0)
+                thresholdInput:SetAutoFocus(false)
+                thresholdInput:SetNumeric(true)
+                thresholdInput:SetMaxLetters(7)
+                thresholdInput:SetText(tostring(stackThreshold))
+                thresholdInput:SetScript("OnEditFocusLost", function(self)
+                    local threshold = math.max(1, math.floor(tonumber(self:GetText()) or stackThreshold))
+                    self:SetText(tostring(threshold))
+                    if threshold == stackThreshold then return end
+                    stackThreshold = threshold
+                    -- Rebuilding the panel after a mode switch can release focus.
+                    if API:GetSpellStackGlow(currentSpecID, spellID) then
+                        API:SetSpellStackGlow(currentSpecID, spellID, true, stackThreshold, stackOperator)
+                    end
+                end)
+                thresholdInput:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+                thresholdInput:SetScript("OnEscapePressed", function(self)
+                    self:SetText(tostring(stackThreshold))
+                    self:ClearFocus()
+                end)
+                yOff = yOff - 36
+            end
+            return yOff
+        end
 
         local isCustom = IsCustomBuffSpell(spellID)
 
@@ -1177,7 +1206,8 @@ local function CreateBuffGroupsTab(page)
                         countOffsetY = gd.countOffsetY or 0,
                     },
                     isCustom and nil or { isStatic = gd.staticDisplay or false },
-                    isCustom
+                    isCustom,
+                    { buildAppearance = BuildAppearance, buildThresholds = BuildThresholds }
                 )
             end
         end
@@ -1196,7 +1226,8 @@ local function CreateBuffGroupsTab(page)
                     countOffsetY = CDM.db.countOffsetYMain or 0,
                 },
                 nil,
-                isCustom
+                isCustom,
+                { buildAppearance = BuildAppearance, buildThresholds = BuildThresholds }
             )
         end
 

@@ -1139,6 +1139,9 @@ local Renderers = {}
 
 Renderers[M.TYPE_TIMER] = function(bar, cfg, ctx)
     local blzChild, blizzBar, fbAura = ctx.blzChild, ctx.blizzBar, ctx.fbAura
+    if bar._engineOwnsTimer or cfg.showDuration == false then
+        bar._timerText:Hide()
+    end
 
     if ctx.isActive then
         if not bar:IsShown() then bar:Show() end
@@ -1661,17 +1664,10 @@ local function OnPreviewEdge()
     Wake()
 end
 
--- SetConfigWindowActive early-returns when the state is unchanged, and
--- hooksecurefunc only fires on a completed call, so this is a hint to
--- re-evaluate rather than the source of truth -- IsPreviewActive reads the
--- live frame state instead.
--- Defined in BuffGroupOverlays.lua, which loads earlier; guarded so a load
--- order change degrades to "no hint" rather than erroring at parse time.
-if CDM.SetConfigWindowActive then
-    hooksecurefunc(CDM, "SetConfigWindowActive", function(_, active)
-        previewConfigActive = active and true or false
-        OnPreviewEdge()
-    end)
+-- Options loads on demand, after this module; it notifies previews directly.
+function CDM:UpdateBuffBarConfigPreview(active)
+    previewConfigActive = active and true or false
+    OnPreviewEdge()
 end
 
 do

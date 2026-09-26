@@ -27,6 +27,7 @@ local function Byte(value)
 end
 
 local function BuildBreakpoints(ov)
+    local showSingle = ov.textOverride and ov.stackTextShowSingle == true
     local threshold = ov.stackTextThresholdEnabled and (tonumber(ov.stackTextThreshold) or 2) or math.huge
     if threshold ~= threshold then threshold = math.huge end
     if threshold ~= math.huge then threshold = max(1, floor(threshold)) end
@@ -39,10 +40,10 @@ local function BuildBreakpoints(ov)
     local points = {}
     for _, edge in ipairs(edges) do
         local format = edge >= threshold and colored or "%d"
-        if edge == 0 or (edge == 1 and not ov.stackTextShowSingle) then format = "" end
+        if edge == 0 or (edge == 1 and not showSingle) then format = "" end
         points[#points + 1] = { threshold = edge, format = format }
     end
-    return points, threshold .. ":" .. colored .. ":" .. tostring(ov.stackTextShowSingle == true)
+    return points, threshold .. ":" .. colored .. ":" .. tostring(showSingle == true)
 end
 
 local function Native(record, alpha)
@@ -88,6 +89,7 @@ local function Accessible(button)
 end
 
 local function GetStyle(ov, frameData)
+    ov = ov.textOverride and ov or EMPTY
     local db = CDM.db
     if not db then return end
     local sets = CDM.BuffGroupSets
@@ -252,7 +254,7 @@ Sync = function(record)
     end
     if record.cooldownID ~= id then Park(record) end
     local ov = CDM.ResolveBuffSpellOverrideForFrame(frame, frameData)
-    if not (ov and ov.textOverride and (ov.stackTextThresholdEnabled or ov.stackTextShowSingle)) then
+    if not (ov and (ov.stackTextThresholdEnabled or (ov.textOverride and ov.stackTextShowSingle))) then
         Park(record)
         return
     end

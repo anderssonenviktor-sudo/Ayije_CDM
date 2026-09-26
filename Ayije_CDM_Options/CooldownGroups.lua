@@ -950,6 +950,57 @@ local function CreateCooldownGroupsPanel(subPage, page)
                 auraOv = GetUngroupedOverride(spellID)
             end
 
+            local function EnsureCooldownOverride()
+                if groupIndex then return EnsureSpellOverride(groupIndex, spellID) end
+                return EnsureUngroupedOverrideEntry(spellID)
+            end
+
+            local suppressGCD = UI.CreateModernCheckbox(rc, L["Suppress GCD"],
+                auraOv and auraOv.suppressGCD or false, function(checked)
+                    local ov = EnsureCooldownOverride()
+                    if not ov then return end
+                    ov.suppressGCD = checked or nil
+                    SaveAndRefresh()
+                end)
+            suppressGCD:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 36
+
+            if currentSpecID == playerSpecID then
+                local replacementLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+                replacementLabel:SetText(L["Replace with Buff"])
+                replacementLabel:SetPoint("TOPLEFT", 0, yOff)
+                yOff = yOff - 22
+
+                local replacementDropdown = RegisterRightPanelDropdown(
+                    CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate"))
+                replacementDropdown:SetWidth(220)
+                replacementDropdown:SetPoint("TOPLEFT", 0, yOff)
+                local selectedID = auraOv and auraOv.replaceBuffCooldownID or 0
+                local selectedSpell = auraOv and auraOv.replaceBuffSpellID
+                local selectedLabel = selectedSpell and (C_Spell.GetSpellName(selectedSpell) or tostring(selectedSpell)) or L["None"]
+                for _, option in ipairs(API:GetBuffReplacementOptions()) do
+                    if option.value == selectedID then selectedLabel = option.label end
+                end
+                replacementDropdown:SetDefaultText(selectedLabel)
+                UI.SetupValueDropdown(replacementDropdown,
+                    function() return API:GetBuffReplacementOptions() end,
+                    function() return selectedID end,
+                    function(value)
+                        local ov = EnsureCooldownOverride()
+                        if not ov then return end
+                        for _, option in ipairs(API:GetBuffReplacementOptions()) do
+                            if option.value == value then
+                                API:SetBuffReplacement(ov, option, currentSpecID)
+                                selectedID = value
+                                replacementDropdown:SetDefaultText(option.label)
+                                SaveAndRefresh()
+                                return
+                            end
+                        end
+                    end)
+                yOff = yOff - 40
+            end
+
             local isDotDefault = DOT_OVERRIDE_SPELLS and DOT_OVERRIDE_SPELLS[spellID]
             local showAura
             if auraOv and auraOv.showAuraOverlay ~= nil then

@@ -1469,6 +1469,8 @@ function CDM:ApplyStyle(frame, vName, forceUpdate)
         self:ApplyCooldownCustomIcon(frame)
     end
 
+    if self.ApplySpellAppearanceOverrides then self:ApplySpellAppearanceOverrides(frame, vName) end
+
     if fullUpdate then
         frameData.hooksInitialized = true
     end
