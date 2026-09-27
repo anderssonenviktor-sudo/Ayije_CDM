@@ -411,7 +411,7 @@ local function StripDefaultMatchingValues(profile)
     end
 end
 
-local DB_SCHEMA_VERSION = 38
+local DB_SCHEMA_VERSION = 40
 
 local LEGACY_RESOURCE_KEYS = {
     "resourcesBarHeight", "resourcesBar2Height", "resourcesBarWidth",
@@ -1457,6 +1457,33 @@ local PROFILE_MIGRATIONS = {
                 glow.flashOnStart = nil
                 glow.increaseNearExpiry = nil
             end
+        end,
+    },
+    {
+        version = 39,
+        run = function(profile)
+            profile.chargeShowEdge = nil
+            profile.chargeHideSwipe = nil
+            profile.desaturateOutOfResources = nil
+        end,
+    },
+    {
+        version = 40,
+        run = function(profile)
+            profile.fadingEnabled = nil
+            profile.fadingTriggerNoTarget = nil
+            profile.fadingTriggerOOC = nil
+            profile.fadingTriggerMounted = nil
+            profile.fadingOpacity = nil
+            profile.fadingEssential = nil
+            profile.fadingUtility = nil
+            profile.fadingBuffs = nil
+            profile.fadingBuffBars = nil
+            profile.fadingTrinkets = nil
+            profile.fadingResources = nil
+            profile.fadingTrigger = nil
+            profile.fadingRacials = nil
+            profile.fadingDefensives = nil
         end,
     },
 }

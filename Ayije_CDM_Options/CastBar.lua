@@ -613,4 +613,4 @@ local function CreateCastBarTab(page, tabId)
     end
 end
 
-API:RegisterConfigTab("castbar", L["Cast Bar"], CreateCastBarTab, 11.2)
+API:RegisterConfigTab("castbar", L["Castbar"], CreateCastBarTab, 11.2)

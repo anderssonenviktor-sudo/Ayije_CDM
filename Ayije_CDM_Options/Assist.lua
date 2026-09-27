@@ -7,8 +7,7 @@ local UI = ns.ConfigUI
 local L = Runtime.L
 
 
-local function CreateAssistTab(page, tabId)
-    local scrollChild = UI.CreateScrollableTab(page, "AyijeCDM_AssistScrollFrame", 700, 370)
+local function CreateAssistPanel(scrollChild, page)
 
     local poHeader = UI.CreateHeader(scrollChild, L["Press Overlay"])
     poHeader:SetPoint("TOPLEFT", 0, 0)
@@ -26,33 +25,17 @@ local function CreateAssistTab(page, tabId)
     )
     page.controls.pressOverlayEnabled:SetPoint("TOPLEFT", poHeader, "BOTTOMLEFT", 0, -15)
 
-    local settingExclusive = false
-    local function SetExclusiveStyle(activeKey)
-        if settingExclusive then return end
-        settingExclusive = true
-        local keys = { "pressOverlayTint", "pressOverlayHighlight", "pressOverlayBorder" }
-        for _, key in ipairs(keys) do
-            CDM.db[key] = (key == activeKey)
-        end
-        if page.controls.pressOverlayTint then
-            page.controls.pressOverlayTint:SetChecked(activeKey == "pressOverlayTint")
-        end
-        if page.controls.pressOverlayHighlight then
-            page.controls.pressOverlayHighlight:SetChecked(activeKey == "pressOverlayHighlight")
-        end
-        if page.controls.pressOverlayBorder then
-            page.controls.pressOverlayBorder:SetChecked(activeKey == "pressOverlayBorder")
-        end
-        settingExclusive = false
-        API:Refresh("STYLE")
-    end
-
     page.controls.pressOverlayTint = UI.CreateModernCheckbox(
         scrollChild,
         L["Color Tint"],
         CDM.db.pressOverlayTint or false,
         function(checked)
-            if checked then SetExclusiveStyle("pressOverlayTint") end
+            CDM.db.pressOverlayTint = checked
+            if checked then
+                CDM.db.pressOverlayHighlight = false
+                CDM.db.pressOverlayBorder = false
+            end
+            API:Refresh("STYLE")
         end
     )
     page.controls.pressOverlayTint:SetPoint("TOPLEFT", page.controls.pressOverlayEnabled, "BOTTOMLEFT", 0, -10)
@@ -60,50 +43,13 @@ local function CreateAssistTab(page, tabId)
     page.pressOverlayTintColorPicker = UI.CreateColorSwatch(scrollChild, L["Tint Color"], "pressOverlayTintColor", "STYLE")
     page.pressOverlayTintColorPicker:SetPoint("TOPLEFT", page.controls.pressOverlayTint, "BOTTOMLEFT", 0, -10)
 
-    page.controls.pressOverlayHighlight = UI.CreateModernCheckbox(
-        scrollChild,
-        L["Highlight"],
-        CDM.db.pressOverlayHighlight or false,
-        function(checked)
-            if checked then SetExclusiveStyle("pressOverlayHighlight") end
-        end
-    )
-    page.controls.pressOverlayHighlight:SetPoint("TOPLEFT", page.pressOverlayTintColorPicker, "BOTTOMLEFT", 0, -10)
-
-    page.controls.pressOverlayBorder = UI.CreateModernCheckbox(
-        scrollChild,
-        L["Border"],
-        CDM.db.pressOverlayBorder or false,
-        function(checked)
-            if checked then SetExclusiveStyle("pressOverlayBorder") end
-        end
-    )
-    page.controls.pressOverlayBorder:SetPoint("TOPLEFT", page.controls.pressOverlayHighlight, "BOTTOMLEFT", 0, -10)
-
-    for _, ctrl in ipairs({ page.controls.pressOverlayTint, page.controls.pressOverlayHighlight, page.controls.pressOverlayBorder }) do
-        local cb = ctrl.checkbox
-        local origScript = cb:GetScript("OnClick")
-        cb:SetScript("OnClick", function(self)
-            if not self:GetChecked() then
-                self:SetChecked(true)
-                return
-            end
-            origScript(self)
-        end)
-    end
-
-    page.pressOverlayBorderColorPicker = UI.CreateColorSwatch(scrollChild, L["Border Color"], "pressOverlayBorderColor", "STYLE")
-    page.pressOverlayBorderColorPicker:SetPoint("TOPLEFT", page.controls.pressOverlayBorder, "BOTTOMLEFT", 0, -10)
-
     local poControls = {
         page.controls.pressOverlayTint, page.pressOverlayTintColorPicker,
-        page.controls.pressOverlayHighlight,
-        page.controls.pressOverlayBorder, page.pressOverlayBorderColorPicker,
     }
 
     local poOverlay = CreateFrame("Frame", nil, scrollChild)
     poOverlay:SetPoint("TOPLEFT", page.controls.pressOverlayTint, "TOPLEFT")
-    poOverlay:SetPoint("BOTTOMRIGHT", page.pressOverlayBorderColorPicker, "BOTTOMRIGHT")
+    poOverlay:SetPoint("BOTTOMRIGHT", page.pressOverlayTintColorPicker, "BOTTOMRIGHT")
     local poMaxLevel = 0
     for _, ctrl in ipairs(poControls) do
         local lvl = ctrl:GetFrameLevel()
@@ -123,7 +69,7 @@ local function CreateAssistTab(page, tabId)
     setPOControlsEnabled(CDM.db.pressOverlayEnabled or false)
     
     local mainHeader = UI.CreateHeader(scrollChild, L["Keybindings"])
-    mainHeader:SetPoint("TOPLEFT", page.pressOverlayBorderColorPicker, "BOTTOMLEFT", 0, -20)
+    mainHeader:SetPoint("TOPLEFT", page.pressOverlayTintColorPicker, "BOTTOMLEFT", 0, -20)
 
     local setKBControlsEnabled
     page.controls.assistEnabled = UI.CreateModernCheckbox(
@@ -143,7 +89,7 @@ local function CreateAssistTab(page, tabId)
         function(v)
             CDM.db.assistFontSize = v
             API:Refresh("STYLE")
-        end
+        end, 110, 145
     )
     page.controls.assistFontSize:SetPoint("TOPLEFT", page.controls.assistEnabled, "BOTTOMLEFT", 0, -15)
 
@@ -175,7 +121,7 @@ local function CreateAssistTab(page, tabId)
         function(v)
             CDM.db.assistOffsetX = v
             API:Refresh("STYLE")
-        end
+        end, 110, 145
     )
     page.controls.assistOffsetX:SetPoint("TOPLEFT", ddPos, "BOTTOMLEFT", 0, -15)
 
@@ -184,7 +130,7 @@ local function CreateAssistTab(page, tabId)
         function(v)
             CDM.db.assistOffsetY = v
             API:Refresh("STYLE")
-        end
+        end, 110, 145
     )
     page.controls.assistOffsetY:SetPoint("TOPLEFT", page.controls.assistOffsetX, "BOTTOMLEFT", 0, -15)
 
@@ -219,4 +165,4 @@ local function CreateAssistTab(page, tabId)
     setKBControlsEnabled(CDM.db.assistEnabled or false)
 end
 
-API:RegisterConfigTab("assist", L["Assist"], CreateAssistTab, 7.5)
+ns._CreateAssistPanel = CreateAssistPanel

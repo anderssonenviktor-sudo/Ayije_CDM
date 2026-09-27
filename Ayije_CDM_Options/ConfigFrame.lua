@@ -165,10 +165,8 @@ end
 ns.ConfigCreatePage = CreateCategoryPage
 
 local categoryHeaders = {
-    { label = L["CDM"], tabs = {"layout", "buffgroups", "bars"} },
-    { label = L["Styling"], tabs = {"border", "text", "glow", "fading", "assist"} },
-    { label = L["Features"], tabs = {"resources", "castbar"} },
-    { label = L["Utility"], tabs = {"profiles", "importexport"} },
+    { label = L["CDM"], tabs = {"layout", "buffgroups", "bars", "glow", "castbar", "resources", "border"} },
+    { divider = true, tabs = {"profiles", "importexport"} },
 }
 
 local function CreateConfigFrame()
@@ -397,8 +395,33 @@ local function CreateConfigFrame()
     local tabIndent = 17
 
     for _, category in ipairs(categoryHeaders) do
-        AddHeader(category.label, yOffset)
-        yOffset = yOffset - 34
+        if category.divider then
+            local gold = CDM_C.GOLD
+            local mutedGold = CreateColor(gold.r, gold.g, gold.b, 0.35)
+            local fadedGold = CreateColor(gold.r, gold.g, gold.b, 0)
+
+            local diamond = Sidebar:CreateTexture(nil, "ARTWORK")
+            diamond:SetColorTexture(gold.r, gold.g, gold.b, 0.5)
+            diamond:SetSize(7, 7)
+            diamond:SetPoint("CENTER", Sidebar, "TOP", 0, yOffset - 9)
+            diamond:SetRotation(math.pi / 4)
+
+            local leftLine = Sidebar:CreateTexture(nil, "ARTWORK")
+            leftLine:SetColorTexture(1, 1, 1)
+            leftLine:SetSize(74, 2)
+            leftLine:SetPoint("RIGHT", diamond, "LEFT", -7, 0)
+            leftLine:SetGradient("HORIZONTAL", fadedGold, mutedGold)
+
+            local rightLine = Sidebar:CreateTexture(nil, "ARTWORK")
+            rightLine:SetColorTexture(1, 1, 1)
+            rightLine:SetSize(74, 2)
+            rightLine:SetPoint("LEFT", diamond, "RIGHT", 7, 0)
+            rightLine:SetGradient("HORIZONTAL", mutedGold, fadedGold)
+            yOffset = yOffset - 26
+        else
+            AddHeader(category.label, yOffset)
+            yOffset = yOffset - 34
+        end
 
         for _, tabId in ipairs(category.tabs) do
             local tabDef = ns.ConfigTabs and ns.ConfigTabs[tabId]

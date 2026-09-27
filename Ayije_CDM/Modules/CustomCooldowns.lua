@@ -904,16 +904,3 @@ end
 
 CDM.ReconcileCustomCooldowns = ReconcileCustomCooldowns
 CDM.OnCustomCooldownsProfileApplied = OnCustomCooldownsProfileApplied
-
--- Custom cooldown icons visually live in the Essential viewer, so they follow
--- its fading toggle.
-if CDM.Fading and CDM.Fading.RegisterTarget then
-    CDM.Fading:RegisterTarget("fadingEssential", function(a)
-        local frames = CDM.GetCustomCooldownIconFrames()
-        if frames then
-            for _, frame in ipairs(frames) do
-                frame:SetAlpha(a)
-            end
-        end
-    end)
-end

@@ -175,6 +175,9 @@ function ns.BuildPandemicGlow(parent, onHeightChanged)
         self:SetAlpha(enabled and 1 or 0.4)
         blocker:SetShown(not enabled)
     end
+    function body:GetColorDropdown()
+        return widgets.colorMode
+    end
     Build()
     return body
 end

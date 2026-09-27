@@ -601,10 +601,6 @@ function CDM:ForceReanchor(viewer)
         end
     end
 
-    if self.Fading then
-        self.Fading:ReapplyCurrent()
-    end
-
     if reanchorPending[vName] then
         reanchorPending[vName] = nil
         self:ForceReanchor(viewer)

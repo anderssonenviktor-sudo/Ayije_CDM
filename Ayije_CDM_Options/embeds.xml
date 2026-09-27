@@ -9,7 +9,6 @@
     <Script file="Border.lua"/>
     <Script file="Text.lua"/>
     <Script file="Glow.lua"/>
-    <Script file="Fading.lua"/>
     <Script file="Assist.lua"/>
     <Script file="GroupEditorShared.lua"/>
     <Script file="BuffGroups.lua"/>

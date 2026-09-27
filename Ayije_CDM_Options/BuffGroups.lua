@@ -2347,8 +2347,10 @@ local function CreateBuffGroupsTab(page)
     local tabBar = UI.CreateSubTabBar(page, {
         { id = "buffs", label = L["Buffs"] },
         { id = "general", label = L["General"] },
+        { id = "text", label = L["Text"] },
     }, "buffs")
     CreateBuffGroupsPanel(tabBar.subPages.buffs, page)
+    ns._CreateBuffTextPanel(tabBar.subPages.text, page)
 
     local generalPage = tabBar.subPages.general
     local divider = generalPage:CreateTexture(nil, "ARTWORK")

@@ -49,7 +49,7 @@ function UI.CreateColorSwatch(parent, label, key, scope)
 
     local button = CreateFrame("Button", nil, frame, "BackdropTemplate")
     button:SetSize(20, 20)
-    button:SetPoint("LEFT", 140, 0)
+    button:SetPoint("LEFT", text, "RIGHT", 8, 0)
     button:SetBackdrop({
         edgeFile = CDM_C.TEX_WHITE8X8, edgeSize = 1,
         bgFile = CDM_C.TEX_WHITE8X8,

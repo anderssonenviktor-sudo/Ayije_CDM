@@ -22,14 +22,6 @@ local glowColorOptions = {
     { value = "custom", label = L["Custom"] },
 }
 
-local typeSections = {}
-
-local function UpdateTypeSections(selectedType)
-    for typeId, section in pairs(typeSections) do
-        section:SetShown(typeId == selectedType)
-    end
-end
-
 local function SliderValueToAutocastScale(sliderValue)
     return 1 + ((sliderValue - 1) * 0.25)
 end
@@ -40,11 +32,19 @@ local function AutocastScaleToSliderValue(scale)
     return math.max(1, math.min(9, sliderValue))
 end
 
-local function CreateGlowTab(page, tabId)
+local function BuildGlowSettings(page, onHeightChanged)
     local scrollChild = page
+    local typeSections = {}
+    local UpdateScrollHeight
+    local function UpdateTypeSections(selectedType)
+        for typeId, section in pairs(typeSections) do
+            section:SetShown(typeId == selectedType)
+        end
+        if UpdateScrollHeight then UpdateScrollHeight() end
+    end
 
     local mainHeader = UI.CreateHeader(scrollChild, L["Glow Settings"])
-    mainHeader:SetPoint("TOPLEFT", 35, -40)
+    mainHeader:SetPoint("TOPLEFT", 0, 0)
 
     local lblType = scrollChild:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
     lblType:SetText(L["Glow Type"])
@@ -236,7 +236,183 @@ local function CreateGlowTab(page, tabId)
     )
     page.controls.procYOffset:SetPoint("TOPLEFT", page.controls.procXOffset, "BOTTOMLEFT", 0, -10)
 
+    local lastControls = {
+        pixel = page.controls.pixelBorder,
+        autocast = page.controls.autocastYOffset,
+        button = page.controls.buttonFrequency,
+        proc = page.controls.procYOffset,
+    }
+    UpdateScrollHeight = function()
+        C_Timer.After(0, function()
+            if not page:IsVisible() then return end
+            local last = lastControls[CDM.db.glowType] or (colorPicker:IsShown() and colorPicker or ddColor)
+            local top, bottom = mainHeader:GetTop(), last:GetBottom()
+            if top and bottom then
+                local height = top - bottom
+                scrollChild:SetHeight(height)
+                onHeightChanged(height)
+            end
+        end)
+    end
+    page:HookScript("OnShow", UpdateScrollHeight)
+    API:RegisterRefreshCallback("glowSettingsHeight", UpdateScrollHeight, 90, { "STYLE" })
     UpdateTypeSections(CDM.db.glowType or "proc")
+    return ddColor
 end
 
-API:RegisterConfigTab("glow", L["Glow"], CreateGlowTab, 6)
+local function BuildPandemicSettings(rc, onHeightChanged)
+    local yOff = 0
+
+    local pandemicHeader = UI.CreateHeader(rc, L["Pandemic Display"])
+    pandemicHeader:SetPoint("TOPLEFT", 0, yOff)
+    yOff = yOff - 30
+
+    local hidePandemicCheckbox
+    local enableCustomizationCheckbox
+    local pandemicBorderCheckbox
+    local pandemicBorderColor
+    local pandemicGlowControls
+
+    local function UpdatePandemicEnableState()
+        local hideEnabled = CDM.db.hidePandemicIndicator == true
+        local customizationEnabled = hideEnabled and (CDM.db.pandemicCustomizationEnabled == true)
+
+        enableCustomizationCheckbox:SetEnabled(hideEnabled)
+        pandemicBorderCheckbox:SetEnabled(customizationEnabled)
+
+        local borderColorEnabled = customizationEnabled and (CDM.db.pandemicBorderEnabled == true)
+        pandemicBorderColor:SetEnabled(borderColorEnabled)
+        if pandemicGlowControls then pandemicGlowControls:SetEnabled(customizationEnabled) end
+    end
+
+    hidePandemicCheckbox = UI.CreateModernCheckbox(
+        rc,
+        L["Hide Blizzard's Pandemic Indicator (animated refresh window border)"],
+        CDM.db.hidePandemicIndicator or false,
+        function(checked)
+            CDM.db.hidePandemicIndicator = checked
+            UpdatePandemicEnableState()
+            API:Refresh("STYLE")
+        end
+    )
+    hidePandemicCheckbox:SetPoint("TOPLEFT", 0, yOff)
+    yOff = yOff - 30
+
+    enableCustomizationCheckbox = UI.CreateModernCheckbox(
+        rc,
+        L["Enable Pandemic Customization"],
+        CDM.db.pandemicCustomizationEnabled or false,
+        function(checked)
+            CDM.db.pandemicCustomizationEnabled = checked
+            UpdatePandemicEnableState()
+            API:Refresh("STYLE")
+        end
+    )
+    enableCustomizationCheckbox:SetPoint("TOPLEFT", 0, yOff)
+    yOff = yOff - 40
+
+    pandemicBorderCheckbox = UI.CreateModernCheckbox(
+        rc,
+        L["Custom Pandemic Border"],
+        CDM.db.pandemicBorderEnabled or false,
+        function(checked)
+            CDM.db.pandemicBorderEnabled = checked
+            UpdatePandemicEnableState()
+            API:Refresh("STYLE")
+        end
+    )
+    pandemicBorderCheckbox:SetPoint("TOPLEFT", 0, yOff)
+    yOff = yOff - 30
+
+    pandemicBorderColor = UI.CreateColorSwatch(rc, L["Color"], "pandemicBorderColor", "STYLE")
+    pandemicBorderColor:SetPoint("TOPLEFT", 0, yOff)
+    yOff = yOff - 50
+
+    local glowTop = yOff
+    local glowHeight = 0
+    local function UpdateScrollHeight()
+        local height = -glowTop + glowHeight + 20
+        rc:SetHeight(height)
+        onHeightChanged(height)
+    end
+    pandemicGlowControls = ns.BuildPandemicGlow(rc, function(height)
+        glowHeight = height
+        UpdateScrollHeight()
+    end)
+    pandemicGlowControls:SetPoint("TOPLEFT", 0, yOff)
+    UpdatePandemicEnableState()
+
+    UpdateScrollHeight()
+    return pandemicGlowControls:GetColorDropdown()
+end
+
+local function CreateGlowPreview(page, anchor, pandemic)
+    local icon = CreateFrame("Frame", nil, page)
+    icon:SetPoint("LEFT", anchor, "RIGHT", 80, 0)
+    local texture = icon:CreateTexture(nil, "ARTWORK")
+    texture:SetAllPoints()
+    texture:SetTexture(135846)
+
+    local function Stop()
+        CDM.Glow:RequestBuffGlow(icon, false)
+        CDM.StopGlow(icon, "pandemic")
+        CDM.BORDER:ClearPandemicBorderColor(icon)
+    end
+
+    local function Refresh()
+        if not page:IsVisible() then return end
+        local enabled = not pandemic or (CDM.db.hidePandemicIndicator == true
+            and CDM.db.pandemicCustomizationEnabled == true)
+        icon:SetSize(40, 40)
+        CDM.CONST.ApplyIconTexCoord(texture, CDM.CONST.GetEffectiveZoomAmount())
+        Stop()
+        CDM.BORDER:CreateBorder(icon, { forceUpdate = true })
+        if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[icon] = nil end
+        if not enabled then return end
+        if pandemic then
+            if CDM.db.pandemicBorderEnabled == true then
+                CDM.BORDER:ApplyPandemicBorderColor(icon, CDM.db.pandemicBorderColor)
+            end
+            local settings = CDM.ResolvePandemicGlowSettings()
+            if settings.enabled == true then
+                CDM.StartGlow(icon, settings.style, settings.options)
+            end
+        else
+            CDM.Glow:RequestBuffGlow(icon, true)
+        end
+    end
+
+    page:HookScript("OnShow", Refresh)
+    page:HookScript("OnHide", Stop)
+    API:RegisterRefreshCallback(pandemic and "pandemicPreview" or "glowPreview",
+        Refresh, 90, { "STYLE", "LAYOUT" })
+    Refresh()
+end
+
+local function CreateGlowTab(page)
+    local content, scrollFrame = UI.CreateScrollableTab(page, "AyijeCDM_Glow_SettingsScrollFrame", 1000, 650)
+    local glowSection = CreateFrame("Frame", nil, content)
+    glowSection:SetPoint("TOPLEFT")
+    glowSection:SetPoint("TOPRIGHT")
+    glowSection:SetHeight(400)
+    glowSection.controls = {}
+
+    local pandemicSection = CreateFrame("Frame", nil, content)
+    pandemicSection:SetPoint("TOPLEFT", glowSection, "BOTTOMLEFT", 0, -20)
+    pandemicSection:SetPoint("TOPRIGHT", glowSection, "BOTTOMRIGHT", 0, -20)
+    pandemicSection:SetHeight(600)
+
+    local function UpdateHeight()
+        local height = glowSection:GetHeight() + pandemicSection:GetHeight() + 40
+        content:SetHeight(height)
+        scrollFrame:GetScrollChild():SetHeight(height + 20)
+    end
+
+    local glowColor = BuildGlowSettings(glowSection, UpdateHeight)
+    local pandemicColor = BuildPandemicSettings(pandemicSection, UpdateHeight)
+    CreateGlowPreview(glowSection, glowColor, false)
+    CreateGlowPreview(pandemicSection, pandemicColor, true)
+    UpdateHeight()
+end
+
+API:RegisterConfigTab("glow", L["Glow/Pandemic"], CreateGlowTab, 6)

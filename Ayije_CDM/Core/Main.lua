@@ -290,9 +290,6 @@ local function ActivateEditMode()
     if CDM.UpdateContainerDragOverlays then
         CDM:UpdateContainerDragOverlays()
     end
-    if CDM.Fading then
-        CDM.Fading:ShowImmediate()
-    end
 end
 
 local function SetupEditModeIntegration()
@@ -306,9 +303,6 @@ local function SetupEditModeIntegration()
                 CDM:UpdateContainerDragOverlays()
             end
             CDM:ForceReanchorAll()
-            if CDM.Fading then
-                CDM.Fading:Evaluate()
-            end
         end)
 
         if EditModeManagerFrame:IsShown() then
@@ -417,7 +411,6 @@ local function InitializeModules()
     end
 
     CDM.Keybinds:Initialize()
-    CDM.Fading:Initialize()
     CDM.PressOverlay:Initialize()
 end
 
@@ -470,7 +463,6 @@ local function ForceRestyleAll()
     if CDM.RefreshAllSwipeColors then
         CDM.RefreshAllSwipeColors()
     end
-    if CDM.Fading then CDM.Fading:ReapplyCurrent() end
 end
 
 local function RegisterRefreshCallbacks()

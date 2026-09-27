@@ -10,6 +10,7 @@ local function CreateLayoutTab(page, tabId)
     local tabBar = UI.CreateSubTabBar(page, {
         { id = "cooldowns", label = L["Cooldowns"] },
         { id = "general", label = L["General"] },
+        { id = "text", label = L["Text"] },
     }, "cooldowns")
 
     local subPages = tabBar.subPages
@@ -17,6 +18,8 @@ local function CreateLayoutTab(page, tabId)
     if ns._CreateCooldownGroupsPanel then
         ns._CreateCooldownGroupsPanel(subPages.cooldowns, page)
     end
+
+    ns._CreateCooldownTextPanel(subPages.text, page)
 
     local generalPage = subPages.general
 

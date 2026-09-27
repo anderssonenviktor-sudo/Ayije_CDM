@@ -380,7 +380,7 @@ CDM.defaults = {
     hideIconOverlayTexture = true,
     swipeColor = { r = 0, g = 0, b = 0, a = 0.6 },
     hideGCDSwipe = false,
-    desaturateOutOfResources = true,
+    desaturateOutOfResources = false,
 
     -- Glow Settings
     glowType = "pixel",
@@ -432,16 +432,4 @@ CDM.defaults = {
     chargeShowEdge  = false,
     chargeHideSwipe = false,
 
-    -- Fading
-    fadingEnabled = false,
-    fadingTriggerNoTarget = true,
-    fadingTriggerOOC = false,
-    fadingTriggerMounted = false,
-    fadingOpacity = 30,
-    fadingEssential = true,
-    fadingUtility = true,
-    fadingBuffs = true,
-    fadingBuffBars = true,
-    fadingTrinkets = true,
-    fadingResources = true,
 }

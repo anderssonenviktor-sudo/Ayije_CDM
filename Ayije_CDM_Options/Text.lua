@@ -9,17 +9,6 @@ local UI = ns.ConfigUI
 local SLIDER_LABEL_W = 130
 local SLIDER_W = 220
 
-local OUTLINE_OPTIONS = {
-    { value = "",             label = L["None"] },
-    { value = "OUTLINE",      label = L["Outline"] },
-    { value = "THICKOUTLINE", label = L["Thick Outline"] },
-    { value = "SLUG",         label = L["Slug"] },
-}
-
-local function OutlineLabel(value)
-    return UI.GetOptionLabel(OUTLINE_OPTIONS, value, L["Outline"])
-end
-
 local function SetDB(key, scope)
     return function(v)
         CDM.db[key] = v
@@ -50,41 +39,6 @@ local function ColorSwatch(rc, label, key, yOff, scope)
     return swatch
 end
 
-local function FontDropdown(rc, yOff, page)
-    local lbl = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
-    lbl:SetText(L["Font"])
-    lbl:SetPoint("TOPLEFT", 0, yOff)
-
-    local dd = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
-    dd:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -10)
-    dd:SetWidth(220)
-    dd:SetDefaultText(CDM.db.textFont or CDM.defaults.textFont or "Expressway")
-    UI.SetupMediaDropdown(dd, "font",
-        function() return CDM.db.textFont end,
-        function(name) CDM.db.textFont = name; API:Refresh("STYLE") end,
-        function(name) dd:SetDefaultText(name) end)
-    page.fontDropdown = dd
-end
-
-local function OutlineDropdown(rc, yOff, page)
-    local lbl = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
-    lbl:SetText(L["Font Outline"])
-    lbl:SetPoint("TOPLEFT", 0, yOff)
-
-    local dd = CreateFrame("DropdownButton", nil, rc, "WowStyle1DropdownTemplate")
-    dd:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -10)
-    dd:SetWidth(220)
-    dd:SetDefaultText(OutlineLabel(CDM.db.textFontOutline))
-    UI.SetupValueDropdown(dd, OUTLINE_OPTIONS,
-        function() return CDM.db.textFontOutline end,
-        function(value, label)
-            CDM.db.textFontOutline = value
-            dd:SetDefaultText(label)
-            API:Refresh("STYLE")
-        end)
-    page.outlineDropdown = dd
-end
-
 local function PositionDropdown(rc, label, key, yOff, positions)
     local lbl = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font14")
     lbl:SetText(label)
@@ -105,94 +59,94 @@ local function PositionDropdown(rc, label, key, yOff, positions)
     return dd
 end
 
-local BAR_TEXT_POSITIONS = { "LEFT", "CENTER", "RIGHT" }
+local function BuildCooldownText(subPage, page)
+    local divider = subPage:CreateTexture(nil, "ARTWORK")
+    divider:SetAtlas("Options_HorizontalDivider", true)
+    divider:SetPoint("TOP", subPage, "TOP", 0, 0)
 
-local function BuildGlobal(subPage, page)
-    local rc, sc = UI.MakeSubPageScroll(subPage, "AyijeCDM_Text_GlobalScrollFrame")
-    local yOff = 0
+    local rc = CreateFrame("Frame", nil, subPage)
+    rc:SetPoint("TOPLEFT", 30, -15)
+    rc:SetPoint("BOTTOMRIGHT", -20, 10)
 
-    FontDropdown(rc, yOff, page); yOff = yOff - 55
-    OutlineDropdown(rc, yOff, page); yOff = yOff - 65
+    local function Column(x, y)
+        local frame = CreateFrame("Frame", nil, rc)
+        frame:SetPoint("TOPLEFT", x, y)
+        frame:SetSize(260, 310)
+        return frame
+    end
 
-    SectionHeader(rc, L["Cooldown Timer"], yOff); yOff = yOff - 30
-    ColorSwatch(rc, L["Color"], "cooldownColor", yOff); yOff = yOff - 45
+    local function CompactSlider(parent, label, key, y, minV, maxV, precise)
+        local slider
+        if precise then
+            slider = UI.CreateModernSliderPrecise(parent, label, minV, maxV,
+                CDM.db[key], 0.5, 1, SetDB(key))
+        else
+            slider = UI.CreateModernSlider(parent, label, minV, maxV,
+                CDM.db[key], SetDB(key))
+        end
+        slider:SetSize(260, 48)
+        slider:SetPoint("TOPLEFT", 0, y)
+        slider.Label:ClearAllPoints()
+        slider.Label:SetPoint("TOPLEFT")
+        slider.Label:SetWidth(205)
+        slider.Slider:ClearAllPoints()
+        slider.Slider:SetPoint("BOTTOMLEFT", 0, 0)
+        slider.Slider:SetWidth(260)
+        slider.Input:ClearAllPoints()
+        slider.Input:SetPoint("TOPRIGHT")
+        page.controls[key] = slider
+        return slider
+    end
 
-    SectionHeader(rc, L["Cooldown Countdown Format"], yOff); yOff = yOff - 30
+    local timer = Column(0, 0)
+    SectionHeader(timer, L["Cooldown Timer"], 0)
+    ColorSwatch(timer, L["Color"], "cooldownColor", -25)
+    CompactSlider(timer, L["Row 1 Font Size"], "cooldownFontSize", -60, 8, 32)
+    CompactSlider(timer, L["Row 2 Font Size"], "essRow2CooldownFontSize", -115, 8, 32)
+    CompactSlider(timer, L["Show decimals below"],
+        "cooldownDecimalThreshold", -170, 0, 10, true)
 
-    local decSlider = UI.CreateModernSliderPrecise(rc,
-        L["Show decimals below (seconds, 0 = off)"], 0, 10,
-        CDM.db.cooldownDecimalThreshold, 0.5, 1,
-        function(v)
-            CDM.db.cooldownDecimalThreshold = v
-            API:Refresh("STYLE")
-        end)
-    decSlider:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 60
+    local threshold = Column(290, 0)
+    SectionHeader(threshold, L["Threshold Color"], 0)
+    local chk = UI.CreateModernCheckbox(threshold, L["Color countdown below threshold"],
+        CDM.db.cooldownColorThresholdEnabled, SetDB("cooldownColorThresholdEnabled"))
+    chk:SetPoint("TOPLEFT", 0, -25)
+    chk:SetWidth(260)
+    chk.label:SetWidth(226)
+    chk.label:SetJustifyH("LEFT")
+    CompactSlider(threshold, L["Threshold (seconds)"],
+        "cooldownColorThreshold", -60, 1, 30, true)
+    ColorSwatch(threshold, L["Color"], "cooldownColorThresholdColor", -130)
 
-    SectionHeader(rc, L["Threshold Color"], yOff); yOff = yOff - 30
+    local charges = Column(0, -235)
+    SectionHeader(charges, L["Charges"], 0)
+    CompactSlider(charges, L["Font Size"], "chargeFontSize", -30, 8, 32)
+    CompactSlider(charges, L["Font size row 2"], "essRow2ChargeFontSize", -80, 8, 32)
+    ColorSwatch(charges, L["Color"], "chargeColor", -130)
+    PositionDropdown(charges, L["Position"], "chargePosition", -165)
+    CompactSlider(charges, L["X Offset"], "chargeOffsetX", -220, -50, 50)
+    CompactSlider(charges, L["Y Offset"], "chargeOffsetY", -270, -50, 50)
 
-    local chk = UI.CreateModernCheckbox(rc, L["Color countdown below threshold"],
-        CDM.db.cooldownColorThresholdEnabled,
-        function(checked)
-            CDM.db.cooldownColorThresholdEnabled = checked
-            API:Refresh("STYLE")
-        end)
-    chk:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 35
-
-    local thrSlider = UI.CreateModernSliderPrecise(rc,
-        L["Threshold (seconds)"], 1, 30,
-        CDM.db.cooldownColorThreshold, 0.5, 1,
-        function(v)
-            CDM.db.cooldownColorThreshold = v
-            API:Refresh("STYLE")
-        end)
-    thrSlider:SetPoint("TOPLEFT", 0, yOff); yOff = yOff - 60
-
-    ColorSwatch(rc, L["Color"], "cooldownColorThresholdColor", yOff); yOff = yOff - 45
-    UI.FinalizeScroll(sc, rc, yOff)
+    local utility = Column(290, -235)
+    SectionHeader(utility, L["Utility"], 0)
+    CompactSlider(utility, L["Cooldown Font Size"], "utilityCooldownFontSize", -30, 8, 32)
+    CompactSlider(utility, L["Charges Font Size"], "utilityChargeFontSize", -80, 8, 32)
+    ColorSwatch(utility, L["Color"], "utilityChargeColor", -130)
+    PositionDropdown(utility, L["Position"], "utilityChargePosition", -165)
+    CompactSlider(utility, L["X Offset"], "utilityChargeOffsetX", -220, -50, 50)
+    CompactSlider(utility, L["Y Offset"], "utilityChargeOffsetY", -270, -50, 50)
 end
 
-local function BuildEssential(subPage, page)
-    local rc, sc = UI.MakeSubPageScroll(subPage, "AyijeCDM_Text_EssentialScrollFrame")
-    local yOff = 0
-
-    SectionHeader(rc, L["Cooldown Timer"], yOff); yOff = yOff - 30
-    Slider(page, rc, L["Row 1 Font Size"], 8, 32, "cooldownFontSize", yOff, 12); yOff = yOff - 60
-    Slider(page, rc, L["Row 2 Font Size"], 8, 32, "essRow2CooldownFontSize", yOff, 12); yOff = yOff - 60
-
-    SectionHeader(rc, L["Row 1 - Stacks (Charges)"], yOff); yOff = yOff - 30
-    Slider(page, rc, L["Font Size"], 8, 32, "chargeFontSize", yOff, 12); yOff = yOff - 60
-    ColorSwatch(rc, L["Color"], "chargeColor", yOff); yOff = yOff - 45
-    PositionDropdown(rc, L["Position"], "chargePosition", yOff); yOff = yOff - 60
-    Slider(page, rc, L["X Offset"], -50, 50, "chargeOffsetX", yOff, 0); yOff = yOff - 50
-    Slider(page, rc, L["Y Offset"], -50, 50, "chargeOffsetY", yOff, 0); yOff = yOff - 70
-
-    SectionHeader(rc, L["Row 2 - Stacks (Charges)"], yOff); yOff = yOff - 30
-    Slider(page, rc, L["Font Size"], 8, 32, "essRow2ChargeFontSize", yOff, 15); yOff = yOff - 60
-    ColorSwatch(rc, L["Color"], "essRow2ChargeColor", yOff); yOff = yOff - 45
-    PositionDropdown(rc, L["Position"], "essRow2ChargePosition", yOff); yOff = yOff - 60
-    Slider(page, rc, L["X Offset"], -50, 50, "essRow2ChargeOffsetX", yOff, 0); yOff = yOff - 50
-    Slider(page, rc, L["Y Offset"], -50, 50, "essRow2ChargeOffsetY", yOff, 0); yOff = yOff - 50
-    UI.FinalizeScroll(sc, rc, yOff)
-end
-
-local function BuildUtility(subPage, page)
-    local rc, sc = UI.MakeSubPageScroll(subPage, "AyijeCDM_Text_UtilityScrollFrame")
-    local yOff = 0
-
-    SectionHeader(rc, L["Cooldown Timer"], yOff); yOff = yOff - 30
-    Slider(page, rc, L["Font Size"], 8, 32, "utilityCooldownFontSize", yOff, 12); yOff = yOff - 60
-
-    SectionHeader(rc, L["Stacks (Charges)"], yOff); yOff = yOff - 30
-    Slider(page, rc, L["Font Size"], 8, 32, "utilityChargeFontSize", yOff, 12); yOff = yOff - 60
-    ColorSwatch(rc, L["Color"], "utilityChargeColor", yOff); yOff = yOff - 45
-    PositionDropdown(rc, L["Position"], "utilityChargePosition", yOff); yOff = yOff - 60
-    Slider(page, rc, L["X Offset"], -50, 50, "utilityChargeOffsetX", yOff, 0); yOff = yOff - 50
-    Slider(page, rc, L["Y Offset"], -50, 50, "utilityChargeOffsetY", yOff, 0); yOff = yOff - 50
-    UI.FinalizeScroll(sc, rc, yOff)
-end
+ns._CreateCooldownTextPanel = BuildCooldownText
 
 local function BuildBuffIcons(subPage, page)
-    local rc, sc = UI.MakeSubPageScroll(subPage, "AyijeCDM_Text_BuffIconsScrollFrame")
+    local divider = subPage:CreateTexture(nil, "ARTWORK")
+    divider:SetAtlas("Options_HorizontalDivider", true)
+    divider:SetPoint("TOP", subPage, "TOP", 0, 0)
+
+    local rc = CreateFrame("Frame", nil, subPage)
+    rc:SetPoint("TOPLEFT", 30, -15)
+    rc:SetPoint("BOTTOMRIGHT", -20, 10)
     local yOff = 0
 
     SectionHeader(rc, L["Cooldown Timer"], yOff); yOff = yOff - 30
@@ -205,68 +159,6 @@ local function BuildBuffIcons(subPage, page)
     PositionDropdown(rc, L["Position"], "countPositionMain", yOff); yOff = yOff - 60
     Slider(page, rc, L["X Offset"], -20, 20, "countOffsetXMain", yOff, 0); yOff = yOff - 50
     Slider(page, rc, L["Y Offset"], -20, 20, "countOffsetYMain", yOff, 4); yOff = yOff - 50
-    UI.FinalizeScroll(sc, rc, yOff)
 end
 
-local function BuildBuffBars(subPage, page)
-    local rc, sc = UI.MakeSubPageScroll(subPage, "AyijeCDM_Text_BuffBarsScrollFrame")
-    local yOff = 0
-
-    SectionHeader(rc, L["Name Text"], yOff); yOff = yOff - 30
-    Slider(page, rc, L["Font Size"], 8, 24, "buffBarNameFontSize", yOff, 15); yOff = yOff - 60
-    ColorSwatch(rc, L["Color"], "buffBarNameColor", yOff); yOff = yOff - 45
-    Slider(page, rc, L["X Offset"], -50, 50, "buffBarNameOffsetX", yOff, 2); yOff = yOff - 50
-    Slider(page, rc, L["Y Offset"], -20, 20, "buffBarNameOffsetY", yOff, 0); yOff = yOff - 50
-
-    SectionHeader(rc, L["Duration Text"], yOff); yOff = yOff - 30
-    Slider(page, rc, L["Font Size"], 8, 24, "buffBarDurationFontSize", yOff, 15); yOff = yOff - 60
-    ColorSwatch(rc, L["Color"], "buffBarDurationColor", yOff); yOff = yOff - 45
-    PositionDropdown(rc, L["Anchor"], "buffBarDurationPosition", yOff, BAR_TEXT_POSITIONS); yOff = yOff - 60
-    Slider(page, rc, L["X Offset"], -50, 50, "buffBarDurationOffsetX", yOff, -2); yOff = yOff - 50
-    Slider(page, rc, L["Y Offset"], -20, 20, "buffBarDurationOffsetY", yOff, 0); yOff = yOff - 50
-    -- Min 3 matches the runtime clamp in BuffBarDecimals; lower is silently raised.
-    Slider(page, rc, L["Decimals <"], 3, 30, "buffBarDecimalThreshold", yOff, 5, "BUFF_DATA"); yOff = yOff - 50
-
-    SectionHeader(rc, L["Stack Count Text"], yOff); yOff = yOff - 30
-    Slider(page, rc, L["Font Size"], 8, 24, "buffBarApplicationsFontSize", yOff, 15); yOff = yOff - 60
-    ColorSwatch(rc, L["Color"], "buffBarApplicationsColor", yOff); yOff = yOff - 45
-    PositionDropdown(rc, L["Anchor"], "buffBarApplicationsPosition", yOff, BAR_TEXT_POSITIONS); yOff = yOff - 60
-    Slider(page, rc, L["X Offset"], -50, 50, "buffBarApplicationsOffsetX", yOff, 0); yOff = yOff - 50
-    Slider(page, rc, L["Y Offset"], -50, 50, "buffBarApplicationsOffsetY", yOff, 0); yOff = yOff - 50
-    UI.FinalizeScroll(sc, rc, yOff)
-end
-
-local SUB_TAB_IDS = { "global", "essential", "utility", "bufficons", "buffbars" }
-
-local function CreateTextTab(page, tabId)
-    local subTabs = UI.CreateSubTabBar(page, {
-        { id = "global",    label = L["Global"] },
-        { id = "essential", label = L["Essential"] },
-        { id = "utility",   label = L["Utility"] },
-        { id = "bufficons", label = L["Buff Icons"] },
-        { id = "buffbars",  label = L["Buff Bars"] },
-    }, "global")
-
-    local divider = page:CreateTexture(nil, "ARTWORK")
-    divider:SetAtlas("Options_HorizontalDivider", true)
-    local dividerH = divider:GetHeight()
-    divider:ClearAllPoints()
-    divider:SetPoint("TOPLEFT", subTabs.barFrame, "BOTTOMLEFT", -30, 0)
-    divider:SetPoint("TOPRIGHT", subTabs.barFrame, "BOTTOMRIGHT", 30, 0)
-    divider:SetHeight(dividerH)
-
-    for _, id in ipairs(SUB_TAB_IDS) do
-        local pg = subTabs.subPages[id]
-        pg:ClearAllPoints()
-        pg:SetPoint("TOPLEFT", subTabs.barFrame, "BOTTOMLEFT", -30, -15)
-        pg:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", 0, 20)
-    end
-
-    BuildGlobal(subTabs.subPages.global, page)
-    BuildEssential(subTabs.subPages.essential, page)
-    BuildUtility(subTabs.subPages.utility, page)
-    BuildBuffIcons(subTabs.subPages.bufficons, page)
-    BuildBuffBars(subTabs.subPages.buffbars, page)
-end
-
-API:RegisterConfigTab("text", L["Text"], CreateTextTab, 5)
+ns._CreateBuffTextPanel = BuildBuffIcons
