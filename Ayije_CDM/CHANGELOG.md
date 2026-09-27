@@ -1,5 +1,5 @@
 ## Changelog
-## v.1.16
+## v.1.17
 
 - Fixed the color change for buff stacks
 - Some resoursebars now have a option to change color when spell activation overlay gets triggered
