@@ -75,8 +75,22 @@ local function CreateLayoutTab(page, tabId)
     end)
     maxRowEssSlider:SetPoint("TOPLEFT", essHeader, "BOTTOMLEFT", 0, -15)
 
+    local row1Width = ns.CreateIconSizeSlider(content, L["Row 1 Width"], "sizeEssRow1", "w")
+    row1Width:SetPoint("TOPLEFT", maxRowEssSlider, "BOTTOMLEFT", 0, -10)
+    local row1Height = ns.CreateIconSizeSlider(content, L["Row 1 Height"], "sizeEssRow1", "h")
+    row1Height:SetPoint("TOPLEFT", row1Width, "BOTTOMLEFT", 0, -10)
+    local row2Width = ns.CreateIconSizeSlider(content, L["Row 2 Width"], "sizeEssRow2", "w")
+    row2Width:SetPoint("TOPLEFT", row1Height, "BOTTOMLEFT", 0, -10)
+    local row2Height = ns.CreateIconSizeSlider(content, L["Row 2 Height"], "sizeEssRow2", "h")
+    row2Height:SetPoint("TOPLEFT", row2Width, "BOTTOMLEFT", 0, -10)
+
     local utilHeader = UI.CreateHeader(content, L["Utility"])
-    utilHeader:SetPoint("TOPLEFT", maxRowEssSlider, "BOTTOMLEFT", 0, -20)
+    utilHeader:SetPoint("TOPLEFT", row2Height, "BOTTOMLEFT", 0, -20)
+
+    local utilityWidth = ns.CreateIconSizeSlider(content, L["Width"], "sizeUtility", "w")
+    utilityWidth:SetPoint("TOPLEFT", utilHeader, "BOTTOMLEFT", 0, -15)
+    local utilityHeight = ns.CreateIconSizeSlider(content, L["Height"], "sizeUtility", "h")
+    utilityHeight:SetPoint("TOPLEFT", utilityWidth, "BOTTOMLEFT", 0, -10)
 
     local wrapCheckbox, utilWrapSlider, unlockCheckbox, xOffsetSlider, verticalCheckbox
 
@@ -116,7 +130,7 @@ local function CreateLayoutTab(page, tabId)
             API:Refresh("STYLE")
         end
     )
-    generalPage.trinketsHideAuraCheckbox:SetPoint("TOPLEFT", utilHeader, "BOTTOMLEFT", 0, -15)
+    generalPage.trinketsHideAuraCheckbox:SetPoint("TOPLEFT", utilityHeight, "BOTTOMLEFT", 0, -15)
 
     wrapCheckbox = UI.CreateModernCheckbox(
         content,

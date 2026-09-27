@@ -46,7 +46,11 @@ StaticPopupDialogs["AYIJE_CDM_CONFIRM_DELETE_GROUP"] = {
     preferredIndex = 3,
 }
 
-local function CreateBuffGroupsTab(page)
+local function CreateBuffGroupsPanel(page, tabPage)
+    local divider = page:CreateTexture(nil, "ARTWORK")
+    divider:SetAtlas("Options_HorizontalDivider", true)
+    divider:SetPoint("TOP", page, "TOP", 0, 0)
+
     local si = GetSpecialization()
     local currentSpecID = si and GetSpecializationInfo(si) or nil
     local playerSpecID = currentSpecID
@@ -2285,6 +2289,9 @@ local function CreateBuffGroupsTab(page)
         end,
     })
 
+    specDropdown:ClearAllPoints()
+    specDropdown:SetPoint("TOPRIGHT", tabPage, "TOPRIGHT", -6, -8)
+
     local RegisterViewerCallbacks, UnregisterViewerCallbacks = Shared.CreateViewerSettingsCallbacks(QueueLeftPanelRefresh)
 
     page:SetScript("OnMouseUp", function()
@@ -2334,6 +2341,27 @@ local function CreateBuffGroupsTab(page)
         if page:IsShown() then BuildIconGrid() end
     end)
 
+end
+
+local function CreateBuffGroupsTab(page)
+    local tabBar = UI.CreateSubTabBar(page, {
+        { id = "buffs", label = L["Buffs"] },
+        { id = "general", label = L["General"] },
+    }, "buffs")
+    CreateBuffGroupsPanel(tabBar.subPages.buffs, page)
+
+    local generalPage = tabBar.subPages.general
+    local divider = generalPage:CreateTexture(nil, "ARTWORK")
+    divider:SetAtlas("Options_HorizontalDivider", true)
+    divider:SetPoint("TOP", generalPage, "TOP", 0, 0)
+
+    local content = UI.CreateScrollableTab(generalPage, "AyijeCDM_BuffGeneralScrollFrame", 180)
+    local header = UI.CreateHeader(content, L["Buff"])
+    header:SetPoint("TOPLEFT", 0, 0)
+    local width = ns.CreateIconSizeSlider(content, L["Width"], "sizeBuff", "w")
+    width:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -15)
+    local height = ns.CreateIconSizeSlider(content, L["Height"], "sizeBuff", "h")
+    height:SetPoint("TOPLEFT", width, "BOTTOMLEFT", 0, -10)
 end
 
 API:RegisterConfigTab("buffgroups", L["Buffs"], CreateBuffGroupsTab, 8)
