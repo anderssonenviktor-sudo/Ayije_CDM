@@ -40,11 +40,9 @@ function Fading:RegisterTarget(dbKey, applyFn)
 end
 
 Fading:RegisterTarget("fadingBuffs", function(a)
-    if CDM.CustomBuffs and CDM.CustomBuffs.activeBuffs then
-        for _, buffData in pairs(CDM.CustomBuffs.activeBuffs) do
-            if buffData and buffData.frame then
-                buffData.frame:SetAlpha(a)
-            end
+    if CDM.CustomBuffs and CDM.CustomBuffs.iconFrames then
+        for _, frame in pairs(CDM.CustomBuffs.iconFrames) do
+            frame:SetAlpha(a)
         end
     end
     if CDM.buffGroupContainers then

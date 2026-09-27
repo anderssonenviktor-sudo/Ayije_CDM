@@ -164,9 +164,9 @@ local function BuildActiveSpellSet()
         end
     end
     local CB = CDM.CustomBuffs
-    if CB and CB.activeBuffs then
-        for sid, buffData in pairs(CB.activeBuffs) do
-            if buffData and buffData.frame and buffData.frame:IsShown() then
+    if CB and CB.iconFrames then
+        for sid, frame in pairs(CB.iconFrames) do
+            if frame:IsShown() then
                 MarkSafe(scratchActiveSet, sid)
             end
         end

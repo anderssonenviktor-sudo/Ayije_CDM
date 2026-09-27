@@ -18,7 +18,6 @@ local footerRefreshRegistered = false
 local lastFooterFont = nil
 local combatCloseRegistered = false
 local SCROLL_FRAME_NAMES = {
-    positions = "AyijeCDM_PosScrollFrame",
     resources = "AyijeCDM_ResourcesScrollFrame",
     bars = "AyijeCDM_BarsScrollFrame",
     castbar = "AyijeCDM_CastBarScrollFrame",
@@ -166,7 +165,7 @@ end
 ns.ConfigCreatePage = CreateCategoryPage
 
 local categoryHeaders = {
-    { label = L["CDM"], tabs = {"layout", "buffgroups", "bars", "positions"} },
+    { label = L["CDM"], tabs = {"layout", "buffgroups", "bars"} },
     { label = L["Styling"], tabs = {"sizes", "border", "text", "glow", "fading", "assist"} },
     { label = L["Features"], tabs = {"resources", "castbar"} },
     { label = L["Utility"], tabs = {"profiles", "importexport"} },

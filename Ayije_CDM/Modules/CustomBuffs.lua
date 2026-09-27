@@ -223,6 +223,27 @@ local function CreateCustomBuffIcon(spellID, config)
     return frame
 end
 
+function CDM:UpdateCustomBuffPreview()
+    local settings = _G.CooldownViewerSettings
+    local preview = self.anchorModeActive or (settings and settings:IsShown())
+    local registry = self.db and self.db.customBuffRegistry or {}
+    if preview then
+        for spellID, config in pairs(registry) do
+            if not CB.activeBuffs[spellID] then
+                local frame = CreateCustomBuffIcon(spellID, config)
+                frame.Cooldown:SetScript("OnCooldownDone", nil)
+                frame.Cooldown:Clear()
+                frame:Show()
+            end
+        end
+    end
+    for spellID, frame in pairs(CB.iconFrames) do
+        if not CB.activeBuffs[spellID] and not (preview and registry[spellID]) then
+            frame:Hide()
+        end
+    end
+end
+
 local DeactivateCustomBuff
 
 local function ActivateCustomBuff(spellID, config, overrideStartTime)

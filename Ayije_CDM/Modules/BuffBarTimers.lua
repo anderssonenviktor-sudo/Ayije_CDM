@@ -700,11 +700,12 @@ local function StyleBar(bar, cfg, offsetAccum, grow, host)
     -- Borders last: they overlay the finished geometry. The bar's own border
     -- sits above the whole threshold-overlay band so a high threshold cannot
     -- paint over it; the icon border has no overlays to clear.
-    EnsureBorder(bar, "_barBorderHost", "_barBorderVer", sb, LEVEL_BORDER)
-    if iconPos == "HIDDEN" then
-        local ibh = bar._iconBorderHost
-        if ibh and ibh.border then ibh.border:Hide() end
-    else
+    bar._barBorderHost:SetShown(cfg.hideBorder ~= true)
+    bar._iconBorderHost:SetShown(cfg.hideBorder ~= true and iconPos ~= "HIDDEN")
+    if cfg.hideBorder ~= true then
+        EnsureBorder(bar, "_barBorderHost", "_barBorderVer", sb, LEVEL_BORDER)
+    end
+    if cfg.hideBorder ~= true and iconPos ~= "HIDDEN" then
         EnsureBorder(bar, "_iconBorderHost", "_iconBorderVer", icf, 1)
     end
 
@@ -1275,68 +1276,6 @@ Renderers[M.TYPE_STACK] = function(bar, cfg, ctx)
     return true
 end
 
--- Preview
---
--- While a config window is open every configured bar is drawn, whether or not
--- its aura is up, so positions and sizes can actually be judged. This only
--- touches our frames; Blizzard's CooldownViewer data is never modified.
-
-local previewConfigActive = false
-
--- IsShown(), never IsVisible(): IsVisible() also reports the parent chain, so
--- a cutscene hiding UIParent would flip the preview off and on again.
-local function IsPreviewActive()
-    local panel = _G.CooldownViewerSettings
-    if panel and panel:IsShown() then return true end
-
-    local configFrame = _G.Ayije_CDMConfigFrame
-    if configFrame then return configFrame:IsShown() end
-
-    return previewConfigActive
-end
-CDM.IsBuffBarPreviewActive = IsPreviewActive
-
--- Draw a bar as it would look with no aura on it: full fill for a timer bar,
--- empty for a stack bar (which is what zero stacks looks like in play).
-local function RenderPreview(bar, cfg)
-    if not bar:IsShown() then bar:Show() end
-    bar._timerText:Hide()
-
-    if cfg.barType == M.TYPE_STACK then
-        SetAllBarsValue(bar, 0)
-        bar._stackText:SetText("")
-        bar._stackText:Hide()
-    else
-        local sb = bar._bar
-        sb:SetMinMaxValues(0, 1)
-        sb:SetValue(1)
-        if cfg.showDuration ~= false and not bar._engineOwnsTimer then
-            bar._timerText:SetText("--")
-            bar._timerText:Show()
-        end
-        bar._stackText:SetText("")
-        bar._stackText:Hide()
-    end
-
-    -- Name and icon come from the config, since there is no live aura to read.
-    if cfg.showName ~= false and not bar._nameSet then
-        local nameStr = cfg.name
-            or (IsUsableSID(cfg.spellID) and C_Spell and C_Spell.GetSpellName
-                and C_Spell.GetSpellName(cfg.spellID))
-        if nameStr then
-            bar._nameText:SetText(TruncateName(nameStr, cfg.nameMaxChars))
-            bar._nameSet = true
-        end
-    end
-    if (cfg.iconPosition or "LEFT") ~= "HIDDEN" and bar._icon then
-        local sid = ResolveIconSpellID(cfg)
-        if sid and bar._lastIconSID ~= sid then
-            bar._lastIconSID = sid
-            local t = C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(sid)
-            if t then bar._icon:SetTexture(t) end
-        end
-    end
-end
 
 -- The tick
 
@@ -1362,8 +1301,6 @@ local function Tick()
     local cfgList = BuildCfgList()
     local map = AssignFramesToConfigs(cfgList)
     local live = false
-    -- Resolved once per tick, not per bar: it walks global frame lookups.
-    local previewing = IsPreviewActive()
 
     for i = 1, #entries do
         local cfg = entries[i].bar
@@ -1404,26 +1341,18 @@ local function Tick()
             tickCtx.isActive = isActive
             tickCtx.fbAura = fbAura
 
-            -- Preview: with a config window open, a bar whose aura is not up is
-            -- drawn anyway so it can be positioned. A live aura still renders
-            -- normally, so the preview never masks real state.
-            if previewing and not isActive and not fbAura then
-                RenderPreview(bar, cfg)
-                live = true
-            else
-                -- Two distinct answers: `active` drives the idle sleeper,
-                -- `owned` means the renderer has already decided this bar's
-                -- visibility and the shared hide below must keep its hands off
-                -- (a stack bar with Always Show On stays up while it is down).
-                local render = Renderers[cfg.barType] or Renderers[M.TYPE_TIMER]
-                local active, owned = render(bar, cfg, tickCtx)
+            -- Two distinct answers: `active` drives the idle sleeper,
+            -- `owned` means the renderer has already decided this bar's
+            -- visibility and the shared hide below must keep its hands off
+            -- (a stack bar with Always Show On stays up while it is down).
+            local render = Renderers[cfg.barType] or Renderers[M.TYPE_TIMER]
+            local active, owned = render(bar, cfg, tickCtx)
 
-                if active then
-                    live = true
-                elseif not owned and bar:IsShown() then
-                    bar:Hide()
-                    bar._nameSet = nil
-                end
+            if active then
+                live = true
+            elseif not owned and bar:IsShown() then
+                bar:Hide()
+                bar._nameSet = nil
             end
         end
     end
@@ -1645,36 +1574,3 @@ end)
 CDM:RegisterEvent("PLAYER_REGEN_DISABLED", function()
     Wake()
 end)
-
--- Preview edges.
---
--- Closing the config must clear each bar's preview render, or a bar whose aura
--- is down would keep its "--" and full fill until something else redrew it.
--- The tick already hides such bars on its next pass, so a Wake is enough --
--- but _nameSet is cleared here so a real aura re-reads its own name rather
--- than inheriting the config-supplied one.
-local function OnPreviewEdge()
-    for i = 1, #barFrames do
-        local bar = barFrames[i]
-        if bar then
-            bar._nameSet = nil
-            bar._lastIconSID = nil
-        end
-    end
-    Wake()
-end
-
--- Options loads on demand, after this module; it notifies previews directly.
-function CDM:UpdateBuffBarConfigPreview(active)
-    previewConfigActive = active and true or false
-    OnPreviewEdge()
-end
-
-do
-    local registry = EventRegistry
-    if registry and registry.RegisterCallback then
-        local owner = {}
-        registry:RegisterCallback("CooldownViewerSettings.OnShow", OnPreviewEdge, owner)
-        registry:RegisterCallback("CooldownViewerSettings.OnHide", OnPreviewEdge, owner)
-    end
-end

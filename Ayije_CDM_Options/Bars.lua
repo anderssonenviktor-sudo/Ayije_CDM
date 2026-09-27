@@ -20,14 +20,12 @@ local DestroyFrame = Shared.DestroyFrame
 -- settings instead.
 local PAGE_INSET = 12
 local STRIP_TOP = -12
--- Wide enough for a full row of icons plus padding:
--- TILE_PAD + 4*TILE_ICON + 3*TILE_ICON_GAP + TILE_PAD = 202
-local TILE_W = 202
+local TILE_MIN_W = 64
 local TILE_GAP = 10
 local TILE_HEADER_H = 24
-local TILE_PAD = 8
-local TILE_ICON = 42
-local TILE_ICON_GAP = 6
+local TILE_PAD = 6
+local TILE_ICON = 32
+local TILE_ICON_GAP = 2
 local TILE_ICONS_PER_ROW = 4
 local TILE_MIN_H = TILE_HEADER_H + TILE_PAD + TILE_ICON + TILE_PAD
 
@@ -94,7 +92,7 @@ local function CreateBarsTab(page)
     local RefreshAll
     local ShowBarSettings
     local ShowGroupSettings
-    local ShowAddBarPanel
+    local ShowAddBarPopup
     local renameActiveGroupIndex = nil
     local renameActiveEditBox = nil
 
@@ -246,11 +244,13 @@ local function CreateBarsTab(page)
 
     local stripFrame = CreateFrame("Frame", nil, page)
     stripFrame:SetPoint("TOPLEFT", buttonRow, "BOTTOMLEFT", 0, -8)
-    stripFrame:SetPoint("TOPRIGHT", buttonRow, "BOTTOMRIGHT", 0, -8)
+    stripFrame:SetPoint("TOPRIGHT", buttonRow, "BOTTOMRIGHT", -300, -8)
     stripFrame:SetHeight(TILE_MIN_H)
 
     local stripEmptyText = stripFrame:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
     stripEmptyText:SetPoint("TOPLEFT", 2, -6)
+    stripEmptyText:SetPoint("TOPRIGHT", -2, -6)
+    stripEmptyText:SetJustifyH("LEFT")
     stripEmptyText:Hide()
 
     -- Settings area fills everything under the strip.
@@ -265,8 +265,36 @@ local function CreateBarsTab(page)
 
     local panelManager = Shared.CreateRightPanelManager(settingsPanel, settingsPlaceholder, DestroyFrame)
     local RegisterPanelDropdown = panelManager.RegisterDropdown
-    local CreatePanelContent = panelManager.CreateScrollContent
-    local ClearPanel = panelManager.Clear
+    local preview = ns.CreateBuffBarPreview(page)
+    preview:SetPoint("TOPRIGHT", buttonRow, "TOPRIGHT", -4, 0)
+
+    local function LayoutSettingsPanel()
+        local headerHeight = 32 + stripFrame:GetHeight()
+        if preview:IsShown() then
+            headerHeight = math.max(headerHeight, preview:GetHeight())
+        end
+        settingsPanel:ClearAllPoints()
+        settingsPanel:SetPoint("TOPLEFT", buttonRow, "TOPLEFT", 0, -headerHeight - 12)
+        settingsPanel:SetPoint("BOTTOMRIGHT", page, "BOTTOMRIGHT", -PAGE_INSET, 16)
+    end
+
+    stripFrame:HookScript("OnSizeChanged", LayoutSettingsPanel)
+
+    local function ResetPreview()
+        preview:SetBar(nil)
+        preview:Hide()
+        LayoutSettingsPanel()
+    end
+
+    local function CreatePanelContent(height)
+        ResetPreview()
+        return panelManager.CreateScrollContent(height)
+    end
+
+    local function ClearPanel()
+        ResetPreview()
+        panelManager.Clear()
+    end
 
     local function MakeDropdown(parent)
         return RegisterPanelDropdown(
@@ -503,7 +531,14 @@ local function CreateBarsTab(page)
 
         local _, rc = CreatePanelContent(400)
 
-        local function Save() SaveAndRefresh() end
+        preview:SetBar(bar)
+        preview:Show()
+        LayoutSettingsPanel()
+
+        local function Save()
+            SaveAndRefresh()
+            preview:Refresh()
+        end
         local function Write(key, value) bar[key] = value; Save() end
         local function WriteColor(key, r, g, b, a)
             bar[key] = { r = r, g = g, b = b, a = a or 1 }
@@ -512,69 +547,22 @@ local function CreateBarsTab(page)
 
         local isStack = bar.barType == M.TYPE_STACK
 
-        -- Title row: identity plus the two per-bar actions.
-        local titleIcon = CreateFrame("Frame", nil, rc)
-        titleIcon:SetSize(26, 26)
-        titleIcon:SetPoint("TOPLEFT", 0, 0)
-        local iconTex = titleIcon:CreateTexture(nil, "ARTWORK")
-        iconTex:SetAllPoints()
-        local tex = bar.spellID and C_Spell.GetSpellTexture(bar.spellID)
-        iconTex:SetTexture(tex or 134400)
-        CDM_C.ApplyIconTexCoord(iconTex, CDM_C.GetEffectiveZoomAmount())
-        if CDM.BORDER and CDM.BORDER.CreateBorder then
-            CDM.BORDER:CreateBorder(titleIcon)
-            if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[titleIcon] = nil end
-        end
-
-        local barName = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
-        barName:SetPoint("LEFT", titleIcon, "RIGHT", 8, 0)
-        barName:SetText(bar.name
-            or (bar.spellID and C_Spell.GetSpellName(bar.spellID))
-            or L["Unknown"])
-        barName:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
-
-        local removeBtn = UI.CreateTextButton(rc)
-        removeBtn:SetSize(100, 22)
-        removeBtn:SetPoint("TOPRIGHT", rc, "TOPRIGHT", -4, -2)
-        removeBtn:SetText(L["Remove Bar"])
-        removeBtn:SetScript("OnClick", function()
-            M.RemoveBar(bar, currentSpecID)
-            if selectedBar == bar then
-                selectedBar = nil
-                selectedBarGroupIndex = nil
-            end
-            ClearPanel()
-            SaveAndRefresh()
-            RefreshLeftPanelIfNeeded()
-        end)
-
-        local typeDropdown = MakeDropdown(rc)
-        typeDropdown:SetWidth(140)
-        typeDropdown:SetPoint("RIGHT", removeBtn, "LEFT", -8, 0)
-        typeDropdown:SetDefaultText(
-            UI.GetOptionLabel(BAR_TYPE_OPTIONS, bar.barType, L["Timer Bar"]))
-        UI.SetupValueDropdown(typeDropdown, BAR_TYPE_OPTIONS,
-            function() return bar.barType end,
-            function(val)
-                bar.barType = val
-                M.NormalizeBar(bar)
-                Save()
-                RefreshLeftPanelIfNeeded()
-                ShowBarSettings(bar, groupIndex)
-            end)
-
         -- Tab strip: the shared Blizzard-atlas tabs, same as the Cooldowns and
         -- Text pages, followed by the thin horizontal divider they all use.
         local tabHost = CreateFrame("Frame", nil, rc)
-        tabHost:SetPoint("TOPLEFT", 0, -36)
-        tabHost:SetPoint("TOPRIGHT", rc, "TOPRIGHT", 0, -36)
+        tabHost:SetPoint("TOPLEFT", 0, 0)
+        tabHost:SetPoint("TOPRIGHT", rc, "TOPRIGHT", 0, 0)
         tabHost:SetHeight(240)
 
-        local subTabs = UI.CreateSubTabBar(tabHost, {
+        local tabDefs = {
             { id = "appearance", label = L["Appearance"] },
-            { id = "text",       label = L["Text"] },
-            { id = "custom",     label = L["Custom"] },
-        }, barSettingsTab)
+        }
+        if isStack then
+            tabDefs[#tabDefs + 1] = { id = "custom", label = L["Custom"] }
+        else
+            barSettingsTab = "appearance"
+        end
+        local subTabs = UI.CreateSubTabBar(tabHost, tabDefs, barSettingsTab)
 
         local tabPages = subTabs.subPages
 
@@ -608,7 +596,7 @@ local function CreateBarsTab(page)
             if ResizeToTab then ResizeToTab(id) end
         end
 
-        for _, def in ipairs({ "appearance", "text", "custom" }) do
+        for _, def in ipairs({ "appearance", "custom" }) do
             local btn = subTabs.tabButtons[def]
             if btn then
                 btn:SetScript("OnClick", function() SelectTab(def) end)
@@ -618,6 +606,7 @@ local function CreateBarsTab(page)
         -- Each tab lays its sections out in two columns of its own.
         local function BuildPage(id, build)
             local pg = tabPages[id]
+            if not pg then return end
             local C = NewColumns(pg)
             build(C)
             C.Flush()
@@ -628,7 +617,8 @@ local function CreateBarsTab(page)
 
         -- ---- Appearance: how the bar looks and how big it is ----
         BuildPage("appearance", function(C)
-            C.Section(122, function(col)
+            do
+                local col = C.Get(2)
                 C.Header(col, L["Dimensions"])
                 C.Slider(col, L["Bar Width (0 = Auto)"], 0, 600, bar.width or 0, function(v)
                     local value = UI.RoundToInt(v)
@@ -638,10 +628,38 @@ local function CreateBarsTab(page)
                 C.Slider(col, L["Bar Height"], 4, 40, bar.height or 20, function(v)
                     Write("height", UI.RoundToInt(v))
                 end)
-            end)
+            end
 
-            C.Section(248, function(col)
-                C.Header(col, L["Appearance"])
+            do
+                local col = C.Get(1)
+                C.Label(col, L["Bar Type"])
+                C.Dropdown(col, BAR_TYPE_OPTIONS,
+                    function() return bar.barType end,
+                    function(val)
+                        bar.barType = val
+                        M.NormalizeBar(bar)
+                        Save()
+                        RefreshLeftPanelIfNeeded()
+                        ShowBarSettings(bar, groupIndex)
+                    end,
+                    UI.GetOptionLabel(BAR_TYPE_OPTIONS, bar.barType, L["Timer Bar"]))
+
+                local removeBtn = UI.CreateTextButton(tabPages.appearance)
+                removeBtn:SetSize(100, 22)
+                removeBtn:SetPoint("TOPLEFT", col.x, col.y)
+                removeBtn:SetText(L["Remove Bar"])
+                removeBtn:SetScript("OnClick", function()
+                    M.RemoveBar(bar, currentSpecID)
+                    if selectedBar == bar then
+                        selectedBar = nil
+                        selectedBarGroupIndex = nil
+                    end
+                    ClearPanel()
+                    SaveAndRefresh()
+                    RefreshLeftPanelIfNeeded()
+                end)
+                col.y = col.y - 32
+
                 C.Label(col, L["Bar Texture:"])
                 local dd = MakeDropdown(tabPages.appearance)
                 dd:SetWidth(200)
@@ -656,6 +674,8 @@ local function CreateBarsTab(page)
                     function(r, g, b, a) WriteColor("barColor", r, g, b, a) end)
                 C.ColorRow(col, L["Background Color"], bar.bgColor,
                     function(r, g, b, a) WriteColor("bgColor", r, g, b, a) end)
+                C.Check(col, L["Hide Border"], bar.hideBorder == true,
+                    function(checked) Write("hideBorder", checked) end)
                 C.Label(col, L["Icon Position:"])
                 C.Dropdown(col, ICON_POS_OPTIONS,
                     function() return bar.iconPosition or "LEFT" end,
@@ -664,41 +684,18 @@ local function CreateBarsTab(page)
                 C.Slider(col, L["Icon-Bar Gap"], -1, 20, bar.iconGap or 1, function(v)
                     Write("iconGap", UI.RoundToInt(v))
                 end)
-            end)
-        end)
+            end
 
-        -- ---- Text: every string the bar can draw ----
-        BuildPage("text", function(C)
-            C.Section(bar.showName ~= false and 274 or 62, function(col)
-                C.Header(col, L["Name Text"])
-                C.Check(col, L["Show Buff Name"], bar.showName ~= false, function(checked)
-                    bar.showName = checked
-                    Save()
-                    ShowBarSettings(bar, groupIndex)
-                end)
-                if bar.showName ~= false then
-                    C.Slider(col, L["Max Name Length (0 = Full)"], 0, 30, bar.nameMaxChars or 0,
-                        function(v) Write("nameMaxChars", UI.RoundToInt(v)) end)
-                    C.Slider(col, L["Font Size"], 6, 32, bar.nameFontSize or 15,
-                        function(v) Write("nameFontSize", UI.RoundToInt(v)) end)
-                    C.ColorRow(col, L["Color"], bar.nameColor,
-                        function(r, g, b, a) WriteColor("nameColor", r, g, b, a) end)
-                    C.Slider(col, L["X Offset"], -50, 50, bar.nameOffsetX or 2,
-                        function(v) Write("nameOffsetX", UI.RoundToInt(v)) end)
-                    C.Slider(col, L["Y Offset"], -20, 20, bar.nameOffsetY or 0,
-                        function(v) Write("nameOffsetY", UI.RoundToInt(v)) end)
-                end
-            end)
-
+            local col = C.Get(2)
+            col.y = col.y - 12
+            C.Header(col, L["Text"])
             local shownStack = bar.showApplications ~= false
-            C.Section(shownStack and 286 or 62, function(col)
-                C.Header(col, L["Stack Text"])
-                C.Check(col, L["Show Stack Count"], shownStack, function(checked)
-                    bar.showApplications = checked
-                    Save()
-                    ShowBarSettings(bar, groupIndex)
-                end)
-                if not shownStack then return end
+            C.Check(col, L["Show Stack Count"], shownStack, function(checked)
+                bar.showApplications = checked
+                Save()
+                ShowBarSettings(bar, groupIndex)
+            end)
+            if shownStack then
                 C.Slider(col, L["Font Size"], 6, 32, bar.applicationsFontSize or 15,
                     function(v) Write("applicationsFontSize", UI.RoundToInt(v)) end)
                 C.ColorRow(col, L["Color"], bar.applicationsColor,
@@ -712,37 +709,39 @@ local function CreateBarsTab(page)
                     function(v) Write("applicationsOffsetX", UI.RoundToInt(v)) end)
                 C.Slider(col, L["Y Offset"], -20, 20, bar.applicationsOffsetY or 0,
                     function(v) Write("applicationsOffsetY", UI.RoundToInt(v)) end)
-            end)
-
-            -- Duration text is meaningless on a stack bar.
+            end
             if not isStack then
-                local shown = bar.showDuration ~= false
-                -- Header+check, then size/color/position/x/y.
-                local h = shown and (62 + 46 + 28 + 22 + 36 + 46 + 46) or 62
-                C.Section(h, function(col)
-                    C.Header(col, L["Duration Text"])
-                    C.Check(col, L["Show Duration Text"], shown, function(checked)
-                        bar.showDuration = checked
-                        Save()
-                        ShowBarSettings(bar, groupIndex)
-                    end)
-                    if not shown then return end
-                    C.Slider(col, L["Font Size"], 6, 32, bar.durationFontSize or 15,
-                        function(v) Write("durationFontSize", UI.RoundToInt(v)) end)
-                    C.ColorRow(col, L["Color"], bar.durationColor,
-                        function(r, g, b, a) WriteColor("durationColor", r, g, b, a) end)
-                    C.Label(col, L["Position"])
-                    C.PositionDropdown(col,
-                        function() return bar.durationPosition or "RIGHT" end,
-                        function(val) bar.durationPosition = val; Save() end,
-                        bar.durationPosition or "RIGHT")
-                    C.Slider(col, L["X Offset"], -50, 50, bar.durationOffsetX or -2,
-                        function(v) Write("durationOffsetX", UI.RoundToInt(v)) end)
-                    C.Slider(col, L["Y Offset"], -20, 20, bar.durationOffsetY or 0,
-                        function(v) Write("durationOffsetY", UI.RoundToInt(v)) end)
-                    -- Decimals live under Custom: they are timer-bar behaviour,
-                    -- not text styling.
+                C.Check(col, L["Show Duration Text"], bar.showDuration ~= false, function(checked)
+                    bar.showDuration = checked
+                    Save()
+                    ShowBarSettings(bar, groupIndex)
                 end)
+                local dec = bar.timerDecimals ~= false
+                local decimalsCheck = C.Check(col, L["Show Decimals"], dec, function(checked)
+                    bar.timerDecimals = checked
+                    Save()
+                    ShowBarSettings(bar, groupIndex)
+                end)
+                decimalsCheck:SetEnabled(bar.showDuration ~= false)
+                if dec and bar.showDuration ~= false then
+                    C.Slider(col, L["Decimal Threshold"], 3, 120, bar.decimalThreshold or 5,
+                        function(v) Write("decimalThreshold", UI.RoundToInt(v)) end)
+                end
+            end
+            if not isStack and bar.showDuration ~= false then
+                C.Slider(col, L["Font Size"], 6, 32, bar.durationFontSize or 15,
+                    function(v) Write("durationFontSize", UI.RoundToInt(v)) end)
+                C.ColorRow(col, L["Color"], bar.durationColor,
+                    function(r, g, b, a) WriteColor("durationColor", r, g, b, a) end)
+                C.Label(col, L["Position"])
+                C.PositionDropdown(col,
+                    function() return bar.durationPosition or "RIGHT" end,
+                    function(val) bar.durationPosition = val; Save() end,
+                    bar.durationPosition or "RIGHT")
+                C.Slider(col, L["X Offset"], -50, 50, bar.durationOffsetX or -2,
+                    function(v) Write("durationOffsetX", UI.RoundToInt(v)) end)
+                C.Slider(col, L["Y Offset"], -20, 20, bar.durationOffsetY or 0,
+                    function(v) Write("durationOffsetY", UI.RoundToInt(v)) end)
             end
         end)
 
@@ -866,32 +865,13 @@ local function CreateBarsTab(page)
                     C.ColorRow(col, L["Tick Color"], bar.tickColor,
                         function(r, g, b, a) WriteColor("tickColor", r, g, b, a) end)
                 end)
-            else
-                -- Timer bars: decimals are their bar-type-specific behaviour,
-                -- so they sit here rather than under Text -- the same role
-                -- Stack Fill plays for a stack bar.
-                local dec = bar.timerDecimals ~= false
-                C.Section(dec and 128 or 82, function(col)
-                    C.Header(col, L["Decimal Timer"])
-                    C.Check(col, L["Show Decimals"], dec, function(checked)
-                        bar.timerDecimals = checked
-                        Save()
-                        ShowBarSettings(bar, groupIndex)
-                    end)
-                    C.Label(col, L["Shows tenths of a second below the threshold."], true, true)
-                    if dec then
-                        C.Slider(col, L["Decimal Threshold"], 3, 120, bar.decimalThreshold or 5,
-                            function(v) Write("decimalThreshold", UI.RoundToInt(v)) end)
-                    end
-                end)
             end
         end)
 
         ResizeToTab = function(id)
             local h = (pageHeights[id] or 0)
             tabHost:SetHeight(math.abs(pagesTop) + h)
-            -- 36 = the tab host's own top offset inside the scroll child.
-            rc:SetHeight(36 + math.abs(pagesTop) + h + 16)
+            rc:SetHeight(math.abs(pagesTop) + h + 16)
         end
 
         -- The helper already selected `barSettingsTab` at construction and its
@@ -907,126 +887,112 @@ local function CreateBarsTab(page)
         end
     end
 
-    -- Add Bar: lists what Blizzard's buff-bar viewer currently tracks.
-    ShowAddBarPanel = function(targetGroupIndex)
-        local _, rc = CreatePanelContent(400)
-        local yOff = 0
+    local addBarPopup
+    local addBarPopupContent
 
-        local headerText = L["Add Bar"]
-        if targetGroupIndex then
-            local groups = GetGroups()
-            local gd = groups and groups[targetGroupIndex]
-            headerText = (L["Add Bar to:"]) .. " " .. (gd and gd.name or "Group")
+    ShowAddBarPopup = function(targetGroupIndex)
+        panelManager.CloseDropdownMenus()
+        if not addBarPopup then
+            addBarPopup = UI.CreateModalOverlay()
         end
+        addBarPopup:Hide()
+        DestroyFrame(addBarPopupContent)
+        local rc = CreateFrame("Frame", nil, addBarPopup.window)
+        rc:SetPoint("TOPLEFT", 22, -38)
+        rc:SetWidth(300)
+        addBarPopupContent = rc
+
+        local popupDB = CDM.db
+        local popupSpecID = currentSpecID
+        local groups = GetGroups()
+        local targetGroup = targetGroupIndex and groups and groups[targetGroupIndex]
+        if targetGroupIndex and not targetGroup then return end
 
         local header = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
-        header:SetPoint("TOPLEFT", 0, yOff)
-        header:SetText(headerText)
+        header:SetPoint("TOPLEFT")
+        header:SetWidth(300)
+        header:SetJustifyH("LEFT")
+        header:SetWordWrap(false)
+        header:SetText(targetGroup and (L["Add Bar to:"] .. " " .. (targetGroup.name or L["Group"]))
+            or L["Add Bar"])
         header:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
-
-        local backBtn = UI.CreateTextButton(rc)
-        backBtn:SetSize(70, 22)
-        backBtn:SetPoint("TOPLEFT", COL_W + COL_GAP, yOff)
-        backBtn:SetText(L["Back"])
-        backBtn:SetScript("OnClick", function()
-            if targetGroupIndex then
-                ShowGroupSettings(targetGroupIndex)
-            else
-                ClearPanel()
-            end
-        end)
-        yOff = yOff - 32
-
-        local typeLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-        typeLabel:SetText(L["Bar Type"])
-        typeLabel:SetPoint("TOPLEFT", 0, yOff)
-        yOff = yOff - 22
-
-        local chosenType = M.TYPE_TIMER
-        local typeDropdown = MakeDropdown(rc)
-        typeDropdown:SetWidth(170)
-        typeDropdown:SetPoint("TOPLEFT", 0, yOff)
-        typeDropdown:SetDefaultText(L["Timer Bar"])
-        UI.SetupValueDropdown(typeDropdown, BAR_TYPE_OPTIONS,
-            function() return chosenType end,
-            function(val)
-                chosenType = val
-                typeDropdown:SetDefaultText(UI.GetOptionLabel(BAR_TYPE_OPTIONS, val, val))
-            end)
-        yOff = yOff - 40
 
         local listLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
         listLabel:SetText(L["Tracked buffs"])
-        listLabel:SetPoint("TOPLEFT", 0, yOff)
+        listLabel:SetPoint("TOPLEFT", 0, -32)
         UI.SetTextWhite(listLabel)
-        yOff = yOff - 26
 
         local tracked = CDM.GetBuffBarTrackedSpells and CDM.GetBuffBarTrackedSpells() or {}
+        local listHeight = math.max(1, #tracked) * 28
+        local list = CreateFrame("Frame", nil, rc)
+        list:SetPoint("TOPLEFT", 0, -58)
+        list:SetSize(300, listHeight)
+
         if #tracked == 0 then
-            local msg = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-            msg:SetPoint("TOPLEFT", 0, yOff)
+            local msg = list:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            msg:SetPoint("TOPLEFT", 0, -4)
             msg:SetText(L["(No tracked buffs found)"])
             UI.SetTextMuted(msg)
-            yOff = yOff - 30
-        else
-            -- Two columns of rows so a long tracked list stays on screen.
-            local startY = yOff
-            local perCol = math.ceil(#tracked / 2)
-            for i, entry in ipairs(tracked) do
-                local colIndex = (i <= perCol) and 0 or 1
-                local rowIndex = (i <= perCol) and (i - 1) or (i - perCol - 1)
-
-                local added = M.IsSpellConfigured(entry.spellID, currentSpecID)
-
-                local row = CreateFrame("Button", nil, rc)
-                row:SetSize(COL_W, 28)
-                row:SetPoint("TOPLEFT", colIndex * (COL_W + COL_GAP), startY - rowIndex * 28)
-
-                local rowIcon = row:CreateTexture(nil, "ARTWORK")
-                rowIcon:SetSize(22, 22)
-                rowIcon:SetPoint("LEFT", 0, 0)
-                if entry.icon then rowIcon:SetTexture(entry.icon) end
-                CDM_C.ApplyIconTexCoord(rowIcon, CDM_C.GetEffectiveZoomAmount())
-
-                local label = row:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-                label:SetPoint("LEFT", rowIcon, "RIGHT", 6, 0)
-                label:SetPoint("RIGHT", row, "RIGHT", -4, 0)
-                label:SetJustifyH("LEFT")
-                if added then
-                    label:SetText(entry.name .. " |cff888888(" .. (L["added"]) .. ")|r")
-                    UI.SetTextFaint(label)
-                else
-                    label:SetText(entry.name)
-                end
-
-                local sid, sname = entry.spellID, entry.name
-                row:SetScript("OnClick", function()
-                    local destination
-                    if targetGroupIndex then
-                        local groups = EnsureGroups()
-                        local gd = groups and groups[targetGroupIndex]
-                        if not gd then return end
-                        gd.bars = gd.bars or {}
-                        destination = gd.bars
-                    else
-                        destination = M.EnsureUngrouped(currentSpecID)
-                    end
-                    if not destination then return end
-
-                    local newBar = M.CreateBar(sid, sname, chosenType)
-                    destination[#destination + 1] = newBar
-                    selectedBar = newBar
-                    selectedBarGroupIndex = targetGroupIndex
-                    selectedGroupIndex = nil
-                    SaveAndRefresh()
-                    RefreshLeftPanelIfNeeded()
-                    ShowBarSettings(newBar, targetGroupIndex)
-                end)
-            end
-            yOff = startY - perCol * 28
         end
 
-        rc:SetHeight(math.abs(yOff) + 24)
+        for i, entry in ipairs(tracked) do
+            local added = M.IsSpellConfigured(entry.spellID, currentSpecID)
+            local row = CreateFrame("Button", nil, list)
+            row:SetSize(300, 28)
+            row:SetPoint("TOPLEFT", 0, -(i - 1) * 28)
+            row:SetHighlightTexture("Interface\\Buttons\\WHITE8X8")
+            row:GetHighlightTexture():SetVertexColor(1, 1, 1, 0.1)
+
+            local rowIcon = row:CreateTexture(nil, "ARTWORK")
+            rowIcon:SetSize(22, 22)
+            rowIcon:SetPoint("LEFT", 0, 0)
+            rowIcon:SetTexture(entry.icon or 134400)
+            CDM_C.ApplyIconTexCoord(rowIcon, CDM_C.GetEffectiveZoomAmount())
+
+            local label = row:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
+            label:SetPoint("LEFT", rowIcon, "RIGHT", 6, 0)
+            label:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+            label:SetJustifyH("LEFT")
+            label:SetWordWrap(false)
+            if added then
+                label:SetText(entry.name .. " |cff888888(" .. L["added"] .. ")|r")
+                UI.SetTextFaint(label)
+            else
+                label:SetText(entry.name)
+            end
+
+            local sid, sname = entry.spellID, entry.name
+            row:SetScript("OnClick", function()
+                local currentGroups = GetGroups()
+                if not page:IsShown() or popupDB ~= CDM.db or popupSpecID ~= currentSpecID
+                    or (targetGroupIndex and (not currentGroups or currentGroups[targetGroupIndex] ~= targetGroup)) then
+                    addBarPopup:Hide()
+                    return
+                end
+                local destination
+                if targetGroup then
+                    targetGroup.bars = targetGroup.bars or {}
+                    destination = targetGroup.bars
+                else
+                    destination = M.EnsureUngrouped(currentSpecID)
+                end
+                if not destination then return end
+
+                local newBar = M.CreateBar(sid, sname, M.TYPE_TIMER)
+                destination[#destination + 1] = newBar
+                selectedBar = newBar
+                selectedBarGroupIndex = targetGroupIndex
+                selectedGroupIndex = nil
+                addBarPopup:Hide()
+                SaveAndRefresh()
+                RefreshLeftPanelIfNeeded()
+                ShowBarSettings(newBar, targetGroupIndex)
+            end)
+        end
+
+        rc:SetHeight(58 + listHeight)
+        addBarPopup.window:SetSize(344, rc:GetHeight() + 58)
+        addBarPopup:Show()
     end
 
     -- Toolbar buttons
@@ -1057,13 +1023,9 @@ local function CreateBarsTab(page)
             -- Adding into the selected group is the normal path; with nothing
             -- selected the bar lands ungrouped.
             local target = selectedGroupIndex or selectedBarGroupIndex
-            ShowAddBarPanel(target)
+            ShowAddBarPopup(target)
         end)
 
-        local hint = buttonRow:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font12")
-        hint:SetPoint("LEFT", addBarBtn, "RIGHT", 12, 0)
-        hint:SetText(L["Drag a bar onto a group to move it."])
-        UI.SetTextMuted(hint)
     end
 
     -- Group strip tiles
@@ -1076,18 +1038,15 @@ local function CreateBarsTab(page)
         local tile = tiles[tilesActive]
         if not tile then
             tile = CreateFrame("Frame", nil, stripFrame)
-            tile:SetSize(TILE_W, TILE_MIN_H)
+            tile:SetSize(TILE_MIN_W, TILE_MIN_H)
 
-            -- A card: 1px outline, dark body, and a slightly lighter header
-            -- strip carrying the name. Built from plain textures so it picks up
-            -- no Blizzard art that would fight the rest of the config frame.
             -- A true outline: four 1px edges, hollow in the middle. A
             -- full-rect texture behind the body would composite with it and
             -- darken the whole tile.
             local edges = {}
             for e = 1, 4 do
                 local t = tile:CreateTexture(nil, "BORDER")
-                t:SetColorTexture(0, 0, 0, 0.9)
+                t:SetColorTexture(0.35, 0.35, 0.35, 0.7)
                 edges[e] = t
             end
             edges[1]:SetPoint("TOPLEFT")
@@ -1111,20 +1070,18 @@ local function CreateBarsTab(page)
                 end,
             }
 
-            -- Header first, then the body BELOW it -- they must not overlap.
-            -- Stacking two translucent blacks composites their alphas (0.5 over
-            -- 0.75 reads as ~0.875), which is why the header looked solid.
+            -- Keep the translucent header and body separate to avoid doubling their opacity.
             local header = tile:CreateTexture(nil, "BACKGROUND", nil, 1)
             header:SetPoint("TOPLEFT", 1, -1)
             header:SetPoint("TOPRIGHT", -1, -1)
             header:SetHeight(TILE_HEADER_H)
-            header:SetColorTexture(0, 0, 0, 0.55)
+            header:SetColorTexture(0.035, 0.035, 0.035, 0.65)
             tile.header = header
 
             local bg = tile:CreateTexture(nil, "BACKGROUND", nil, 1)
             bg:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, 0)
             bg:SetPoint("BOTTOMRIGHT", -1, 1)
-            bg:SetColorTexture(0, 0, 0, 0.5)
+            bg:SetColorTexture(0.035, 0.035, 0.035, 0.65)
             tile.bg = bg
 
             -- Selection reads as an accent line under the header plus a tinted
@@ -1176,7 +1133,6 @@ local function CreateBarsTab(page)
         tile.highlight:Hide()
         tile.delBtn:Show()
         if tile.renameBox then tile.renameBox:Hide() end
-        if tile.emptyText then tile.emptyText:Hide() end
         tile:Show()
         return tile
     end
@@ -1265,13 +1221,20 @@ local function CreateBarsTab(page)
 
     -- Populate one tile with a group's bars (or the ungrouped list).
     local function FillTile(tile, bars, groupIndex)
+        local columns = math.min(TILE_ICONS_PER_ROW, math.max(1,
+            math.floor((stripFrame:GetWidth() - TILE_PAD * 2 + TILE_ICON_GAP) / (TILE_ICON + TILE_ICON_GAP))))
+        local iconColumns = math.min(columns, math.max(1, #bars))
+        local iconWidth = TILE_PAD * 2 + iconColumns * TILE_ICON + (iconColumns - 1) * TILE_ICON_GAP
+        local maxWidth = TILE_PAD * 2 + columns * TILE_ICON + (columns - 1) * TILE_ICON_GAP
+        local titleWidth = math.min(maxWidth, math.ceil(tile.title:GetStringWidth()) + 36)
+        tile:SetWidth(math.max(TILE_MIN_W, iconWidth, titleWidth))
         for i = 1, #bars do
             local bar = bars[i]
             M.NormalizeBar(bar)
             local f = AcquireTileIcon(tile)
 
-            local row = math.floor((i - 1) / TILE_ICONS_PER_ROW)
-            local col = (i - 1) % TILE_ICONS_PER_ROW
+            local row = math.floor((i - 1) / columns)
+            local col = (i - 1) % columns
             f:ClearAllPoints()
             f:SetPoint("TOPLEFT", TILE_PAD + col * (TILE_ICON + TILE_ICON_GAP),
                 -(TILE_HEADER_H + TILE_PAD) - row * (TILE_ICON + TILE_ICON_GAP))
@@ -1343,27 +1306,11 @@ local function CreateBarsTab(page)
         -- Grow the tile to fit however many rows of icons it holds. An empty
         -- group keeps one row's worth of space so it still reads as a drop
         -- target.
-        local rows = math.max(1, math.ceil(#bars / TILE_ICONS_PER_ROW))
+        local rows = math.max(1, math.ceil(#bars / columns))
         local needed = TILE_HEADER_H + TILE_PAD
             + rows * TILE_ICON + (rows - 1) * TILE_ICON_GAP
             + TILE_PAD
         tile:SetHeight(math.max(TILE_MIN_H, needed))
-
-        -- Prompt in place of icons when the group is empty.
-        if #bars == 0 then
-            if not tile.emptyText then
-                local t = tile:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font12")
-                t:SetPoint("TOPLEFT", TILE_PAD, -(TILE_HEADER_H + TILE_PAD + 6))
-                t:SetPoint("TOPRIGHT", -TILE_PAD, -(TILE_HEADER_H + TILE_PAD + 6))
-                t:SetJustifyH("LEFT")
-                tile.emptyText = t
-            end
-            tile.emptyText:SetText(L["Drag a bar here, or Add Bar"])
-            UI.SetTextFaint(tile.emptyText)
-            tile.emptyText:Show()
-        elseif tile.emptyText then
-            tile.emptyText:Hide()
-        end
 
         return tile:GetHeight()
     end
@@ -1384,17 +1331,23 @@ local function CreateBarsTab(page)
             return
         end
 
-        local x, tallest = 0, TILE_MIN_H
+        local x, y, rowHeight = 0, 0, 0
+        local availableWidth = stripFrame:GetWidth()
+        local function PlaceTile(tile)
+            if x > 0 and x + tile:GetWidth() > availableWidth then
+                x = 0
+                y = y + rowHeight + TILE_GAP
+                rowHeight = 0
+            end
+            tile:ClearAllPoints()
+            tile:SetPoint("TOPLEFT", x, -y)
+            x = x + tile:GetWidth() + TILE_GAP
+            rowHeight = math.max(rowHeight, tile:GetHeight())
+        end
 
         for gi = 1, #groups do
             local gd = groups[gi]
             local tile = AcquireTile()
-            tile:ClearAllPoints()
-            tile:SetPoint("TOPLEFT", x, 0)
-
-            -- The tile body and header are flat black; selection reads from the
-            -- border, the accent line under the header, the body tint and the
-            -- title colour instead.
             local isSel = (selectedGroupIndex == gi)
             tile.highlight:SetShown(isSel)
             tile.accent:SetShown(isSel)
@@ -1402,7 +1355,7 @@ local function CreateBarsTab(page)
                 tile.accent:SetColorTexture(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
                 tile.border:SetColorTexture(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 0.85)
             else
-                tile.border:SetColorTexture(0, 0, 0, 0.9)
+                tile.border:SetColorTexture(0.35, 0.35, 0.35, 0.7)
             end
 
             local displayName = gd.name or ("Group " .. gi)
@@ -1512,7 +1465,7 @@ local function CreateBarsTab(page)
                             RefreshLeftPanelIfNeeded()
                         end)
                         rootDescription:CreateButton(L["Add Bar"], function()
-                            ShowAddBarPanel(gi)
+                            ShowAddBarPopup(gi)
                         end)
                         rootDescription:CreateButton(L["Duplicate"], function()
                             local specGroups = EnsureGroups()
@@ -1546,10 +1499,9 @@ local function CreateBarsTab(page)
                 RefreshLeftPanelIfNeeded()
             end)
 
-            local h = FillTile(tile, gd.bars or {}, gi)
-            if h > tallest then tallest = h end
+            FillTile(tile, gd.bars or {}, gi)
+            PlaceTile(tile)
             RegisterDropTarget(tile, gi)
-            x = x + TILE_W + TILE_GAP
         end
 
         -- Ungrouped tile only when it has contents: the intended workflow is
@@ -1557,8 +1509,6 @@ local function CreateBarsTab(page)
         -- would just invite confusion.
         if #ungrouped > 0 then
             local tile = AcquireTile()
-            tile:ClearAllPoints()
-            tile:SetPoint("TOPLEFT", x, 0)
             -- Amber border so it reads as "these want a home", without being an
             -- error state. The body stays black like every other tile.
             tile.border:SetColorTexture(0.55, 0.40, 0.16, 0.9)
@@ -1570,12 +1520,12 @@ local function CreateBarsTab(page)
             tile.delBtn:SetScript("OnClick", nil)
             tile.selectBtn:SetScript("OnClick", nil)
 
-            local h = FillTile(tile, ungrouped, nil)
-            if h > tallest then tallest = h end
+            FillTile(tile, ungrouped, nil)
+            PlaceTile(tile)
             RegisterDropTarget(tile, nil)
         end
 
-        stripFrame:SetHeight(tallest)
+        stripFrame:SetHeight(math.max(TILE_MIN_H, y + rowHeight))
     end
 
     RefreshAll = function()
@@ -1585,11 +1535,20 @@ local function CreateBarsTab(page)
         -- orphan or duplicate one. Group deletion, the one case where the
         -- index a rename refers to shifts, commits explicitly in DoDelete.
         BuildStrip()
+        if preview:IsShown() then preview:Refresh() end
     end
+
+    local lastStripWidth = stripFrame:GetWidth()
+    stripFrame:HookScript("OnSizeChanged", function(_, width)
+        if width == lastStripWidth then return end
+        lastStripWidth = width
+        RefreshAll()
+    end)
 
     page:SetScript("OnMouseUp", function() EndDrag() end)
 
     page:HookScript("OnHide", function()
+        if addBarPopup then addBarPopup:Hide() end
         panelManager.CloseDropdownMenus()
         CancelDrag()
     end)

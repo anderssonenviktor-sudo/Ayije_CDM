@@ -27,13 +27,11 @@ function CDM:SetConfigWindowActive(active)
         configWindowActive = active
         self:Refresh("LAYOUT")
     end
-    if self.UpdateBuffBarConfigPreview then
-        self:UpdateBuffBarConfigPreview(active)
-    end
 end
 
 function CDM:SetAnchorModeActive(active)
     self.anchorModeActive = active and true or false
+    self:Refresh("BUFF_DATA")
     self:UpdateContainerDragOverlays()
 end
 

@@ -27,10 +27,10 @@ local ICON_SIZE = 30
 local ROW_HEIGHT = 36
 local GROUP_HEADER_H = 28
 local ARROW_BTN_SIZE = 29
-local GRID_ICON_SIZE = 36
-local GRID_ICON_GAP = 4
-local GRID_DISPLAY_MAX = 14
-local MIN_GRID_ROWS = 2
+local GRID_ICON_SIZE = 32
+local GRID_ICON_GAP = 2
+local GRID_MIN_ICON_SIZE = 24
+local GRID_FRAME_INSET = 6
 
 StaticPopupDialogs["AYIJE_CDM_CONFIRM_DELETE_GROUP"] = {
     text = "",
@@ -267,21 +267,41 @@ local function CreateBuffGroupsTab(page)
 
     -- Ungrouped buffs live in an icon grid at the top (same structure as the
     -- Cooldowns panel), which doubles as the drop target for un-grouping.
-    local minGridHeight = MIN_GRID_ROWS * (GRID_ICON_SIZE + GRID_ICON_GAP) - GRID_ICON_GAP + 8
-
-    local iconGridFrame = CreateFrame("Frame", nil, page)
+    local iconGridFrame = CreateFrame("Frame", nil, page, "BackdropTemplate")
     iconGridFrame:SetPoint("TOPLEFT", LEFT_INSET, -16)
-    iconGridFrame:SetPoint("TOPRIGHT", -200, -16)
-    iconGridFrame:SetHeight(minGridHeight)
+    iconGridFrame:SetSize(GRID_ICON_SIZE + GRID_FRAME_INSET * 2, GRID_ICON_SIZE + GRID_FRAME_INSET * 2)
+    iconGridFrame:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    iconGridFrame:SetBackdropColor(0.035, 0.035, 0.035, 0.65)
+    iconGridFrame:SetBackdropBorderColor(0.35, 0.35, 0.35, 0.7)
+
+    local addCustomBuffButton = CreateFrame("Button", nil, iconGridFrame, "BackdropTemplate")
+    addCustomBuffButton:SetBackdrop({
+        bgFile = "Interface\\Buttons\\WHITE8X8",
+        edgeFile = "Interface\\Buttons\\WHITE8X8",
+        edgeSize = 1,
+    })
+    addCustomBuffButton:SetBackdropColor(0.12, 0.1, 0.035, 0.8)
+    addCustomBuffButton:SetBackdropBorderColor(1, 0.82, 0, 0.45)
+    local plusHorizontal = addCustomBuffButton:CreateTexture(nil, "ARTWORK")
+    plusHorizontal:SetSize(10, 2)
+    plusHorizontal:SetPoint("CENTER")
+    plusHorizontal:SetColorTexture(1, 0.82, 0, 1)
+    local plusVertical = addCustomBuffButton:CreateTexture(nil, "ARTWORK")
+    plusVertical:SetSize(2, 10)
+    plusVertical:SetPoint("CENTER")
+    plusVertical:SetColorTexture(1, 0.82, 0, 1)
+    local plusHighlight = addCustomBuffButton:CreateTexture(nil, "HIGHLIGHT")
+    plusHighlight:SetAllPoints()
+    plusHighlight:SetColorTexture(1, 0.82, 0, 0.12)
 
     iconGridFrame.highlight = iconGridFrame:CreateTexture(nil, "BACKGROUND")
     iconGridFrame.highlight:SetAllPoints()
     iconGridFrame.highlight:SetColorTexture(1, 0.82, 0, 0.12)
     iconGridFrame.highlight:Hide()
-
-    local gridEmptyText = iconGridFrame:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-    gridEmptyText:SetPoint("LEFT", 4, 0)
-    gridEmptyText:Hide()
 
     local gridIcons = {}
     local gridIconsActive = 0
@@ -296,6 +316,11 @@ local function CreateBuffGroupsTab(page)
             icon:SetAllPoints()
             frame.icon = icon
             CDM_C.ApplyIconTexCoord(icon, CDM_C.GetEffectiveZoomAmount())
+            local border = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+            border:SetAllPoints()
+            border:SetFrameLevel(frame:GetFrameLevel() + 1)
+            border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+            frame.border = border
             local overlay = CreateFrame("Button", nil, frame)
             overlay:SetAllPoints()
             overlay:SetFrameLevel(frame:GetFrameLevel() + 2)
@@ -313,6 +338,29 @@ local function CreateBuffGroupsTab(page)
             gridIcons[i]:Hide()
         end
         gridIconsActive = 0
+    end
+
+    local function UpdateGridOverrideBorders()
+        for i = 1, gridIconsActive do
+            local frame = gridIcons[i]
+            local override = GetUngroupedOverride(frame.cdmSpellID)
+            local color = currentSpecID and CDM.GetSpellBorderColor
+                and CDM:GetSpellBorderColor(currentSpecID, frame.cdmSpellID)
+            local enabled = type(color) == "table"
+            if type(override) == "table" then
+                for _, value in pairs(override) do
+                    if value == true then enabled = true; break end
+                end
+                enabled = enabled or override.showAuraOverlay ~= nil or override.customIcon ~= nil
+                    or override.borderColor ~= nil
+                    or (override.glowType ~= nil and override.glowType ~= "DEFAULT")
+            end
+            if enabled then
+                frame.border:SetBackdropBorderColor(0.25, 0.85, 0.45, 1)
+            else
+                frame.border:SetBackdropBorderColor(0.08, 0.08, 0.08, 0.8)
+            end
+        end
     end
 
     local buttonRow = CreateFrame("Frame", nil, page)
@@ -855,6 +903,8 @@ local function CreateBuffGroupsTab(page)
             yOff = yOff - 36
         end
 
+        if isCustomBuff then return yOff end
+
         yOff = yOff - 10
         local thresholdHeader = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
         thresholdHeader:SetPoint("TOPLEFT", 0, yOff)
@@ -873,8 +923,6 @@ local function CreateBuffGroupsTab(page)
                 onToggle = refresh,
             })
         end
-
-        if isCustomBuff then return yOff end
 
         yOff = yOff - 10
         local overrideHeader = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
@@ -1004,6 +1052,7 @@ local function CreateBuffGroupsTab(page)
                 if leftBorder then
                     leftBorder:SetBackdropBorderColor(r, g, b, 1)
                 end
+                UpdateGridOverrideBorders()
             end)
             borderColorPicker:SetPoint("LEFT", borderLabel, "RIGHT", 6, 0)
             yOff = yOff - 30
@@ -1018,6 +1067,7 @@ local function CreateBuffGroupsTab(page)
                     if leftBorder then
                         ApplyConfiguredBorderColor(leftBorder)
                     end
+                    UpdateGridOverrideBorders()
                     ShowSpellSettings(spellID, groupIndex)
                 end
             end)
@@ -1236,6 +1286,8 @@ local function CreateBuffGroupsTab(page)
 
     local btnRefs = {}
     local ShowSpellPickerPanel
+    local customBuffPopup
+    local customBuffPopupContent
     local ShowCustomBuffAddPanel
 
     local headerPool, groupContainerPool, emptyRowPool, spellRowPool =
@@ -1306,7 +1358,27 @@ local function CreateBuffGroupsTab(page)
 
     ShowCustomBuffAddPanel = function(targetGroupIndex)
         pickerActiveGroupIndex = nil
-        local _, rc = CreateRightScrollContent(500)
+        if not customBuffPopup then
+            customBuffPopup = UI.CreateModalOverlay()
+        end
+        DestroyFrame(customBuffPopupContent)
+        local rc = CreateFrame("Frame", nil, customBuffPopup.window)
+        rc:SetPoint("TOPLEFT", 22, -38)
+        rc:SetWidth(344)
+        customBuffPopupContent = rc
+        local popupDB = CDM.db
+        local popupSpecID = currentSpecID
+        local popupGroups = GetSpecGroups()
+        local popupGroup = targetGroupIndex and popupGroups and popupGroups[targetGroupIndex]
+        local function IsCurrentTarget()
+            local groups = GetSpecGroups()
+            if not page:IsShown() or popupDB ~= CDM.db or popupSpecID ~= currentSpecID
+                or (targetGroupIndex and (not groups or groups[targetGroupIndex] ~= popupGroup)) then
+                customBuffPopup:Hide()
+                return false
+            end
+            return true
+        end
         local yOff = 0
 
         local headerText
@@ -1320,6 +1392,9 @@ local function CreateBuffGroupsTab(page)
 
         local header = rc:CreateFontString(nil, "ARTWORK", "AyijeCDM_Font18")
         header:SetPoint("TOPLEFT", 0, yOff)
+        header:SetWidth(344)
+        header:SetJustifyH("LEFT")
+        header:SetWordWrap(false)
         header:SetText(headerText)
         header:SetTextColor(CDM_C.GOLD.r, CDM_C.GOLD.g, CDM_C.GOLD.b, 1)
         yOff = yOff - 30
@@ -1340,7 +1415,7 @@ local function CreateBuffGroupsTab(page)
                 local alreadyExists = CDM.db.customBuffRegistry and CDM.db.customBuffRegistry[sid]
 
                 local tRow = CreateFrame("Frame", nil, rc)
-                tRow:SetSize(300, 30)
+                tRow:SetSize(344, 30)
                 tRow:SetPoint("TOPLEFT", 0, yOff)
 
                 local tIcon = tRow:CreateTexture(nil, "ARTWORK")
@@ -1356,9 +1431,12 @@ local function CreateBuffGroupsTab(page)
                 local tAddBtn = UI.CreateTextButton(tRow)
                 tAddBtn:SetSize(50, 20)
                 tAddBtn:SetPoint("RIGHT", -4, 0)
+                tName:SetPoint("RIGHT", tAddBtn, "LEFT", -8, 0)
+                tName:SetJustifyH("LEFT")
                 tAddBtn:SetText(L["Add"])
                 tAddBtn:SetEnabled(not alreadyExists)
                 tAddBtn:SetScript("OnClick", function()
+                    if not IsCurrentTarget() then return end
                     local ov = (tmpl.icon or tmpl.triggerType) and { icon = tmpl.icon, triggerType = tmpl.triggerType } or nil
                     if not API:AddCustomBuffSpell(sid, dur, ov) then return end
                     if targetGroupIndex then
@@ -1414,6 +1492,8 @@ local function CreateBuffGroupsTab(page)
 
         local previewText = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font12")
         previewText:SetPoint("TOPLEFT", sidInput, "TOPRIGHT", 8, -3)
+        previewText:SetWidth(170)
+        previewText:SetJustifyH("LEFT")
         previewText:SetText("")
 
         sidInput:SetScript("OnTextChanged", function()
@@ -1439,6 +1519,7 @@ local function CreateBuffGroupsTab(page)
         statusText:SetText("")
         advAddBtn:SetText(L["Add Spell"])
         advAddBtn:SetScript("OnClick", function()
+            if not IsCurrentTarget() then return end
             local sid = tonumber(sidInput:GetText())
             local dur = tonumber(durInput:GetText())
             if not sid or sid <= 0 then
@@ -1481,21 +1562,16 @@ local function CreateBuffGroupsTab(page)
         UI.SetTextMuted(disclaimer)
         yOff = yOff - (disclaimer:GetStringHeight() + 6)
 
-        local backBtn = UI.CreateTextButton(rc)
-        backBtn:SetSize(80, 22)
-        backBtn:SetPoint("TOPRIGHT", rc, "TOPRIGHT", 0, 0)
-        backBtn:SetText(L["Back"])
-        backBtn:SetScript("OnClick", function()
-            if targetGroupIndex then
-                ShowGroupSettings(targetGroupIndex)
-            else
-                ClearRightPanel()
-            end
-        end)
-
         rc:SetHeight(math.abs(yOff) + 20)
+        customBuffPopup.window:SetSize(388, rc:GetHeight() + 58)
+        rc:SetScript("OnHide", function()
+            sidInput:ClearFocus()
+            durInput:ClearFocus()
+        end)
+        sidInput:SetScript("OnEscapePressed", function() customBuffPopup:Hide() end)
+        durInput:SetScript("OnEscapePressed", function() customBuffPopup:Hide() end)
+        customBuffPopup:Show()
     end
-    btnRefs.showAddPanel = ShowCustomBuffAddPanel
 
     do
         local addGroupBtn = UI.CreateTextButton(buttonRow)
@@ -1549,14 +1625,13 @@ local function CreateBuffGroupsTab(page)
         end)
         btnRefs.icon = addIconBtn
 
-        local addCustomBuffBtn = UI.CreateTextButton(buttonRow)
-        addCustomBuffBtn:SetSize(140, 22)
-        addCustomBuffBtn:SetPoint("LEFT", addIconBtn, "RIGHT", 6, 0)
-        addCustomBuffBtn:SetText(L["Add Custom Buff"])
-        addCustomBuffBtn:SetScript("OnClick", function()
-            if btnRefs.showAddPanel then btnRefs.showAddPanel(selectedGroupIndex) end
+        addCustomBuffButton:SetScript("OnClick", function(self)
+            MenuUtil.CreateContextMenu(self, function(_, rootDescription)
+                rootDescription:CreateButton(L["Add Custom Buff"], function()
+                    ShowCustomBuffAddPanel(selectedGroupIndex)
+                end)
+            end)
         end)
-        btnRefs.customBuff = addCustomBuffBtn
     end
 
     local function AcquireEmptyRow(parent, text)
@@ -1677,26 +1752,26 @@ local function CreateBuffGroupsTab(page)
 
     local function BuildIconGrid()
         ReleaseAllGridIcons()
-        gridEmptyText:Hide()
 
-        local iconGap = CDM.db and CDM.db.spacing or GRID_ICON_GAP
-        minGridHeight = MIN_GRID_ROWS * (GRID_ICON_SIZE + iconGap) - iconGap + 8
+        local iconGap = GRID_ICON_GAP
 
         UpdateGridVisibility()
         if currentSpecID ~= playerSpecID then return end
 
         local mergedList = BuildMergedUngroupedList()
 
-        if #mergedList == 0 then
-            iconGridFrame:SetHeight(minGridHeight)
-            gridEmptyText:SetText(L["No ungrouped buffs"])
-            gridEmptyText:Show()
-            UI.SetTextFaint(gridEmptyText)
-            return
-        end
-
+        local availableWidth = math.max(GRID_ICON_SIZE, page:GetWidth() - LEFT_INSET - 200 - GRID_FRAME_INSET * 2)
+        local totalSlots = #mergedList + 1
+        local columns = math.min(totalSlots, math.max(1, math.floor((availableWidth + iconGap) / (GRID_MIN_ICON_SIZE + iconGap))))
+        local iconSize = math.min(GRID_ICON_SIZE, math.floor((availableWidth - (columns - 1) * iconGap) / columns))
+        local totalRows = math.ceil(totalSlots / columns)
         local tooltipOverrideMap = BuildTooltipOverrideMap()
-        local totalRows = math.ceil(#mergedList / GRID_DISPLAY_MAX)
+        iconGridFrame:SetSize(columns * (iconSize + iconGap) - iconGap + GRID_FRAME_INSET * 2,
+            totalRows * (iconSize + iconGap) - iconGap + GRID_FRAME_INSET * 2)
+        addCustomBuffButton:ClearAllPoints()
+        addCustomBuffButton:SetSize(iconSize, iconSize)
+        addCustomBuffButton:SetPoint("TOPLEFT", GRID_FRAME_INSET + (#mergedList % columns) * (iconSize + iconGap),
+            -GRID_FRAME_INSET - math.floor(#mergedList / columns) * (iconSize + iconGap))
 
         for i, item in ipairs(mergedList) do
             local spellID = item.spellID
@@ -1704,15 +1779,11 @@ local function CreateBuffGroupsTab(page)
             frame.cdmSpellID = spellID
             frame.cdmIsCustom = item.isCustom
 
-            if CDM.BORDER and CDM.BORDER.CreateBorder then
-                CDM.BORDER:CreateBorder(frame, { forceUpdate = true })
-                if CDM.BORDER.activeBorders then CDM.BORDER.activeBorders[frame] = nil end
-            end
-
-            local gridRow = math.floor((i - 1) / GRID_DISPLAY_MAX)
-            local gridCol = (i - 1) % GRID_DISPLAY_MAX
+            local gridRow = math.floor((i - 1) / columns)
+            local gridCol = (i - 1) % columns
+            frame:SetSize(iconSize, iconSize)
             frame:ClearAllPoints()
-            frame:SetPoint("TOPLEFT", gridCol * (GRID_ICON_SIZE + iconGap), -gridRow * (GRID_ICON_SIZE + iconGap))
+            frame:SetPoint("TOPLEFT", GRID_FRAME_INSET + gridCol * (iconSize + iconGap), -GRID_FRAME_INSET - gridRow * (iconSize + iconGap))
 
             local displayID = (tooltipOverrideMap and tooltipOverrideMap[spellID]) or spellID
             local cbEntry = GetCustomBuffEntry(spellID)
@@ -1770,6 +1841,7 @@ local function CreateBuffGroupsTab(page)
                             API:Refresh("BUFF_DATA")
                         end
                         if frame.border then ApplyConfiguredBorderColor(frame.border) end
+                        UpdateGridOverrideBorders()
                         if selectedSpellID == spellID then
                             ShowSpellSettings(spellID, nil)
                         end
@@ -1785,9 +1857,7 @@ local function CreateBuffGroupsTab(page)
             frame.overlay:SetScript("OnDragStart", function() StartDrag(spellID, nil, frame) end)
             frame.overlay:SetScript("OnDragStop", function() EndDrag() end)
         end
-
-        local gridHeight = totalRows * (GRID_ICON_SIZE + iconGap) - iconGap + 8
-        iconGridFrame:SetHeight(math.max(gridHeight, minGridHeight))
+        UpdateGridOverrideBorders()
     end
 
     local function ConfigureSpellRow(widget, parent, spellID, sourceGroup, y, isActive, spellIndex, spellCount, tooltipOverrides)
@@ -2205,6 +2275,7 @@ local function CreateBuffGroupsTab(page)
         getPlayerSpecID = function() return playerSpecID end,
         getCurrentSpecID = function() return currentSpecID end,
         onSelectionChange = function(specID)
+            if customBuffPopup then customBuffPopup:Hide() end
             currentSpecID = specID
             selectedGroupIndex = nil
             selectedSpellID = nil
@@ -2221,6 +2292,7 @@ local function CreateBuffGroupsTab(page)
     end)
 
     page:HookScript("OnHide", function()
+        if customBuffPopup then customBuffPopup:Hide() end
         rightPanelManager.CloseDropdownMenus()
         CancelDrag()
         UnregisterViewerCallbacks()
@@ -2253,6 +2325,14 @@ local function CreateBuffGroupsTab(page)
         RefreshCurrentSpecID()
         QueueLeftPanelRefresh(0)
     end, 30, { "BUFF_DATA" })
+
+    API:RegisterRefreshCallback("buffgroups-override-borders", function()
+        if page:IsShown() then UpdateGridOverrideBorders() end
+    end, 31, { "STYLE", "BUFF_DATA" })
+
+    page:HookScript("OnSizeChanged", function()
+        if page:IsShown() then BuildIconGrid() end
+    end)
 
 end
 

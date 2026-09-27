@@ -5,7 +5,6 @@
     <Script file="ConfigFrame.lua"/>
     <Script file="Sizes.lua"/>
     <Script file="Layout.lua"/>
-    <Script file="Positions.lua"/>
     <Script file="PandemicGlow.lua"/>
     <Script file="Border.lua"/>
     <Script file="Text.lua"/>
@@ -23,6 +22,7 @@
     <Script file="Resources_Conditions.lua"/>
     <Script file="Resources_Load.lua"/>
     <Script file="Resources.lua"/>
+    <Script file="BuffBarPreview.lua"/>
     <Script file="Bars.lua"/>
     <Script file="CastBar.lua"/>
 </Ui>

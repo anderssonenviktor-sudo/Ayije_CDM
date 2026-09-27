@@ -561,7 +561,7 @@ function Glow:RequestBuffGlow(frame, enabled, overrideColor, sourceID)
     EnsureBuffGlowTargetHooks(frame)
 
     local stackEnabled, threshold, operator
-    if enabled and sourceID and CDM.GetSpellStackGlow then
+    if not frame.isCustomBuff and enabled and sourceID and CDM.GetSpellStackGlow then
         stackEnabled, threshold, operator = CDM:GetSpellStackGlow(CDM:GetCurrentSpecID(), sourceID)
     end
     if stackEnabled then
@@ -787,7 +787,7 @@ local function RefreshStackFrame(frame)
     local frameData = GetFrameData(frame)
     local specID = CDM:GetCurrentSpecID()
     local enabled, color, sourceID = CDM:ResolveBuffGlowState(frame, specID, frameData.buffCategorySpellID ~= nil)
-    local stackEnabled = enabled and sourceID and CDM:GetSpellStackGlow(specID, sourceID)
+    local stackEnabled = not frame.isCustomBuff and enabled and sourceID and CDM:GetSpellStackGlow(specID, sourceID)
     if not stackEnabled and (not IsStackBuffActive(frame) or frameData.cdmVisualsHidden) then enabled = false end
     Glow:RequestBuffGlow(frame, enabled, color, sourceID)
 end

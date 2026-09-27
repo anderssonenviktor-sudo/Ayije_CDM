@@ -1322,6 +1322,8 @@ local function BuildChains(activeKeys)
     for barKey in pairs(scratchActiveSet) do
         local anchorTo = CDM:GetBarSetting(barKey, "anchorTo")
         if anchorTo and scratchActiveSet[anchorTo]
+            and CDM:GetBarSetting(barKey, "hideBorder") ~= true
+            and CDM:GetBarSetting(anchorTo, "hideBorder") ~= true
             and not scratchActiveSet[barKey].hasPipSpacing
             and not scratchActiveSet[anchorTo].hasPipSpacing then
             local aP = CDM:GetBarSetting(barKey, "anchorPoint") or "BOTTOM"
@@ -1385,8 +1387,7 @@ local function UpdateBorders(activeKeys)
             if bar.borderFrame then bar.borderFrame:Hide() end
             HidePipBarDecorations(bar)
             HideBarUnifiedVerticalSeparators(bar)
-            local hideBorder = bar.barKey == "ArcaneCharges"
-                and CDM:GetBarSetting(bar.barKey, "hideBorder") == true
+            local hideBorder = CDM:GetBarSetting(bar.barKey, "hideBorder") == true
             for i = 1, bar.activePipCount or 0 do
                 local pip = bar.pips[i]
                 if hideBorder then
@@ -1395,18 +1396,17 @@ local function UpdateBorders(activeKeys)
                     EnsurePerBarBorder(pip, borderColor)
                 end
             end
+        elseif CDM:GetBarSetting(chain[1].barKey, "hideBorder") == true then
+            local bar = chain[1]
+            if bar.borderFrame then bar.borderFrame:Hide() end
+            RefreshPipSeparators(bar, borderColor)
+            HideBarUnifiedVerticalSeparators(bar)
         elseif unified then
             hostIdx = hostIdx + 1
             ApplyUnifiedChain(hostIdx, chain, borderColor)
         else
             for _, bar in ipairs(chain) do
-                local hideBorder = bar.barKey == "ArcaneCharges"
-                    and CDM:GetBarSetting(bar.barKey, "hideBorder") == true
-                if hideBorder then
-                    if bar.borderFrame then bar.borderFrame:Hide() end
-                else
-                    EnsurePerBarBorder(bar, borderColor)
-                end
+                EnsurePerBarBorder(bar, borderColor)
                 RefreshPipSeparators(bar, borderColor)
                 HideBarUnifiedVerticalSeparators(bar)
             end

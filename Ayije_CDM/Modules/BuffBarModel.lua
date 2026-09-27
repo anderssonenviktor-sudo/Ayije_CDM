@@ -140,6 +140,7 @@ function M.NormalizeBar(bar)
         end
     end
     if bar.timerDecimals == nil then bar.timerDecimals = true end
+    if bar.hideBorder == nil then bar.hideBorder = false end
 
     if bar.barType == M.TYPE_STACK then
         -- Never 0: the fill range is (0, maxStacks) and a zero span would make

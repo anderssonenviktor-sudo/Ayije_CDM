@@ -132,8 +132,8 @@ local ARROW_BTN_SIZE = 29
 local GRID_ICON_SIZE = 32
 local GRID_MIN_ICON_SIZE = 24
 local GRID_CONTROL_SIZE = 24
-local GRID_ICON_GAP = 1
-local GRID_FRAME_INSET = 1
+local GRID_ICON_GAP = 2
+local GRID_FRAME_INSET = 6
 local GRID_SECTION_GAP = 0
 
 StaticPopupDialogs["AYIJE_CDM_CONFIRM_DELETE_CD_GROUP"] = {
@@ -390,28 +390,28 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
     local iconBarBackground = iconBarFrame:CreateTexture(nil, "BACKGROUND")
     iconBarBackground:SetAllPoints()
-    iconBarBackground:SetColorTexture(0.02, 0.02, 0.02, 0.2)
+    iconBarBackground:SetColorTexture(0.035, 0.035, 0.035, 0.65)
 
     local iconBarBorderTop = iconBarFrame:CreateTexture(nil, "BORDER")
     iconBarBorderTop:SetPoint("TOPLEFT")
     iconBarBorderTop:SetPoint("TOPRIGHT")
     iconBarBorderTop:SetHeight(1)
-    iconBarBorderTop:SetColorTexture(0.18, 0.18, 0.18, 0.45)
+    iconBarBorderTop:SetColorTexture(0.35, 0.35, 0.35, 0.7)
     local iconBarBorderBottom = iconBarFrame:CreateTexture(nil, "BORDER")
     iconBarBorderBottom:SetPoint("BOTTOMLEFT")
     iconBarBorderBottom:SetPoint("BOTTOMRIGHT")
     iconBarBorderBottom:SetHeight(1)
-    iconBarBorderBottom:SetColorTexture(0.18, 0.18, 0.18, 0.45)
+    iconBarBorderBottom:SetColorTexture(0.35, 0.35, 0.35, 0.7)
     local iconBarBorderLeft = iconBarFrame:CreateTexture(nil, "BORDER")
     iconBarBorderLeft:SetPoint("TOPLEFT")
     iconBarBorderLeft:SetPoint("BOTTOMLEFT")
     iconBarBorderLeft:SetWidth(1)
-    iconBarBorderLeft:SetColorTexture(0.18, 0.18, 0.18, 0.45)
+    iconBarBorderLeft:SetColorTexture(0.35, 0.35, 0.35, 0.7)
     local iconBarBorderRight = iconBarFrame:CreateTexture(nil, "BORDER")
     iconBarBorderRight:SetPoint("TOPRIGHT")
     iconBarBorderRight:SetPoint("BOTTOMRIGHT")
     iconBarBorderRight:SetWidth(1)
-    iconBarBorderRight:SetColorTexture(0.18, 0.18, 0.18, 0.45)
+    iconBarBorderRight:SetColorTexture(0.35, 0.35, 0.35, 0.7)
 
     local iconGridLayoutAnchor = CreateFrame("Frame", nil, subPage)
     iconGridLayoutAnchor:SetPoint("TOPLEFT", iconViewFrame, "TOPLEFT")
@@ -430,25 +430,29 @@ local function CreateCooldownGroupsPanel(subPage, page)
     local gridIcons = {}
     local gridIconsActive = 0
 
-    local addRowIcon = CreateFrame("Button", nil, iconActionFrame)
+    local addRowIcon = CreateFrame("Button", nil, iconActionFrame, "BackdropTemplate")
+    addRowIcon:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    addRowIcon:SetBackdropBorderColor(1, 0.82, 0, 0.45)
     addRowIcon:SetSize(GRID_CONTROL_SIZE, GRID_CONTROL_SIZE)
     addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", GRID_FRAME_INSET, -GRID_FRAME_INSET)
     local addRowBackground = addRowIcon:CreateTexture(nil, "BACKGROUND")
     addRowBackground:SetAllPoints()
-    addRowBackground:SetColorTexture(0, 0, 0, 0.06)
+    addRowBackground:SetColorTexture(0.12, 0.1, 0.035, 0.8)
 
     local addRowPlusH = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 2)
     addRowPlusH:SetSize(10, 2)
     addRowPlusH:SetPoint("CENTER")
-    addRowPlusH:SetColorTexture(0.15, 1, 0.2, 1)
+    addRowPlusH:SetColorTexture(1, 0.82, 0, 1)
     local addRowPlusV = addRowIcon:CreateTexture(nil, "ARTWORK", nil, 2)
     addRowPlusV:SetSize(2, 10)
     addRowPlusV:SetPoint("CENTER")
-    addRowPlusV:SetColorTexture(0.15, 1, 0.2, 1)
+    addRowPlusV:SetColorTexture(1, 0.82, 0, 1)
     local addRowHighlight = addRowIcon:CreateTexture(nil, "HIGHLIGHT")
     addRowHighlight:SetAllPoints()
-    addRowHighlight:SetColorTexture(1, 1, 1, 0.12)
-    local rotateBarIcon = CreateFrame("Button", nil, iconViewFrame)
+    addRowHighlight:SetColorTexture(1, 0.82, 0, 0.12)
+    local rotateBarIcon = CreateFrame("Button", nil, iconViewFrame, "BackdropTemplate")
+    rotateBarIcon:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+    rotateBarIcon:SetBackdropBorderColor(1, 0.82, 0, 0.45)
     rotateBarIcon:SetSize(GRID_CONTROL_SIZE, GRID_CONTROL_SIZE)
     local rotateArrow = rotateBarIcon:CreateTexture(nil, "ARTWORK")
     rotateArrow:SetPoint("CENTER")
@@ -465,10 +469,10 @@ local function CreateCooldownGroupsPanel(subPage, page)
     addRowIcon:SetAlpha(1)
     local rotateBarBackground = rotateBarIcon:CreateTexture(nil, "BACKGROUND")
     rotateBarBackground:SetAllPoints()
-    rotateBarBackground:SetColorTexture(0, 0, 0, 0.06)
+    rotateBarBackground:SetColorTexture(0.12, 0.1, 0.035, 0.8)
     local rotateBarHighlight = rotateBarIcon:CreateTexture(nil, "HIGHLIGHT")
     rotateBarHighlight:SetAllPoints()
-    rotateBarHighlight:SetColorTexture(1, 1, 1, 0.12)
+    rotateBarHighlight:SetColorTexture(1, 0.82, 0, 0.12)
     rotateBarIcon:SetScript("OnClick", function()
         SetCooldownBarView(cooldownBarView == "essential" and "utility" or "essential")
     end)
@@ -521,6 +525,41 @@ local function CreateCooldownGroupsPanel(subPage, page)
             gridIcons[i]:Hide()
         end
         gridIconsActive = 0
+    end
+
+    local function HasEnabledOverride(override)
+        if type(override) ~= "table" then return false end
+        for _, value in pairs(override) do
+            if value == true then return true end
+        end
+        return override.showAuraOverlay ~= nil
+            or override.customIcon ~= nil
+            or override.borderColor ~= nil
+            or (type(override.replaceBuffSpellID) == "number" and override.replaceBuffSpellID > 0)
+            or (type(override.replaceBuffCooldownID) == "number" and override.replaceBuffCooldownID > 0)
+            or (override.glowType ~= nil and override.glowType ~= "DEFAULT")
+    end
+
+    local function UpdateGridOverrideBorders()
+        for i = 1, gridIconsActive do
+            local frame = gridIcons[i]
+            local spellID = frame.cdmSpellID
+            local promoted = IsCooldownBuffTracked(currentSpecID, spellID)
+            local override = promoted and CDM.GetUngroupedBuffOverride
+                and CDM:GetUngroupedBuffOverride(spellID) or GetUngroupedOverride(spellID)
+            local enabled = HasEnabledOverride(override)
+            if enabled then
+                frame.border:SetBackdropBorderColor(0.25, 0.85, 0.45, 1)
+            else
+                local color = promoted and CDM.GetSpellBorderColor and CDM:GetSpellBorderColor(currentSpecID, spellID)
+                if color then
+                    frame.border:SetBackdropBorderColor(color.r, color.g, color.b, color.a or 1)
+                else
+                    frame.border:SetBackdropBorderColor(0.08, 0.08, 0.08, 0.8)
+                end
+            end
+            frame.highlight:SetShown(not enabled and selectedSpellID == spellID and not selectedSpellGroupIndex)
+        end
     end
 
     local buttonRow = CreateFrame("Frame", nil, subPage)
@@ -2043,8 +2082,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
 
         local spells = GetUngroupedSpellsFromViewers()
         local totalSpells = #spells
-        local viewWidth = GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2
-        local actionWidth = showAddIcon and (GRID_CONTROL_SIZE + GRID_FRAME_INSET * 2) or 0
+        local viewWidth = GRID_ICON_SIZE + iconGap
+        local actionWidth = showAddIcon and (GRID_ICON_SIZE + iconGap) or 0
         -- Measure the page so fitting the strip cannot shrink its next layout budget.
         local availableWidth = subPage:GetWidth() - LEFT_INSET * 2
             - viewWidth - actionWidth - GRID_SECTION_GAP * 2 - GRID_FRAME_INSET * 2
@@ -2052,6 +2091,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
         local maxColumns = math.max(1, math.floor((availableWidth + iconGap) / (GRID_MIN_ICON_SIZE + iconGap)))
         local columns = math.min(math.max(1, totalSpells), maxColumns)
         local iconSize = math.min(GRID_ICON_SIZE, math.floor((availableWidth - (columns - 1) * iconGap) / columns))
+        actionWidth = showAddIcon and (iconSize + iconGap) or 0
+        viewWidth = iconSize + iconGap
         local rows = math.max(1, math.ceil(totalSpells / columns))
         local contentHeight = rows * iconSize + (rows - 1) * iconGap
         local gridHeight = math.max(GRID_CONTROL_SIZE, contentHeight) + GRID_FRAME_INSET * 2
@@ -2062,15 +2103,16 @@ local function CreateCooldownGroupsPanel(subPage, page)
         iconGridContent:SetSize(contentWidth, contentHeight)
         iconGridFrame:SetWidth(gridWidth)
         iconBarFrame:SetSize(viewWidth + gridWidth + actionWidth + GRID_SECTION_GAP * 2, gridHeight)
-        iconViewFrame:SetHeight(gridHeight)
+        iconViewFrame:SetSize(viewWidth, gridHeight)
         iconActionFrame:SetHeight(gridHeight)
         iconGridFrame:SetHeight(gridHeight)
         iconGridLayoutAnchor:SetHeight(gridHeight)
-        local controlOffset = GRID_FRAME_INSET + math.max(0, (iconSize - GRID_CONTROL_SIZE) / 2)
         addRowIcon:ClearAllPoints()
-        addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", GRID_FRAME_INSET, -controlOffset)
+        addRowIcon:SetSize(iconSize, iconSize)
+        addRowIcon:SetPoint("TOPLEFT", iconActionFrame, "TOPLEFT", iconGap - GRID_FRAME_INSET, -GRID_FRAME_INSET)
         rotateBarIcon:ClearAllPoints()
-        rotateBarIcon:SetPoint("TOPLEFT", iconViewFrame, "TOPLEFT", GRID_FRAME_INSET, -controlOffset)
+        rotateBarIcon:SetSize(iconSize, iconSize)
+        rotateBarIcon:SetPoint("TOPLEFT", iconViewFrame, "TOPLEFT", GRID_FRAME_INSET, -GRID_FRAME_INSET)
         rotateBarIcon:SetArrowDirection(cooldownBarView == "essential" and "down" or "up")
 
         local function GetSlotPosition(slotIndex)
@@ -2156,6 +2198,8 @@ local function CreateCooldownGroupsPanel(subPage, page)
             frame.overlay:SetScript("OnDragStart", function() StartDrag(spellID, nil, frame) end)
             frame.overlay:SetScript("OnDragStop", function() EndDrag() end)
         end
+
+        UpdateGridOverrideBorders()
 
         rotateBarIcon:Show()
 
@@ -2512,6 +2556,10 @@ local function CreateCooldownGroupsPanel(subPage, page)
     subPage:SetScript("OnMouseUp", function()
         EndDrag()
     end)
+
+    API:RegisterRefreshCallback("cdgroups-override-borders", function()
+        if subPage:IsShown() then UpdateGridOverrideBorders() end
+    end, 31, { "STYLE", "CD_DATA", "BUFF_DATA" })
 
     API:RegisterRefreshCallback("cdgroups-spec-refresh", function()
         if not subPage:IsShown() then return end

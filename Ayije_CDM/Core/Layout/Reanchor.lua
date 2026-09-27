@@ -222,12 +222,12 @@ local function CollectFramesForReanchor(activeViewer, activeVName, inEditMode)
     end
 
     if activeVName == VIEWERS.BUFF then
+        if CDM.UpdateCustomBuffPreview then CDM:UpdateCustomBuffPreview() end
         local CB = CDM.CustomBuffs
-        if CB and CB.activeBuffs then
+        if CB and CB.iconFrames then
             local bgSets = CDM.BuffGroupSets
             local grouped = bgSets and bgSets.grouped
-            for spellID, buffData in pairs(CB.activeBuffs) do
-                local frame = buffData.frame
+            for spellID, frame in pairs(CB.iconFrames) do
                 if frame and frame:IsShown() then
                     local fd = GetFrameData(frame)
                     fd.buffCategorySpellID = spellID
@@ -418,12 +418,12 @@ local function RepositionBuffFrames(viewer)
         end
     end
 
+    if CDM.UpdateCustomBuffPreview then CDM:UpdateCustomBuffPreview() end
     local CB = CDM.CustomBuffs
-    if CB and CB.activeBuffs then
+    if CB and CB.iconFrames then
         local bgSets = CDM.BuffGroupSets
         local grouped = bgSets and bgSets.grouped
-        for spellID, buffData in pairs(CB.activeBuffs) do
-            local frame = buffData.frame
+        for spellID, frame in pairs(CB.iconFrames) do
             if frame and frame:IsShown() then
                 local groupIdx = grouped and grouped[spellID]
                 if groupIdx then

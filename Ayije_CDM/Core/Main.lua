@@ -454,9 +454,8 @@ local function ForceRestyleAll()
         end
     end
     local CB = CDM.CustomBuffs
-    if CB and CB.activeBuffs then
-        for _, buffData in pairs(CB.activeBuffs) do
-            local frame = buffData.frame
+    if CB and CB.iconFrames then
+        for _, frame in pairs(CB.iconFrames) do
             if frame then
                 CDM:ApplyStyle(frame, VIEWERS.BUFF, true)
                 CDM:ApplyUngroupedBuffOverrides(frame)
