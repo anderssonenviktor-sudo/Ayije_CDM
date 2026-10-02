@@ -191,9 +191,25 @@ end
 
 function CDM:RefreshBuffReplacementSlots()
     if not self.spellOverrideGates.replacement then return end
+    local specID = self:GetCurrentSpecID()
     for _, route in ipairs(routes) do
         if not InCombatLockdown() then
-            route.source:SetSize(route.target:GetWidth(), route.target:GetHeight())
+            local source = route.source
+            -- Replacement sources skip the regular buff layout/style pass.
+            self:RestoreCooldownTextIfHidden(source)
+            self:RestoreVisualsIfHidden(source)
+            self:ApplyStyle(source, VIEWERS.BUFF)
+            self:ApplyUngroupedBuffOverrides(source)
+            local width, height = route.target:GetWidth(), route.target:GetHeight()
+            source:SetSize(width, height)
+            CDM.CONST.ApplyIconTexCoord(source.Icon, CDM.CONST.GetEffectiveZoomAmount(), width, height)
+            if self.Glow then
+                local enabled, color, sourceID = false, nil, nil
+                if not GetFrameData(source).cdmVisualsHidden then
+                    enabled, color, sourceID = self:ResolveBuffGlowState(source, specID, false)
+                end
+                self.Glow:RequestBuffGlow(source, enabled, color, sourceID)
+            end
         end
         Sync(route)
     end

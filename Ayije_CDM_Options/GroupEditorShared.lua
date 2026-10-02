@@ -1009,16 +1009,6 @@ function Shared.BuildTextOverrideWidgets(rc, yOff, cfg)
         chargeColorPicker:SetPoint("LEFT", chargeColorLabel, "RIGHT", 6, 0)
         yOff = yOff - 30
 
-        if cfg.stackThresholdOverride then
-            local showSingle = UI.CreateModernCheckbox(rc, L["Show Single Stack"], ov.stackTextShowSingle == true,
-                function(checked)
-                    write("stackTextShowSingle", checked or nil)
-                    if cfg.onToggle then cfg.onToggle() end
-                end)
-            showSingle:SetPoint("TOPLEFT", 0, yOff)
-            yOff = yOff - 30
-        end
-
         local posLabel = rc:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
         posLabel:SetText(L["Position"])
         posLabel:SetPoint("TOPLEFT", 0, yOff)

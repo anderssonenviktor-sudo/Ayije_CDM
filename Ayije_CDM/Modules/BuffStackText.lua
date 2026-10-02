@@ -27,7 +27,7 @@ local function Byte(value)
 end
 
 local function BuildBreakpoints(ov)
-    local showSingle = ov.textOverride and ov.stackTextShowSingle == true
+    local showSingle = ov.stackTextShowSingle == true
     local threshold = ov.stackTextThresholdEnabled and (tonumber(ov.stackTextThreshold) or 2) or math.huge
     if threshold ~= threshold then threshold = math.huge end
     if threshold ~= math.huge then threshold = max(1, floor(threshold)) end
@@ -49,6 +49,8 @@ end
 local function Native(record, alpha)
     local text = record.frame.Applications and record.frame.Applications.Applications
     if text then text:SetAlpha(alpha) end
+    local charges = record.frame.ChargeCount and record.frame.ChargeCount.Current
+    if charges then charges:SetAlpha(record.hideStacks and 0 or 1) end
 end
 
 local function Deactivate(record)
@@ -56,12 +58,13 @@ local function Deactivate(record)
     -- Cleanup must not prevent recovery if a frame is temporarily inaccessible.
     local hidden = true
     if record.host then hidden = pcall(record.host.SetAlpha, record.host, 0) end
-    local restored = pcall(Native, record, 1)
+    local restored = pcall(Native, record, record.hideStacks and 0 or 1)
     if not hidden then Retry(record) end
     if not restored then Retry(record) end
 end
 
 local function Park(record)
+    record.hideStacks = nil
     Deactivate(record)
     record.cooldownID = nil
     record.candidateKey = nil
@@ -254,7 +257,15 @@ Sync = function(record)
     end
     if record.cooldownID ~= id then Park(record) end
     local ov = CDM.ResolveBuffSpellOverrideForFrame(frame, frameData)
-    if not (ov and (ov.stackTextThresholdEnabled or (ov.textOverride and ov.stackTextShowSingle))) then
+    if ov and ov.hideStacks then
+        Park(record)
+        record.cooldownID = id
+        record.hideStacks = true
+        Native(record, 0)
+        return
+    end
+    record.hideStacks = nil
+    if not (ov and (ov.stackTextThresholdEnabled or ov.stackTextShowSingle)) then
         Park(record)
         return
     end

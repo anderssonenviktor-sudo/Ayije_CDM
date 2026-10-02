@@ -376,7 +376,12 @@ local function ResolveCustomIconOverrideForFrame(frame, frameData)
         if ov then return ov end
     end
     if sid then
-        return CDM:GetUngroupedBuffOverride(sid)
+        local ov = CDM:GetUngroupedBuffOverride(sid)
+        if ov then return ov end
+    end
+    for _, candidateID in ipairs(CDM:GetSpellIDCandidates(frame)) do
+        local ov = CDM:GetUngroupedBuffOverride(candidateID)
+        if ov then return ov end
     end
     return nil
 end

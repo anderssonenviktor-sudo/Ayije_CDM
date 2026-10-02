@@ -8,6 +8,7 @@ local UI = ns.ConfigUI
 
 local SLIDER_LABEL_W = 130
 local SLIDER_W = 220
+local cooldownTextExpanded = { timer = true, charges = false, utility = false }
 
 local function SetDB(key, scope)
     return function(v)
@@ -68,11 +69,45 @@ local function BuildCooldownText(subPage, page)
     rc:SetPoint("TOPLEFT", 30, -15)
     rc:SetPoint("BOTTOMRIGHT", -20, 10)
 
-    local function Column(x, y)
+    local function CollapsibleSection(key, label, width, contentHeight)
         local frame = CreateFrame("Frame", nil, rc)
-        frame:SetPoint("TOPLEFT", x, y)
-        frame:SetSize(260, 310)
-        return frame
+        frame:SetWidth(width)
+
+        local header = CreateFrame("Button", nil, frame)
+        header:SetPoint("TOPLEFT")
+        header:SetSize(width, 24)
+
+        local arrow = header:CreateTexture(nil, "ARTWORK")
+        arrow:SetTexture("Interface\\AddOns\\Ayije_CDM\\Media\\Textures\\collapse")
+        arrow:SetPoint("LEFT", 0, 0)
+        arrow:SetSize(14, 14)
+        arrow:SetVertexColor(1, 0.82, 0, 1)
+
+        local title = UI.CreateHeader(header, label)
+        title:ClearAllPoints()
+        title:SetPoint("LEFT", arrow, "RIGHT", 8, 0)
+
+        local highlight = header:CreateTexture(nil, "HIGHLIGHT")
+        highlight:SetAllPoints()
+        highlight:SetColorTexture(1, 0.82, 0, 0.08)
+
+        local content = CreateFrame("Frame", nil, frame)
+        content:SetPoint("TOPLEFT", 0, -30)
+        content:SetSize(width, contentHeight)
+
+        local function UpdateSection()
+            local expanded = cooldownTextExpanded[key]
+            content:SetShown(expanded)
+            arrow:SetRotation(expanded and 0 or math.pi / 2)
+            frame:SetHeight(expanded and (30 + contentHeight) or 24)
+        end
+        header:SetScript("OnClick", function()
+            cooldownTextExpanded[key] = not cooldownTextExpanded[key]
+            UI.CloseAllDropdownMenus()
+            UpdateSection()
+        end)
+        UpdateSection()
+        return frame, content
     end
 
     local function CompactSlider(parent, label, key, y, minV, maxV, precise)
@@ -98,43 +133,59 @@ local function BuildCooldownText(subPage, page)
         return slider
     end
 
-    local timer = Column(0, 0)
-    SectionHeader(timer, L["Cooldown Timer"], 0)
-    ColorSwatch(timer, L["Color"], "cooldownColor", -25)
-    CompactSlider(timer, L["Row 1 Font Size"], "cooldownFontSize", -60, 8, 32)
-    CompactSlider(timer, L["Row 2 Font Size"], "essRow2CooldownFontSize", -115, 8, 32)
+    local timerSection, timer = CollapsibleSection("timer", L["Cooldown Timer"], 550, 193)
+    timerSection:SetPoint("TOPLEFT")
+    ColorSwatch(timer, L["Color"], "cooldownColor", 0)
+    CompactSlider(timer, L["Row 1 Font Size"], "cooldownFontSize", -35, 8, 32)
+    CompactSlider(timer, L["Row 2 Font Size"], "essRow2CooldownFontSize", -90, 8, 32)
     CompactSlider(timer, L["Show decimals below"],
-        "cooldownDecimalThreshold", -170, 0, 10, true)
+        "cooldownDecimalThreshold", -145, 0, 10, true)
 
-    local threshold = Column(290, 0)
-    SectionHeader(threshold, L["Threshold Color"], 0)
+    local threshold = CreateFrame("Frame", nil, timer)
+    threshold:SetPoint("TOPLEFT", 290, 0)
+    threshold:SetSize(260, 193)
+    local thresholdHeader = UI.CreateSubHeader(threshold, L["Threshold Color"])
+    thresholdHeader:ClearAllPoints()
+    thresholdHeader:SetPoint("TOPLEFT")
+    local thresholdControls = CreateFrame("Frame", nil, threshold)
+    thresholdControls:SetPoint("TOPLEFT", 0, -60)
+    thresholdControls:SetSize(260, 100)
     local chk = UI.CreateModernCheckbox(threshold, L["Color countdown below threshold"],
-        CDM.db.cooldownColorThresholdEnabled, SetDB("cooldownColorThresholdEnabled"))
+        CDM.db.cooldownColorThresholdEnabled, function(checked)
+            CDM.db.cooldownColorThresholdEnabled = checked
+            thresholdControls:SetShown(checked)
+            API:Refresh("STYLE")
+        end)
     chk:SetPoint("TOPLEFT", 0, -25)
     chk:SetWidth(260)
     chk.label:SetWidth(226)
     chk.label:SetJustifyH("LEFT")
-    CompactSlider(threshold, L["Threshold (seconds)"],
-        "cooldownColorThreshold", -60, 1, 30, true)
-    ColorSwatch(threshold, L["Color"], "cooldownColorThresholdColor", -130)
+    CompactSlider(thresholdControls, L["Threshold (seconds)"],
+        "cooldownColorThreshold", 0, 1, 30, true)
+    ColorSwatch(thresholdControls, L["Color"], "cooldownColorThresholdColor", -70)
+    local function UpdateThresholdControls()
+        thresholdControls:SetShown(CDM.db.cooldownColorThresholdEnabled == true)
+    end
+    subPage:HookScript("OnShow", UpdateThresholdControls)
+    UpdateThresholdControls()
 
-    local charges = Column(0, -235)
-    SectionHeader(charges, L["Charges"], 0)
-    CompactSlider(charges, L["Font Size"], "chargeFontSize", -30, 8, 32)
-    CompactSlider(charges, L["Font size row 2"], "essRow2ChargeFontSize", -80, 8, 32)
-    ColorSwatch(charges, L["Color"], "chargeColor", -130)
-    PositionDropdown(charges, L["Position"], "chargePosition", -165)
-    CompactSlider(charges, L["X Offset"], "chargeOffsetX", -220, -50, 50)
-    CompactSlider(charges, L["Y Offset"], "chargeOffsetY", -270, -50, 50)
+    local chargesSection, charges = CollapsibleSection("charges", L["Charges"], 260, 288)
+    chargesSection:SetPoint("TOPLEFT", timerSection, "BOTTOMLEFT", 0, -14)
+    CompactSlider(charges, L["Row 1 Font Size"], "chargeFontSize", 0, 8, 32)
+    CompactSlider(charges, L["Row 2 Font Size"], "essRow2ChargeFontSize", -50, 8, 32)
+    ColorSwatch(charges, L["Color"], "chargeColor", -100)
+    PositionDropdown(charges, L["Position"], "chargePosition", -135)
+    CompactSlider(charges, L["X Offset"], "chargeOffsetX", -190, -50, 50)
+    CompactSlider(charges, L["Y Offset"], "chargeOffsetY", -240, -50, 50)
 
-    local utility = Column(290, -235)
-    SectionHeader(utility, L["Utility"], 0)
-    CompactSlider(utility, L["Cooldown Font Size"], "utilityCooldownFontSize", -30, 8, 32)
-    CompactSlider(utility, L["Charges Font Size"], "utilityChargeFontSize", -80, 8, 32)
-    ColorSwatch(utility, L["Color"], "utilityChargeColor", -130)
-    PositionDropdown(utility, L["Position"], "utilityChargePosition", -165)
-    CompactSlider(utility, L["X Offset"], "utilityChargeOffsetX", -220, -50, 50)
-    CompactSlider(utility, L["Y Offset"], "utilityChargeOffsetY", -270, -50, 50)
+    local utilitySection, utility = CollapsibleSection("utility", L["Utility"], 260, 288)
+    utilitySection:SetPoint("TOPLEFT", timerSection, "BOTTOMLEFT", 290, -14)
+    CompactSlider(utility, L["Cooldown Font Size"], "utilityCooldownFontSize", 0, 8, 32)
+    CompactSlider(utility, L["Charges Font Size"], "utilityChargeFontSize", -50, 8, 32)
+    ColorSwatch(utility, L["Color"], "utilityChargeColor", -100)
+    PositionDropdown(utility, L["Position"], "utilityChargePosition", -135)
+    CompactSlider(utility, L["X Offset"], "utilityChargeOffsetX", -190, -50, 50)
+    CompactSlider(utility, L["Y Offset"], "utilityChargeOffsetY", -240, -50, 50)
 end
 
 ns._CreateCooldownTextPanel = BuildCooldownText

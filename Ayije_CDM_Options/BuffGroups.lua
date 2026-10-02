@@ -953,6 +953,17 @@ local function CreateBuffGroupsPanel(page, tabPage)
             )
             hideCdCheckbox:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 36
+
+            local hideStacksCheckbox = UI.CreateModernCheckbox(rc, L["Hide Stacks"],
+                existingOv and existingOv.hideStacks == true or false,
+                function(checked)
+                    local ov = ensureOv()
+                    if not ov then return end
+                    ov.hideStacks = checked or nil
+                    save()
+                end)
+            hideStacksCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 36
         end
 
         if not isCustomBuff then
@@ -969,6 +980,17 @@ local function CreateBuffGroupsPanel(page, tabPage)
             )
             hideVisualsCheckbox:SetPoint("TOPLEFT", 0, yOff)
             yOff = yOff - 36
+
+            local showSingleCheckbox = UI.CreateModernCheckbox(rc, L["Show Single Stack"],
+                existingOv and existingOv.stackTextShowSingle == true or false,
+                function(checked)
+                    local ov = ensureOv()
+                    if not ov then return end
+                    ov.stackTextShowSingle = checked or nil
+                    save()
+                end)
+            showSingleCheckbox:SetPoint("TOPLEFT", 0, yOff)
+            yOff = yOff - 36
         end
 
         if not isCustomBuff then
@@ -983,7 +1005,6 @@ local function CreateBuffGroupsPanel(page, tabPage)
                     chargePos = "countPosition", chargeX = "countOffsetX", chargeY = "countOffsetY",
                 },
                 colorAlpha = false,
-                stackThresholdOverride = true,
                 save = save,
                 onToggle = refresh,
                 createDropdown = function(p) return registerDropdown(CreateFrame("DropdownButton", nil, p, "WowStyle1DropdownTemplate")) end,
