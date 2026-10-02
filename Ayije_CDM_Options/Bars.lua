@@ -689,6 +689,8 @@ local function CreateBarsTab(page)
             local col = C.Get(2)
             col.y = col.y - 12
             C.Header(col, L["Text"])
+            C.Check(col, L["Show Buff Name"], bar.showName ~= false,
+                function(checked) Write("showName", checked) end)
             local shownStack = bar.showApplications ~= false
             C.Check(col, L["Show Stack Count"], shownStack, function(checked)
                 bar.showApplications = checked
