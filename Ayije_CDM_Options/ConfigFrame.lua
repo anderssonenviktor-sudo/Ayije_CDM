@@ -99,7 +99,7 @@ RegisterCombatConfigAutoClose()
 
 local function SetCategoryButtonState(button, isActive)
     if isActive then
-        button.Texture:SetAtlas("Options_List_Active", true)
+        button.Texture:SetAtlas("Options_List_Active")
         button.Texture:Show()
         UI.SetTextWhite(button.Text)
         return
@@ -370,12 +370,15 @@ local function CreateConfigFrame()
         btn.Texture:Hide()
 
         btn.Text = btn:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
-        btn.Text:SetPoint("LEFT", indent, 0)  -- Include indent for child hierarchy
+        btn.Text:SetPoint("LEFT", btn, "LEFT", indent, 0)
+        btn.Text:SetPoint("RIGHT", btn, "RIGHT", -4, 0)
+        btn.Text:SetJustifyH("LEFT")
+        btn.Text:SetWordWrap(false)
         btn.Text:SetText(label)
 
         btn:SetScript("OnEnter", function(self)
             if currentTab ~= id then
-                self.Texture:SetAtlas("Options_List_Hover", true)
+                self.Texture:SetAtlas("Options_List_Hover")
                 self.Texture:Show()
             end
         end)
