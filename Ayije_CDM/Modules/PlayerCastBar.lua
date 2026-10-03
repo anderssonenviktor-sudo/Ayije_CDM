@@ -1042,18 +1042,29 @@ local function UpdateCastBarFromConfig(frame)
     frame.cdmShowSpark = showSpark
     frame.sparkObj:SetShown(showSpark)
 
+    if frame.borderFrame and CDM.BORDER and CDM.BORDER.UpdateBorder then
+        CDM.BORDER:UpdateBorder(frame.borderFrame)
+    end
+
     if useAtlas then
         frame.sparkObj:SetTexture(SPARK_TEXTURE)
         frame.sparkObj:SetTexCoord(0.222168, 0.232422, 0.294434, 0.317383)
         frame.sparkObj:SetDesaturated(true)
         frame.sparkObj:SetVertexColor(1, 1, 1, 1)
-        frame.sparkObj:SetSize(16, Snap(h * 2.1))
+        frame.sparkObj:SetSize(16, Snap(h * 2))
     else
         frame.sparkObj:SetTexture(CDM_C.TEX_WHITE8X8)
         frame.sparkObj:SetTexCoord(0, 1, 0, 1)
         frame.sparkObj:SetDesaturated(false)
         frame.sparkObj:SetVertexColor(1, 1, 1, 0.8)
-        frame.sparkObj:SetSize(Snap(2), Snap(h))
+        local border = frame.borderFrame and frame.borderFrame.border
+        local backdrop = border and border:GetBackdrop()
+        local inset = 0
+        if backdrop then
+            inset = math.max(0, (backdrop.edgeSize or 0) - Snap(CfgVal("borderOffsetY", 0)))
+        end
+        -- The spark draws above the border, so keep the solid line inside its inner edges.
+        frame.sparkObj:SetSize(Snap(2), math.max(Pixel.GetSize(), Snap(h) - inset * 2))
     end
 
     if useAtlas then
@@ -1067,10 +1078,6 @@ local function UpdateCastBarFromConfig(frame)
         end
         local bgColor = CfgVal("castBarBackgroundColor", DEFAULT_BG_COLOR)
         frame.bgTexture:SetVertexColor(bgColor.r, bgColor.g, bgColor.b, bgColor.a or 0.8)
-    end
-
-    if frame.borderFrame and CDM.BORDER and CDM.BORDER.UpdateBorder then
-        CDM.BORDER:UpdateBorder(frame.borderFrame)
     end
 
     SyncCastBarBorderVisual(frame, frame.borderFrame)
@@ -1266,6 +1273,7 @@ function CDM:CreatePlayerCastBar()
 
     f.spark = f.topOverlay:CreateTexture(nil, "ARTWORK")
     f.spark:SetTexture(SPARK_TEXTURE)
+    f.spark:SetBlendMode("ADD")
     f.spark:SetSize(16, 42)
     f.spark:SetTexCoord(0.222168, 0.232422, 0.294434, 0.317383)
     f.spark:SetDesaturated(true)
