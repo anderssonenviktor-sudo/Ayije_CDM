@@ -28,6 +28,20 @@ local function IsCooldownViewerSystemFrame(frame)
     return cooldownSystem and frame and frame.system == cooldownSystem
 end
 
+local function UpdateSelectionAlpha(selection)
+    local state = GetSelectionState(selection)
+    if CDM.anchorModeActive then
+        if state.anchorModeAlpha == nil then
+            state.anchorModeAlpha = selection:GetAlpha()
+        end
+        selection:SetAlpha(0)
+    elseif state.anchorModeAlpha ~= nil then
+        local alpha = state.anchorModeAlpha
+        state.anchorModeAlpha = nil
+        selection:SetAlpha(alpha)
+    end
+end
+
 local function CountActiveItemFrames(systemFrame)
     if not (systemFrame and systemFrame.itemFramePool) then
         return 0
@@ -151,6 +165,16 @@ function CDM:SetupCooldownViewerLockTextHandlers(systemFrame)
     if state.handlersSet then return end
 
     state.handlersSet = true
+    selection:HookScript("OnShow", function()
+        if not InCombatLockdown() then UpdateSelectionAlpha(selection) end
+    end)
+    hooksecurefunc(selection, "SetAlpha", function(_, alpha)
+        if CDM.anchorModeActive and state.anchorModeAlpha ~= nil and alpha ~= 0
+            and not InCombatLockdown() then
+            state.anchorModeAlpha = alpha
+            selection:SetAlpha(0)
+        end
+    end)
     selection:HookScript("OnMouseDown", function()
         self:SetCooldownViewerLockText(systemFrame, true)
         state.lockTextToken = (state.lockTextToken or 0) + 1
@@ -189,6 +213,7 @@ function CDM:UpdateEditModeSelectionOverlay(vName)
     selection:SetFrameLevel(container:GetFrameLevel() + 2)
 
     self:SetupCooldownViewerLockTextHandlers(viewer)
+    UpdateSelectionAlpha(selection)
     self:SetCooldownViewerLockText(viewer, false)
 end
 

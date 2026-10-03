@@ -109,7 +109,6 @@ local tempEssential, tempUtility = {}, {}
 local tempAllMainBuffs = {}
 local tempBuffSubCounts = {}
 local EMPTY_FRAMES = {}
-CDM.ungroupedAnchorFrames = CDM.ungroupedAnchorFrames or {}
 
 local function PublishUngroupedAnchorFrames(viewerName, frames)
     local published = CDM.ungroupedAnchorFrames[viewerName]
@@ -514,7 +513,6 @@ local function RunReanchor()
         local essContainer = activeSelf.anchorContainers and activeSelf.anchorContainers[VIEWERS.ESSENTIAL]
         local prevWidth = essContainer and essContainer:GetWidth() or 0
         activeSelf:PositionEssentialOrUtilityIcons(tempEssential, activeViewer, activeVName)
-        PublishUngroupedAnchorFrames(VIEWERS.ESSENTIAL, tempEssential)
         if activeSelf.InvalidateEssentialRow1WidthCache then
             activeSelf:InvalidateEssentialRow1WidthCache()
         end
@@ -536,7 +534,6 @@ local function RunReanchor()
         local utilContainer = activeSelf.anchorContainers and activeSelf.anchorContainers[VIEWERS.UTILITY]
         local prevWidth = utilContainer and utilContainer:GetWidth() or 0
         activeSelf:PositionEssentialOrUtilityIcons(tempUtility, activeViewer, activeVName)
-        PublishUngroupedAnchorFrames(VIEWERS.UTILITY, tempUtility)
         if activeSelf.InvalidateUtilityVisibleCountCache then
             activeSelf:InvalidateUtilityVisibleCountCache()
         end

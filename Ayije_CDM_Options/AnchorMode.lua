@@ -31,6 +31,7 @@ end
 
 function CDM:SetAnchorModeActive(active)
     self.anchorModeActive = active and true or false
+    self:UpdateEditModeSelectionOverlays()
     self:Refresh("BUFF_DATA")
     self:UpdateContainerDragOverlays()
 end
@@ -321,11 +322,15 @@ end
 
 GetFrameBounds = function(frames, extraFrames)
     local left, right, top, bottom
+    local parentScale = UIParent:GetEffectiveScale()
     local function Include(frame)
         if not (frame and frame:IsShown()) then return end
         local frameLeft, frameRight = frame:GetLeft(), frame:GetRight()
         local frameTop, frameBottom = frame:GetTop(), frame:GetBottom()
         if not (frameLeft and frameRight and frameTop and frameBottom) then return end
+        local scaleRatio = frame:GetEffectiveScale() / parentScale
+        frameLeft, frameRight = frameLeft * scaleRatio, frameRight * scaleRatio
+        frameTop, frameBottom = frameTop * scaleRatio, frameBottom * scaleRatio
         left = left and math.min(left, frameLeft) or frameLeft
         right = right and math.max(right, frameRight) or frameRight
         top = top and math.max(top, frameTop) or frameTop
@@ -858,10 +863,13 @@ CDM:RegisterCombatStateHandler(function(isInCombat)
             PrintMessage(L["Anchors closed because combat started."])
             AnchorMode:Exit()
         end
-    elseif pendingCombatRefresh then
-        pendingCombatRefresh = false
-        CDM:Refresh("LAYOUT")
-        CDM:Refresh("RESOURCES")
-        CDM:Refresh("BUFF_DATA")
+    else
+        CDM:UpdateEditModeSelectionOverlays()
+        if pendingCombatRefresh then
+            pendingCombatRefresh = false
+            CDM:Refresh("LAYOUT")
+            CDM:Refresh("RESOURCES")
+            CDM:Refresh("BUFF_DATA")
+        end
     end
 end)

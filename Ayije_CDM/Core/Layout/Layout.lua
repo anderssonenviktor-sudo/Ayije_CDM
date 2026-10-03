@@ -950,9 +950,19 @@ local function GetCustomOrderRank(rankMap, frame, spellID)
     return rankMap[spellID]
 end
 
+CDM.ungroupedAnchorFrames = CDM.ungroupedAnchorFrames or {}
+
 function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
     local sizeEssRow1, sizeEssRow2, sizeUtility, _, spacing, maxRowEss, _, maxRowUtil, utilityVertical = GetLayoutConfig()
     ResetTempIconPositionRecords()
+
+    local anchorFrames = self.ungroupedAnchorFrames[vName]
+    if not anchorFrames then
+        anchorFrames = {}
+        self.ungroupedAnchorFrames[vName] = anchorFrames
+    else
+        table_wipe(anchorFrames)
+    end
 
     local isEssential = (vName == VIEWERS.ESSENTIAL)
 
@@ -1108,6 +1118,8 @@ function CDM:PositionEssentialOrUtilityIcons(icons, viewer, vName)
 
     for index, record in ipairs(tempIconPositionRecords) do
         local frame = record.frame
+        -- Anchor bounds must include injected icons as well as Blizzard's pool.
+        anchorFrames[#anchorFrames + 1] = frame
 
         if useMeasuredHorizontalLayout then
             local row = GetRowForIndex(index, totalIcons, isEssential, maxRowEss, maxRowUtil, utilityVertical)

@@ -366,8 +366,7 @@ local function CreateConfigFrame()
         btn:SetPoint("TOPLEFT", indent, y)
 
         btn.Texture = btn:CreateTexture(nil, "BACKGROUND")
-        btn.Texture:SetPoint("TOPLEFT", -10, 0)
-        btn.Texture:SetPoint("BOTTOMRIGHT", 20, 0)
+        btn.Texture:SetAllPoints(btn)
         btn.Texture:Hide()
 
         btn.Text = btn:CreateFontString(nil, "OVERLAY", "AyijeCDM_Font14")
