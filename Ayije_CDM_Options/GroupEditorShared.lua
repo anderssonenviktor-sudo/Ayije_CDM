@@ -970,7 +970,11 @@ function Shared.BuildTextOverrideWidgets(rc, yOff, cfg)
         local ov = existingOv or {}
         local function write(key, value)
             local o = ensureOv()
-            if o then o[key] = value end
+            if o then
+                o[key] = value
+                -- The dropdown reads the merged snapshot, not the saved entry.
+                ov[key] = value
+            end
             save()
         end
         local function writeColor(key, r, g, b, a)
